@@ -91,6 +91,7 @@ async def daily_morning_routine(
     graph: Any,
     store: Any,
     settings: Any,
+    checkpointer: Any = None,
 ) -> dict[str, Any]:
     """
     FR-120: Run the full daily morning pipeline at 9:00 AM IST (Mon-Fri).
@@ -106,6 +107,8 @@ async def daily_morning_routine(
 
     thread_id = f"morning-{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}"
     config = {"configurable": {"thread_id": thread_id}}
+    if checkpointer is not None:
+        config["configurable"]["checkpointer"] = checkpointer
 
     initial_state = {
         "thread_id": thread_id,
@@ -153,6 +156,7 @@ async def portfolio_guardian_check(
     graph: Any,
     store: Any,
     settings: Any,
+    checkpointer: Any = None,
 ) -> dict[str, Any]:
     """
     FR-121: Mid-day position health check at 1:00 PM IST (Mon-Fri).
@@ -168,6 +172,8 @@ async def portfolio_guardian_check(
 
     thread_id = f"guardian-{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d-%H')}"
     config = {"configurable": {"thread_id": thread_id}}
+    if checkpointer is not None:
+        config["configurable"]["checkpointer"] = checkpointer
 
     initial_state = {
         "thread_id": thread_id,
@@ -206,6 +212,7 @@ async def weekly_portfolio_review(
     graph: Any,
     store: Any,
     settings: Any,
+    checkpointer: Any = None,
 ) -> dict[str, Any]:
     """
     FR-122: Weekly portfolio review on Sunday at 10:00 AM IST.
@@ -217,6 +224,8 @@ async def weekly_portfolio_review(
     """
     thread_id = f"weekly-{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}"
     config = {"configurable": {"thread_id": thread_id}}
+    if checkpointer is not None:
+        config["configurable"]["checkpointer"] = checkpointer
 
     initial_state = {
         "thread_id": thread_id,
@@ -256,6 +265,7 @@ async def monthly_deep_dive(
     graph: Any,
     store: Any,
     settings: Any,
+    checkpointer: Any = None,
 ) -> dict[str, Any]:
     """
     FR-123: Monthly deep dive on 1st of month at 8:00 AM IST.
@@ -268,6 +278,8 @@ async def monthly_deep_dive(
     """
     thread_id = f"monthly-{datetime.now(tz=timezone.utc).strftime('%Y-%m')}"
     config = {"configurable": {"thread_id": thread_id}}
+    if checkpointer is not None:
+        config["configurable"]["checkpointer"] = checkpointer
 
     initial_state = {
         "thread_id": thread_id,
@@ -313,6 +325,7 @@ def register_jobs(
     graph: Any,
     store: Any,
     settings: Any,
+    checkpointer: Any = None,
 ) -> None:
     """
     Register all four scheduled jobs with an APScheduler AsyncIOScheduler.
@@ -330,6 +343,8 @@ def register_jobs(
         The memory store instance.
     settings : AutFinSettings
         Application settings (used for future per-job config overrides).
+    checkpointer : Optional
+        LangGraph checkpointer for crash recovery. If None, jobs run without persistence.
     """
     from apscheduler.triggers.cron import CronTrigger
 
@@ -342,7 +357,7 @@ def register_jobs(
             minute=0,
             timezone=TIMEZONE_IST,
         ),
-        args=[graph, store, settings],
+        args=[graph, store, settings, checkpointer],
         id="daily_morning",
         name="Daily Market Scan + Portfolio Guardian",
         replace_existing=True,
@@ -357,7 +372,7 @@ def register_jobs(
             minute=0,
             timezone=TIMEZONE_IST,
         ),
-        args=[graph, store, settings],
+        args=[graph, store, settings, checkpointer],
         id="midday_guardian",
         name="Mid-Day Portfolio Health Check",
         replace_existing=True,
@@ -372,7 +387,7 @@ def register_jobs(
             minute=0,
             timezone=TIMEZONE_IST,
         ),
-        args=[graph, store, settings],
+        args=[graph, store, settings, checkpointer],
         id="weekly_review",
         name="Weekly Portfolio Review + Watchlist Refresh",
         replace_existing=True,
@@ -387,7 +402,7 @@ def register_jobs(
             minute=0,
             timezone=TIMEZONE_IST,
         ),
-        args=[graph, store, settings],
+        args=[graph, store, settings, checkpointer],
         id="monthly_deep_dive",
         name="Monthly Strategy Review + Full Fundamental Refresh",
         replace_existing=True,
@@ -410,6 +425,7 @@ async def trigger_job(
     graph: Any,
     store: Any,
     settings: Any,
+    checkpointer: Any = None,
 ) -> dict[str, Any]:
     """
     FR-124: Manually trigger any scheduled job by its ID.
@@ -420,6 +436,8 @@ async def trigger_job(
     job_id : str
         One of: daily_morning, midday_guardian, weekly_review, monthly_deep_dive
     graph, store, settings : required by the job functions
+    checkpointer : Optional
+        LangGraph checkpointer for crash recovery.
 
     Returns
     -------
@@ -440,4 +458,4 @@ async def trigger_job(
         )
 
     logger.info("Manually triggering job: %s", job_id)
-    return await job_fn(graph, store, settings)
+    return await job_fn(graph, store, settings, checkpointer)

@@ -337,7 +337,7 @@ class PaperTradingEngine:
             conn = sqlite3.connect(self._db_path)
             if pos:
                 conn.execute(
-                    """INSERT OR REPLACE INTO paper_positions VALUES (?,?,?,?,?,?)""",
+                    """INSERT OR REPLACE INTO paper_positions VALUES (?,?,?,?,?,?,?)""",
                     (
                         pos.symbol, pos.exchange, pos.quantity,
                         pos.avg_price, pos.last_price, pos.product,

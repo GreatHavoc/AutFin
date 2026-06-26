@@ -1,6 +1,6 @@
 # AutFin — Technical Specification
 
-**Version**: 4.0 | **Date**: June 2026 | **Status**: Complete — Single supervisor ReAct graph, 20-tool architecture, self-learning engine, global markets & sentiment upgrade
+**Version**: 4.1 | **Date**: June 2026 | **Status**: Complete — Single supervisor ReAct graph, 20-tool architecture, self-learning engine, global markets & sentiment upgrade, reliability improvements
 
 ---
 
@@ -102,6 +102,7 @@ autfin/
 │   │   ├── store.py                         # LangGraph Store operations (271 lines)
 │   │   ├── vector_store.py                  # ChromaDB collections (325 lines)
 │   │   ├── database.py                      # SQLite schema + CRUD (128 lines)
+│   │   ├── connection_pool.py               # Thread-safe SQLite connection pool
 │   │   └── retrieval.py                     # Multi-scope memory retrieval (688 lines)
 │   │
 │   ├── llm/                                 # LLM client abstraction
@@ -162,7 +163,7 @@ autfin/
 │       ├── __init__.py
 │       └── main.py                          # 7 commands: status|analyze|scan|start|backtest|history|config (916 lines)
 │
-├── tests/                               # 841+ tests, 0 failures
+├── tests/                               # 914+ tests, 0 failures
 │   ├── test_agents/
 │   │   ├── test_market_data.py           # 6 tests ✅
 │   │   ├── test_global_macro.py          # 8 tests ✅
@@ -179,12 +180,15 @@ autfin/
 │   │   ├── test_kite_tools.py
 │   │   ├── test_sentiment_analyzer.py    # 23 tests ✅ (v4.0)
 │   │   ├── test_reddit_and_multi_source.py # 17 tests ✅ (v4.0)
-│   │   └── test_nse_fix.py              # 10 tests ✅ (v4.0)
+│   │   ├── test_nse_fix.py              # 10 tests ✅ (v4.0)
+│   │   ├── test_paper_trading.py         # 43 tests ✅ (v4.1)
+│   │   └── test_universe.py
 │   ├── test_graphs/
 │   │   ├── test_v3_integration.py
 │   │   ├── test_v4_integration.py        # 15 tests ✅ (v4.0)
 │   │   ├── test_hitl.py
-│   │   └── test_error_handler.py
+│   │   ├── test_error_handler.py
+│   │   └── test_supervisor.py            # 21 tests ✅ (v4.1)
 │   ├── test_memory/
 │   │   ├── test_store.py
 │   │   ├── test_vector_store.py
@@ -844,18 +848,114 @@ CREATE TABLE IF NOT EXISTS balance_history (
     source TEXT DEFAULT 'kite_sdk'
 );
 
--- Table: learning_journal
+-- Table: learning_journal (v3.0 schema)
 -- Post-trade reflections stored by the system
 CREATE TABLE IF NOT EXISTS learning_journal (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    decision_id TEXT NOT NULL,
     symbol TEXT NOT NULL,
-    trade_date TEXT NOT NULL,
-    outcome_pnl REAL,
-    was_correct BOOLEAN,
-    lesson TEXT,                          -- LLM-generated learning
+    action TEXT NOT NULL DEFAULT 'BUY',
+    conviction REAL NOT NULL DEFAULT 0.5,
+    pnl_pct REAL,
+    thesis_summary TEXT,
+    outcome TEXT DEFAULT 'open',
+    sector TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_learning_symbol ON learning_journal(symbol);
+CREATE INDEX IF NOT EXISTS idx_learning_sector ON learning_journal(sector);
+CREATE INDEX IF NOT EXISTS idx_learning_outcome ON learning_journal(outcome);
+
+-- Table: stock_pitches (v3.0)
+-- 6-element buy-side pitches rendered by dashboard
+CREATE TABLE IF NOT EXISTS stock_pitches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    context TEXT NOT NULL DEFAULT 'manual',
+    investment_thesis TEXT,
+    catalysts_json TEXT,
+    risks_json TEXT,
+    valuation_summary TEXT,
+    competitive_moat TEXT,
+    price_target_base REAL,
+    price_target_upside REAL,
+    price_target_downside REAL,
+    price_target_rationale TEXT,
+    raw_json TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pitches_symbol ON stock_pitches(symbol);
+CREATE INDEX IF NOT EXISTS idx_pitches_created ON stock_pitches(created_at);
+CREATE INDEX IF NOT EXISTS idx_pitches_context ON stock_pitches(context);
+
+-- Table: fanout_progress (v3.0)
+-- Live status of concurrent research per symbol
+CREATE TABLE IF NOT EXISTS fanout_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    context TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    started_at TEXT,
+    finished_at TEXT,
+    error TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_fanout_session ON fanout_progress(session_id);
+CREATE INDEX IF NOT EXISTS idx_fanout_status ON fanout_progress(status);
+CREATE INDEX IF NOT EXISTS idx_fanout_created ON fanout_progress(created_at);
+
+-- Table: thesis_check_ab
+-- A/B testing framework for LLM vs rule-based thesis checks
+CREATE TABLE IF NOT EXISTS thesis_check_ab (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    llm_verdict TEXT,
+    rule_verdict TEXT NOT NULL,
+    llm_reasoning TEXT,
+    price_change_pct REAL DEFAULT 0,
+    days_held INTEGER DEFAULT 0,
+    subsequent_outcome TEXT,
+    subsequent_pnl_pct REAL,
+    timestamp TEXT NOT NULL
+);
+
+-- Table: research_output
+-- RORO tracking: research depth vs trade outcomes
+CREATE TABLE IF NOT EXISTS research_output (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    depth TEXT NOT NULL,
+    research_weight INTEGER NOT NULL,
+    fundamentals_score REAL,
+    technical_score REAL,
+    sentiment_score REAL,
+    macro_score REAL,
+    valuation_score REAL,
+    research_duration_ms REAL,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Table: trace_history (v4.1)
+-- Observability traces persisted to SQLite
+CREATE TABLE IF NOT EXISTS trace_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trace_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    model TEXT,
+    total_tokens INTEGER DEFAULT 0,
+    total_cost REAL DEFAULT 0.0,
+    errors_json TEXT,
+    metadata_json TEXT,
+    duration_ms REAL DEFAULT 0.0,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_trace_id ON trace_history(trace_id);
+CREATE INDEX IF NOT EXISTS idx_trace_created ON trace_history(created_at);
 ```
 
 ---
@@ -1027,14 +1127,19 @@ class AutFinSettings(BaseSettings):
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-def register_jobs(scheduler: AsyncIOScheduler, graph, store, settings):
-    """Register all scheduled jobs."""
+def register_jobs(scheduler: AsyncIOScheduler, graph, store, settings, checkpointer=None):
+    """Register all scheduled jobs.
+
+    Args:
+        checkpointer: Optional LangGraph checkpointer for crash recovery.
+                     If None, jobs run without persistence.
+    """
 
     # Daily morning routine (Mon-Fri, 9:00 AM IST)
     scheduler.add_job(
         daily_morning_routine,
         CronTrigger(day_of_week="mon-fri", hour=9, minute=0, timezone="Asia/Kolkata"),
-        args=[graph, store, settings],
+        args=[graph, store, settings, checkpointer],
         id="daily_morning",
         name="Daily Market Scan + Portfolio Guardian",
     )
@@ -1043,7 +1148,7 @@ def register_jobs(scheduler: AsyncIOScheduler, graph, store, settings):
     scheduler.add_job(
         portfolio_guardian_check,
         CronTrigger(day_of_week="mon-fri", hour=13, minute=0, timezone="Asia/Kolkata"),
-        args=[graph, store, settings],
+        args=[graph, store, settings, checkpointer],
         id="midday_guardian",
         name="Mid-Day Portfolio Health Check",
     )
@@ -1052,7 +1157,7 @@ def register_jobs(scheduler: AsyncIOScheduler, graph, store, settings):
     scheduler.add_job(
         weekly_portfolio_review,
         CronTrigger(day_of_week="sun", hour=10, minute=0, timezone="Asia/Kolkata"),
-        args=[graph, store, settings],
+        args=[graph, store, settings, checkpointer],
         id="weekly_review",
         name="Weekly Portfolio Review + Watchlist Refresh",
     )
@@ -1061,7 +1166,7 @@ def register_jobs(scheduler: AsyncIOScheduler, graph, store, settings):
     scheduler.add_job(
         monthly_deep_dive,
         CronTrigger(day=1, hour=8, minute=0, timezone="Asia/Kolkata"),
-        args=[graph, store, settings],
+        args=[graph, store, settings, checkpointer],
         id="monthly_deep_dive",
         name="Monthly Strategy Review + Full Fundamental Refresh",
     )
@@ -1198,7 +1303,19 @@ autfin config set deployment_pacing aggressive
   ✅ asyncio.get_event_loop() deprecation fix (4 files)
   ✅ 841+ tests passing
 
-TEST COVERAGE: 841+ tests, all passing
+✅ v4.1 Reliability & Test Coverage (COMPLETE)
+  ✅ Wired SqliteSaver checkpointer into scheduler (crash recovery)
+  ✅ Refactored tools/__init__.py to lazy imports (reduces startup time)
+  ✅ Fixed lookback_days unused param in thesis_ab.py and roro.py
+  ✅ Fixed _persist_position bug in paper_trading/engine.py (6→7 placeholders)
+  ✅ Fixed _get_trade_pnl_for_decision → _get_trade_pnl_for_symbol bug in roro.py
+  ✅ Added SQLite connection pool (memory/connection_pool.py)
+  ✅ Added trace persistence to SQLite (observability/tracer.py)
+  ✅ Added 43 paper trading engine tests
+  ✅ Added 21 supervisor graph unit tests
+  ✅ 914+ tests passing
+
+TEST COVERAGE: 914+ tests, all passing
 COST: $0/month (all free-tier tools)
 ```
 

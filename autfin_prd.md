@@ -2,10 +2,10 @@
 
 ## Product Requirements Document (PRD)
 
-**Version**: 4.0  
+**Version**: 4.1  
 **Date**: June 2026  
 **Author**: Prakhar  
-**Status**: Complete — Single agentic supervisor, 20-tool architecture, self-learning loop, global markets & sentiment upgrade. 841+ tests passing.
+**Status**: Complete — Single agentic supervisor, 20-tool architecture, self-learning loop, global markets & sentiment upgrade. 914+ tests passing.
 
 ---
 
@@ -1353,7 +1353,7 @@ autfin/
 │       ├── __init__.py
 │       └── main.py             # 7 commands: status|analyze|scan|start|backtest|history|config
 │
-├── tests/                      # 841+ tests, 0 failures
+├── tests/                      # 914+ tests, 0 failures
 │   ├── test_agents/            # 14 agent test files
 │   ├── test_tools/             # 6 tool test files
 │   ├── test_graphs/            # 4 integration tests
@@ -1633,7 +1633,7 @@ POST-TRADE (Daily):
 
 ## 10. IMPLEMENTATION ROADMAP
 
-### Current Status: v4.0 Complete
+### Current Status: v4.1 Complete
 
 | Phase | Status | Key Deliverables |
 |-------|--------|-----------------|
@@ -1645,6 +1645,7 @@ POST-TRADE (Daily):
 | Phase F (Autonomy) | ✅ Complete | Langfuse observability, paper trading, backtest engine, learning loop, 20 tools, self-learning |
 | v3.0 Redesign | ✅ Complete | Single supervisor ReAct graph, 20 tools, fan-out research, stock pitches, 683+ tests |
 | v4.0 Global Markets | ✅ Complete | 16 macro indices, India 10Y, Bank Nifty, FinBERT+VADER sentiment, Reddit, multi-source, NSE fix, pandas-ta-classic |
+| v4.1 Reliability | ✅ Complete | Checkpointer wiring, lazy imports, connection pool, trace persistence, 914+ tests |
 
 ### Phase E: Research Depth (Complete)
 

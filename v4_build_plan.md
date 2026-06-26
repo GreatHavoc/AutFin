@@ -1,8 +1,8 @@
-# AutFin v4.0 — Global Markets & Sentiment Upgrade
+# AutFin v4.1 — Reliability & Test Coverage
 
 > **Date:** June 26, 2026
-> **Base:** v3.0 complete (759 tests passing, 20 tools, single supervisor graph)
-> **Goal:** Upgrade macro coverage from 11→16 indices, replace keyword sentiment with ML (FinBERT+VADER), add Reddit retail sentiment, wire Indian news scrapers into pipeline. All free.
+> **Base:** v4.0 complete (841 tests passing, 20 tools, single supervisor graph)
+> **Goal:** Improve reliability (crash recovery, connection pooling), add test coverage for paper trading and supervisor graph, persist observability traces to SQLite.
 
 ---
 
@@ -348,7 +348,7 @@ class RedditSentimentTool:
 | 4.2 | +23 ✅ | 782 | ✅ HybridSentimentAnalyzer: keyword (6), VADER (4), FinBERT (4), public API (6), singleton (2) |
 | 4.3 | +17 ✅ | 813 | ✅ Reddit PRAW tool, MC/ET scraper wiring, multi-source aggregation, weighted scoring |
 | 4.4 | +28 ✅ | 841 | ✅ Supervisor prompt, pitch sentiment, 2 dashboard panels, sidebar, 15 integration + 13 dashboard tests |
-| **Total** | **+82** | **841** | Target: 800+ passing ✅ EXCEEDED |
+| **v4.1** | **+73** | **914** | ✅ P2: checkpointer, lazy imports, lookback_days fix. P3: 43 paper trading + 21 supervisor tests. P5: connection pool, trace persistence. |
 
 ---
 
@@ -362,7 +362,7 @@ class RedditSentimentTool:
 | News sources | 1 (Marketaux) | 4 (Marketaux + MC + ET + Reddit) |
 | Social sentiment | Placeholder | Reddit (331K members) |
 | Global coverage | US + Japan + UK | + China + HK + Germany + France + Europe |
-| Tests | 759 | 841+ |
+| Tests | 759 | 914+ |
 | Cost | $0/month | $0/month |
 
 ---

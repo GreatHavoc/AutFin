@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,28 +32,32 @@ class ThesisCheckResult:
     subsequent_pnl_pct: Optional[float] = None
 
 
-def _get_db() -> sqlite3.Connection:
-    return sqlite3.connect(str(DB_PATH), isolation_level=None)
+def _get_db():
+    """Get a database connection from the pool."""
+    from src.autfin.memory.connection_pool import get_db_pool
+    pool = get_db_pool(DB_PATH)
+    return pool.connection()
 
 
 def _ensure_table():
     try:
-        conn = _get_db()
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS thesis_check_ab (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                symbol TEXT NOT NULL,
-                llm_verdict TEXT,
-                rule_verdict TEXT NOT NULL,
-                llm_reasoning TEXT,
-                price_change_pct REAL DEFAULT 0,
-                days_held INTEGER DEFAULT 0,
-                subsequent_outcome TEXT,
-                subsequent_pnl_pct REAL,
-                timestamp TEXT NOT NULL
-            )"""
-        )
-        conn.close()
+        from src.autfin.memory.connection_pool import get_db_pool
+        pool = get_db_pool(DB_PATH)
+        with pool.connection() as conn:
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS thesis_check_ab (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT NOT NULL,
+                    llm_verdict TEXT,
+                    rule_verdict TEXT NOT NULL,
+                    llm_reasoning TEXT,
+                    price_change_pct REAL DEFAULT 0,
+                    days_held INTEGER DEFAULT 0,
+                    subsequent_outcome TEXT,
+                    subsequent_pnl_pct REAL,
+                    timestamp TEXT NOT NULL
+                )"""
+            )
     except Exception:
         pass
 
@@ -62,40 +65,48 @@ def _ensure_table():
 def record_thesis_check(result: ThesisCheckResult):
     _ensure_table()
     try:
-        conn = _get_db()
-        conn.execute(
-            """INSERT INTO thesis_check_ab
-            (symbol, llm_verdict, rule_verdict, llm_reasoning, price_change_pct,
-             days_held, subsequent_outcome, subsequent_pnl_pct, timestamp)
-            VALUES (?,?,?,?,?,?,?,?,?)""",
-            (
-                result.symbol,
-                result.llm_verdict,
-                result.rule_verdict,
-                result.llm_reasoning,
-                result.price_change_pct,
-                result.days_held,
-                result.subsequent_outcome,
-                result.subsequent_pnl_pct,
-                result.timestamp,
-            ),
-        )
-        conn.close()
+        from src.autfin.memory.connection_pool import get_db_pool
+        pool = get_db_pool(DB_PATH)
+        with pool.connection() as conn:
+            conn.execute(
+                """INSERT INTO thesis_check_ab
+                (symbol, llm_verdict, rule_verdict, llm_reasoning, price_change_pct,
+                 days_held, subsequent_outcome, subsequent_pnl_pct, timestamp)
+                VALUES (?,?,?,?,?,?,?,?,?)""",
+                (
+                    result.symbol,
+                    result.llm_verdict,
+                    result.rule_verdict,
+                    result.llm_reasoning,
+                    result.price_change_pct,
+                    result.days_held,
+                    result.subsequent_outcome,
+                    result.subsequent_pnl_pct,
+                    result.timestamp,
+                ),
+            )
     except Exception as e:
         logger.debug(f"Thesis check record failed: {e}")
 
 
 def compute_ab_stats(lookback_days: int = 90) -> Dict[str, Any]:
-    """Compare LLM vs rule-based accuracy by whether subsequent price moved correctly."""
+    """Compare LLM vs rule-based accuracy by whether subsequent price moved correctly.
+    
+    Args:
+        lookback_days: Only include checks from the last N days (default: 90).
+    """
     _ensure_table()
     try:
-        conn = _get_db()
-        rows = conn.execute(
-            """SELECT llm_verdict, rule_verdict, subsequent_outcome, price_change_pct
-            FROM thesis_check_ab
-            ORDER BY timestamp DESC LIMIT 1000"""
-        ).fetchall()
-        conn.close()
+        from src.autfin.memory.connection_pool import get_db_pool
+        pool = get_db_pool(DB_PATH)
+        with pool.connection() as conn:
+            rows = conn.execute(
+                """SELECT llm_verdict, rule_verdict, subsequent_outcome, price_change_pct
+                FROM thesis_check_ab
+                WHERE timestamp >= datetime('now', ?)
+                ORDER BY timestamp DESC""",
+                (f"-{lookback_days} days",),
+            ).fetchall()
     except Exception:
         return {"error": "DB unavailable", "total_comparisons": 0}
 
@@ -164,13 +175,14 @@ def _is_correct(verdict: Optional[str], subsequent_outcome: Optional[str], chang
 
 def record_outcome(symbol: str, verdict: str, pnl_pct: float):
     try:
-        conn = _get_db()
+        from src.autfin.memory.connection_pool import get_db_pool
+        pool = get_db_pool(DB_PATH)
         outcome = "UP" if pnl_pct > 1 else "DOWN" if pnl_pct < -1 else "FLAT"
-        conn.execute(
-            """UPDATE thesis_check_ab SET subsequent_outcome=?, subsequent_pnl_pct=?
-            WHERE symbol=? AND id=(SELECT MAX(id) FROM thesis_check_ab WHERE symbol=? AND subsequent_outcome IS NULL)""",
-            (outcome, round(pnl_pct, 2), symbol, symbol),
-        )
-        conn.close()
+        with pool.connection() as conn:
+            conn.execute(
+                """UPDATE thesis_check_ab SET subsequent_outcome=?, subsequent_pnl_pct=?
+                WHERE symbol=? AND id=(SELECT MAX(id) FROM thesis_check_ab WHERE symbol=? AND subsequent_outcome IS NULL)""",
+                (outcome, round(pnl_pct, 2), symbol, symbol),
+            )
     except Exception:
         pass

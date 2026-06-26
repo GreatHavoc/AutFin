@@ -6,7 +6,6 @@ Computes a research-depth weighted P&L ratio. Stocks with deeper analysis
 
 from __future__ import annotations
 
-import sqlite3
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,8 +26,11 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def get_db() -> sqlite3.Connection:
-    return sqlite3.connect(str(DB_PATH), isolation_level=None)
+def get_db():
+    """Get a database connection from the pool."""
+    from src.autfin.memory.connection_pool import get_db_pool
+    pool = get_db_pool(DB_PATH)
+    return pool.connection()
 
 
 def record_research_output(
@@ -40,47 +42,53 @@ def record_research_output(
 ):
     weight = WEIGHT_MAP.get(depth, 1)
     try:
-        conn = get_db()
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS research_output (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                decision_id TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                depth TEXT NOT NULL,
-                research_weight INTEGER NOT NULL,
-                fundamentals_score REAL,
-                technical_score REAL,
-                sentiment_score REAL,
-                macro_score REAL,
-                valuation_score REAL,
-                research_duration_ms REAL,
-                created_at TEXT DEFAULT (datetime('now'))
-            )""",
-        )
-        conn.execute(
-            """INSERT INTO research_output
-            (decision_id, symbol, depth, research_weight, fundamentals_score,
-             technical_score, sentiment_score, macro_score, valuation_score, research_duration_ms)
-            VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (
-                decision_id,
-                symbol,
-                depth,
-                weight,
-                scores.get("fundamentals", 0),
-                scores.get("technical", 0),
-                scores.get("sentiment", 0),
-                scores.get("macro", 0),
-                scores.get("valuation", 0),
-                research_duration_ms,
-            ),
-        )
-        conn.close()
+        from src.autfin.memory.connection_pool import get_db_pool
+        pool = get_db_pool(DB_PATH)
+        with pool.connection() as conn:
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS research_output (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    decision_id TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    depth TEXT NOT NULL,
+                    research_weight INTEGER NOT NULL,
+                    fundamentals_score REAL,
+                    technical_score REAL,
+                    sentiment_score REAL,
+                    macro_score REAL,
+                    valuation_score REAL,
+                    research_duration_ms REAL,
+                    created_at TEXT DEFAULT (datetime('now'))
+                )""",
+            )
+            conn.execute(
+                """INSERT INTO research_output
+                (decision_id, symbol, depth, research_weight, fundamentals_score,
+                 technical_score, sentiment_score, macro_score, valuation_score, research_duration_ms)
+                VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    decision_id,
+                    symbol,
+                    depth,
+                    weight,
+                    scores.get("fundamentals", 0),
+                    scores.get("technical", 0),
+                    scores.get("sentiment", 0),
+                    scores.get("macro", 0),
+                    scores.get("valuation", 0),
+                    research_duration_ms,
+                ),
+            )
     except Exception as e:
         logger.debug(f"RORO record failed: {e}")
 
 
 def compute_roro(lookback_days: int = 90) -> Dict[str, Any]:
+    """Compute Return on Research Output (RORO) score.
+    
+    Args:
+        lookback_days: Only include research from the last N days (default: 90).
+    """
     result = {
         "by_depth": {},
         "total_decisions": 0,
@@ -89,12 +97,16 @@ def compute_roro(lookback_days: int = 90) -> Dict[str, Any]:
         "interpretation": "Insufficient data",
     }
     try:
-        conn = get_db()
-        rows = conn.execute(
-            """SELECT r.decision_id, r.symbol, r.depth, r.research_weight, r.created_at
-            FROM research_output r ORDER BY r.created_at DESC"""
-        ).fetchall()
-        conn.close()
+        from src.autfin.memory.connection_pool import get_db_pool
+        pool = get_db_pool(DB_PATH)
+        with pool.connection() as conn:
+            rows = conn.execute(
+                """SELECT r.decision_id, r.symbol, r.depth, r.research_weight, r.created_at
+                FROM research_output r
+                WHERE r.created_at >= datetime('now', ?)
+                ORDER BY r.created_at DESC""",
+                (f"-{lookback_days} days",),
+            ).fetchall()
 
         if not rows:
             return result
@@ -105,7 +117,7 @@ def compute_roro(lookback_days: int = 90) -> Dict[str, Any]:
 
         for row in rows:
             decision_id, symbol, depth, weight, created_at = row
-            trade_pnl = _get_trade_pnl_for_decision(decision_id)
+            trade_pnl = _get_trade_pnl_for_symbol(symbol)
             depth_pnl.setdefault(depth, (0.0, 0))
             pnl, count = depth_pnl[depth]
             depth_pnl[depth] = (pnl + trade_pnl, count + 1)
@@ -143,12 +155,13 @@ def compute_roro(lookback_days: int = 90) -> Dict[str, Any]:
 
 def _get_trade_pnl_for_symbol(symbol: str) -> float:
     try:
-        conn = get_db()
-        row = conn.execute(
-            "SELECT pnl_pct FROM learning_journal WHERE symbol=? ORDER BY created_at DESC LIMIT 1",
-            (symbol.upper(),),
-        ).fetchone()
-        conn.close()
+        from src.autfin.memory.connection_pool import get_db_pool
+        pool = get_db_pool(DB_PATH)
+        with pool.connection() as conn:
+            row = conn.execute(
+                "SELECT pnl_pct FROM learning_journal WHERE symbol=? ORDER BY created_at DESC LIMIT 1",
+                (symbol.upper(),),
+            ).fetchone()
         return float(row[0]) if row and row[0] else 0.0
     except Exception:
         return 0.0
@@ -156,9 +169,10 @@ def _get_trade_pnl_for_symbol(symbol: str) -> float:
 
 def get_research_efficiency() -> Dict[str, Any]:
     try:
-        conn = get_db()
-        total = conn.execute("SELECT COUNT(*) FROM research_output").fetchone()[0]
-        conn.close()
+        from src.autfin.memory.connection_pool import get_db_pool
+        pool = get_db_pool(DB_PATH)
+        with pool.connection() as conn:
+            total = conn.execute("SELECT COUNT(*) FROM research_output").fetchone()[0]
     except Exception:
         total = 0
 
