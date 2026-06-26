@@ -217,8 +217,11 @@ class AutFinStore:
         key: str,
         value: Any,
     ) -> None:
-        """Synchronously store a value."""
-        import asyncio
+        """Synchronously store a value.
+
+        Raises RuntimeError if called from within an already-running event loop.
+        Use the async methods (aput/aget/adelete/asearch) when inside async code.
+        """
         asyncio.run(self.aput(namespace, key, value))
     
     def get(
@@ -226,8 +229,11 @@ class AutFinStore:
         namespace: str,
         key: str,
     ) -> Optional[Any]:
-        """Synchronously retrieve a value."""
-        import asyncio
+        """Synchronously retrieve a value.
+
+        Raises RuntimeError if called from within an already-running event loop.
+        Use the async methods (aput/aget/adelete/asearch) when inside async code.
+        """
         return asyncio.run(self.aget(namespace, key))
     
     def delete(
@@ -235,8 +241,11 @@ class AutFinStore:
         namespace: str,
         key: str,
     ) -> bool:
-        """Synchronously delete a value."""
-        import asyncio
+        """Synchronously delete a value.
+
+        Raises RuntimeError if called from within an already-running event loop.
+        Use the async methods (aput/aget/adelete/asearch) when inside async code.
+        """
         return asyncio.run(self.adelete(namespace, key))
     
     def search(
@@ -245,8 +254,11 @@ class AutFinStore:
         metadata: Optional[Dict[str, Any]] = None,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
-        """Synchronously search for values."""
-        import asyncio
+        """Synchronously search for values.
+
+        Raises RuntimeError if called from within an already-running event loop.
+        Use the async methods (aput/aget/adelete/asearch) when inside async code.
+        """
         return asyncio.run(self.asearch(namespace, metadata, limit))
 
 

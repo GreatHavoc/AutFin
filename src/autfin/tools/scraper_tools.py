@@ -1,4 +1,8 @@
-"""Firecrawl-based web scraping tools for financial data."""
+"""Firecrawl-based web scraping tools for financial data.
+
+Also includes nselib-powered NSE data functions for corporate actions
+and event calendar (complements the HTTP-based announcement scraper).
+"""
 
 import logging
 import os
@@ -58,7 +62,11 @@ def _extract_text_from_html(html: str) -> str:
 
 
 class ScraperTools:
-    """Firecrawl-based web scraping tools for financial data."""
+    """Firecrawl-based web scraping tools for financial data.
+
+    Also includes nselib-powered NSE data functions for corporate actions
+    and event calendar (complements the HTTP-based announcement scraper).
+    """
 
     def __init__(self, api_key: Optional[str] = None):
         """
@@ -196,6 +204,9 @@ class ScraperTools:
         """
         Scrape NSE corporate announcements for a symbol.
 
+        NSE blocks direct API calls without cookies. This method first visits
+        the main page to establish a session, then fetches the announcements API.
+
         Args:
             symbol: Stock symbol (e.g., "RELIANCE").
             limit: Maximum announcements to return.
@@ -204,32 +215,60 @@ class ScraperTools:
             List of dicts with keys: symbol, desc, date, attachment.
         """
         symbol_upper = symbol.upper().strip()
-        url = (
-            "https://www.nseindia.com/api/corporate-announcements"
-            f"?index=equities&symbol={symbol_upper}"
-        )
         try:
-            client = await self._get_client()
-            response = await client.get(url, timeout=15.0)
-            if response.status_code != 200:
-                logger.debug(
-                    "NSE announcements HTTP %d for %s",
-                    response.status_code,
-                    symbol_upper,
-                )
-                return []
+            import httpx
 
-            data = response.json()
-            announcements: List[Dict[str, Any]] = []
-            raw_items = data if isinstance(data, list) else data.get("data", [])
-            for item in raw_items[:limit]:
-                announcements.append({
-                    "symbol": item.get("symbol", symbol_upper),
-                    "desc": item.get("desc", item.get("sm_name", "")),
-                    "date": item.get("an_dt", item.get("sort_date", "")),
-                    "attachment": item.get("attachment", ""),
-                })
-            return announcements
+            # NSE requires cookies from the main page before API calls
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/125.0.0.0 Safari/537.36"
+                ),
+                "Accept": "application/json, text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+            }
+
+            async with httpx.AsyncClient(
+                timeout=15.0,
+                headers=headers,
+                follow_redirects=True,
+            ) as session:
+                # Step 1: Visit main page to get cookies
+                try:
+                    await session.get("https://www.nseindia.com", timeout=10.0)
+                except Exception:
+                    logger.debug("NSE main page fetch failed, trying API anyway")
+
+                # Step 2: Fetch announcements API with cookies
+                api_url = (
+                    "https://www.nseindia.com/api/corporate-announcements"
+                    f"?index=equities&symbol={symbol_upper}"
+                )
+                response = await session.get(api_url, timeout=15.0)
+
+                if response.status_code != 200:
+                    logger.debug(
+                        "NSE announcements HTTP %d for %s",
+                        response.status_code,
+                        symbol_upper,
+                    )
+                    return []
+
+                data = response.json()
+                announcements: List[Dict[str, Any]] = []
+                raw_items = data if isinstance(data, list) else data.get("data", [])
+                for item in raw_items[:limit]:
+                    announcements.append({
+                        "symbol": item.get("symbol", symbol_upper),
+                        "desc": item.get("desc", item.get("sm_name", "")),
+                        "date": item.get("an_dt", item.get("sort_date", "")),
+                        "attachment": item.get("attachment", ""),
+                    })
+                return announcements
+
         except httpx.HTTPError:
             logger.debug(
                 "NSE announcements HTTP error for %s", symbol_upper, exc_info=True
@@ -322,6 +361,99 @@ class ScraperTools:
         except Exception:
             logger.debug(
                 "scrape_economic_times failed for %s", topic, exc_info=True
+            )
+            return []
+
+    # ------------------------------------------------------------------
+    # NSE via nselib (corporate actions, event calendar)
+    # ------------------------------------------------------------------
+
+    def get_nse_corporate_actions(
+        self, symbol: str, period: str = "1M"
+    ) -> List[Dict[str, Any]]:
+        """Get corporate actions (dividends, splits, bonuses) via nselib.
+
+        Uses nselib's bulk API — fetches all actions for the period,
+        then filters for the requested symbol.
+
+        Args:
+            symbol: Stock symbol (e.g., "RELIANCE").
+            period: Lookback period — "1W", "1M", "3M", "6M", "1Y".
+
+        Returns:
+            List of dicts with keys: symbol, subject, ex_date, rec_date.
+        """
+        symbol_upper = symbol.upper().strip()
+        try:
+            from nselib import capital_market
+            df = capital_market.corporate_actions_for_equity(period=period)
+            if df is None or df.empty:
+                return []
+
+            # Filter for the requested symbol
+            sym_col = "symbol" if "symbol" in df.columns else " SYMBOL"
+            filtered = df[df[sym_col].str.upper() == symbol_upper]
+
+            results = []
+            for _, row in filtered.iterrows():
+                results.append({
+                    "symbol": symbol_upper,
+                    "subject": row.get("subject", ""),
+                    "ex_date": row.get("exDate", ""),
+                    "rec_date": row.get("recDate", ""),
+                    "face_val": row.get("faceVal", ""),
+                    "series": row.get("series", ""),
+                })
+            return results
+        except ImportError:
+            logger.debug("nselib not installed, skipping corporate actions")
+            return []
+        except Exception:
+            logger.debug(
+                "get_nse_corporate_actions failed for %s", symbol_upper, exc_info=True
+            )
+            return []
+
+    def get_nse_event_calendar(
+        self, symbol: str, period: str = "1M"
+    ) -> List[Dict[str, Any]]:
+        """Get event calendar (board meetings, fund raising) via nselib.
+
+        Uses nselib's bulk API — fetches all events for the period,
+        then filters for the requested symbol.
+
+        Args:
+            symbol: Stock symbol (e.g., "RELIANCE").
+            period: Lookback period — "1W", "1M", "3M", "6M", "1Y".
+
+        Returns:
+            List of dicts with keys: symbol, company, purpose, date, description.
+        """
+        symbol_upper = symbol.upper().strip()
+        try:
+            from nselib import capital_market
+            df = capital_market.event_calendar_for_equity(period=period)
+            if df is None or df.empty:
+                return []
+
+            filtered = df[df["symbol"].str.upper() == symbol_upper]
+
+            results = []
+            for _, row in filtered.iterrows():
+                results.append({
+                    "symbol": symbol_upper,
+                    "company": row.get("company", ""),
+                    "purpose": row.get("purpose", ""),
+                    "date": row.get("date", ""),
+                    "description": row.get("bm_desc", ""),
+                })
+            return results
+        except ImportError:
+            logger.debug("nselib not installed, skipping event calendar")
+            return []
+        except Exception:
+            logger.debug(
+                "get_nse_event_calendar failed for %s", symbol_upper, exc_info=True
             )
             return []
 

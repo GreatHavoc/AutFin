@@ -636,7 +636,8 @@ async def build_stock_pitch(symbol: str, research_data: Dict[str, Any]) -> Dict[
             "risks is an array of 2-4 key risks. "
             "valuation_summary is a 2-3 sentence analysis. "
             "competitive_moat is a short paragraph. "
-            "price_target is a dict with base, upside, downside and rationale."
+            "price_target is a dict with base, upside, downside and rationale. "
+            "If sentiment data is included, factor it into your thesis and risk assessment."
         )
 
         response = await client.generate(
@@ -1383,11 +1384,17 @@ async def analyze_macro_context() -> Dict[str, Any]:
             "^IXIC": "NASDAQ",
             "^VIX": "VIX",
             "^NSEI": "Nifty 50",
+            "^NSEBANK": "Bank Nifty",
             "DX-Y.NYB": "USD Index",
             "CL=F": "Crude Oil",
             "GC=F": "Gold",
             "^TNX": "10Y Treasury",
             "USDINR=X": "USD/INR",
+            "^SSEC": "Shanghai Composite",
+            "^HSI": "Hang Seng",
+            "^GDAXI": "DAX",
+            "^FCHI": "CAC 40",
+            "^STOXX50E": "Euro Stoxx 50",
         }
 
         indices = {}
@@ -1434,6 +1441,7 @@ async def analyze_macro_context() -> Dict[str, Any]:
             "indices": indices,
             "rates": {
                 "us_10y": indices.get("10Y Treasury", {}).get("ltp", 0.0),
+                "india_10y": macro_signals.get("india_10y_yield", {}).get("value"),
                 "usd_inr": indices.get("USD/INR", {}).get("ltp", 0.0),
             },
             "india_impact": india_impact,
@@ -1457,9 +1465,9 @@ async def analyze_macro_context() -> Dict[str, Any]:
 
 async def get_market_status() -> Dict[str, Any]:
     """
-    Check if market is open, get Nifty level, sector performance.
+    Check if market is open, get Nifty level, Bank Nifty, global indices, sector performance.
     No parameters.
-    Returns {is_open, nifty_level, nifty_change_pct, sectors: {}}.
+    Returns {is_open, nifty_level, nifty_change_pct, bank_nifty, global_indices, sectors: {}}.
     """
     try:
         import yfinance as yf
@@ -1474,6 +1482,56 @@ async def get_market_status() -> Dict[str, Any]:
             else info.get("regularMarketPrice")
         ) or info.get("previousClose") or 0.0
         nifty_change_pct = info.get("regularMarketChangePercent") or 0.0
+
+        # Bank Nifty
+        bank_nifty_ltp = 0.0
+        bank_nifty_change_pct = 0.0
+        try:
+            bn = yf.Ticker("^NSEBANK")
+            bn_info = bn.info or {}
+            bn_fast = bn.fast_info if hasattr(bn, "fast_info") else None
+            bank_nifty_ltp = (
+                getattr(bn_fast, "last_price", None)
+                if bn_fast
+                else bn_info.get("regularMarketPrice")
+            ) or bn_info.get("previousClose") or 0.0
+            bank_nifty_change_pct = bn_info.get("regularMarketChangePercent") or 0.0
+        except Exception:
+            pass
+
+        # Global indices
+        global_index_map = {
+            "^GSPC": "S&P 500",
+            "^IXIC": "NASDAQ",
+            "^N225": "Nikkei 225",
+            "^FTSE": "FTSE 100",
+            "^SSEC": "Shanghai Composite",
+            "^HSI": "Hang Seng",
+            "^GDAXI": "DAX",
+            "^FCHI": "CAC 40",
+            "^STOXX50E": "Euro Stoxx 50",
+            "^VIX": "VIX",
+            "DX-Y.NYB": "USD Index",
+            "USDINR=X": "USD/INR",
+        }
+        global_indices = {}
+        for ticker_id, label in global_index_map.items():
+            try:
+                t = yf.Ticker(ticker_id)
+                t_info = t.info or {}
+                t_fast = t.fast_info if hasattr(t, "fast_info") else None
+                ltp = (
+                    getattr(t_fast, "last_price", None)
+                    if t_fast
+                    else t_info.get("regularMarketPrice")
+                ) or t_info.get("previousClose", 0)
+                change_pct = t_info.get("regularMarketChangePercent", 0)
+                global_indices[label] = {
+                    "ltp": round(float(ltp), 2) if ltp else 0.0,
+                    "change_pct": round(float(change_pct), 2) if change_pct else 0.0,
+                }
+            except Exception:
+                global_indices[label] = {"ltp": 0.0, "change_pct": 0.0}
 
         now = datetime.now()
         weekday = now.weekday()
@@ -1509,6 +1567,9 @@ async def get_market_status() -> Dict[str, Any]:
             "timestamp": now.isoformat(),
             "nifty_level": round(float(nifty_ltp), 2),
             "nifty_change_pct": round(float(nifty_change_pct), 2),
+            "bank_nifty_level": round(float(bank_nifty_ltp), 2),
+            "bank_nifty_change_pct": round(float(bank_nifty_change_pct), 2),
+            "global_indices": global_indices,
             "sectors": sectors,
         }
 
@@ -1520,6 +1581,9 @@ async def get_market_status() -> Dict[str, Any]:
             "is_open": False,
             "nifty_level": 0.0,
             "nifty_change_pct": 0.0,
+            "bank_nifty_level": 0.0,
+            "bank_nifty_change_pct": 0.0,
+            "global_indices": {},
             "sectors": {},
         }
 

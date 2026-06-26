@@ -109,7 +109,13 @@ td {{ padding: 8px; border-bottom: 1px solid #333; }}
         from src.autfin.learning import CalibrationTracker
         tracker = CalibrationTracker()
         import asyncio
-        cal = asyncio.get_event_loop().run_until_complete(tracker.get_calibration()) if asyncio.get_event_loop().is_running() else {}
+        try:
+            loop = asyncio.get_running_loop()
+            # Already inside an async context — can't call run_until_complete
+            cal = {}
+        except RuntimeError:
+            # No running loop — safe to use asyncio.run()
+            cal = asyncio.run(tracker.get_calibration())
         for tier, data in cal.items():
             html += f'<p><strong>{tier}:</strong> {data.get("actual_win_rate", 0):.0%} actual vs {data.get("expected_win_rate", 0):.0%} expected ({data.get("sample_size", 0)} trades) — {data.get("status", "?")}</p>'
     except Exception:

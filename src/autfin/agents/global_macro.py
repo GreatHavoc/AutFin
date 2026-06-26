@@ -64,11 +64,12 @@ _macro_cache = MacroDataCache(ttl_seconds=300)
 
 # ================== FRED API FETCHER ==================
 
-# FRED series IDs for US economic indicators
+# FRED series IDs for economic indicators
 FRED_SERIES = {
     "us_gdp": "GDP",
     "us_cpi": "CPIAUCSL",
     "fed_funds_rate": "FEDFUNDS",
+    "india_10y_yield": "INDIRLTLT01STM",  # India 10Y Government Bond Yield (monthly)
 }
 
 # FRED data is quarterly (GDP) or monthly (CPI, Fed Funds) — cache for 24h
@@ -140,6 +141,7 @@ def fetch_fred_indicators() -> Dict[str, Dict[str, Any]]:
         "us_gdp": ("percent", "BEA (quarterly)"),
         "us_cpi": ("index", "BLS (monthly)"),
         "fed_funds_rate": ("percent", "Federal Reserve (monthly)"),
+        "india_10y_yield": ("percent", "RBI/FRED (monthly)"),
     }
     
     for series_id, (unit, source) in labels.items():
@@ -357,6 +359,11 @@ async def fetch_macro_indicators() -> Dict[str, Any]:
             "^IXIC": "nasdaq_composite",
             "^N225": "nikkei_225",
             "^FTSE": "ftse_100",
+            "^SSEC": "shanghai_composite",
+            "^HSI": "hang_seng",
+            "^GDAXI": "dax",
+            "^FCHI": "cac_40",
+            "^STOXX50E": "euro_stoxx_50",
             "^VIX": "vix",
             "DX-Y.NYB": "dxy",
         }
@@ -411,7 +418,7 @@ async def fetch_macro_indicators() -> Dict[str, Any]:
 
         # US economic indicators — try FRED API, fallback to None
         fred_data = fetch_fred_indicators()
-        for key in ["us_gdp", "us_cpi", "fed_funds_rate"]:
+        for key in ["us_gdp", "us_cpi", "fed_funds_rate", "india_10y_yield"]:
             indicators["data"][key] = fred_data.get(key, {
                 "value": None,
                 "unit": "percent",
@@ -864,6 +871,96 @@ SECTOR_IMPACT_MATRIX: Dict[str, Dict[str, Dict[str, str]]] = {
             "strength": "low",
             "affected_sectors": ["IT", "pharma"],
             "reasoning": "Falling yields support growth stock valuations",
+        },
+    },
+    # India 10Y yield up: hawkish RBI → negative for rate-sensitive sectors
+    "india_10y_yield": {
+        "positive": {
+            "direction": "negative",
+            "strength": "high",
+            "affected_sectors": ["banking", "realty", "infra", "NBFCs"],
+            "reasoning": "Rising India yields signal tighter monetary policy, hurt rate-sensitive sectors",
+        },
+        "negative": {
+            "direction": "positive",
+            "strength": "high",
+            "affected_sectors": ["banking", "realty", "infra", "NBFCs"],
+            "reasoning": "Falling India yields signal easing, boost rate-sensitive sectors",
+        },
+    },
+    # Shanghai Composite up: China demand → positive for metals, IT
+    "shanghai_composite": {
+        "positive": {
+            "direction": "positive",
+            "strength": "medium",
+            "affected_sectors": ["metals", "IT", "auto"],
+            "reasoning": "China rally signals global risk-on, lifts commodity demand and IT outsourcing",
+        },
+        "negative": {
+            "direction": "negative",
+            "strength": "low",
+            "affected_sectors": ["metals"],
+            "reasoning": "China weakness signals global slowdown, hits commodity-linked sectors",
+        },
+    },
+    # Hang Seng up: HK/China risk-on → positive for banking, IT
+    "hang_seng": {
+        "positive": {
+            "direction": "positive",
+            "strength": "medium",
+            "affected_sectors": ["IT", "banking"],
+            "reasoning": "HK rally signals Asia risk-on, supports banking and IT flows",
+        },
+        "negative": {
+            "direction": "negative",
+            "strength": "low",
+            "affected_sectors": ["banking"],
+            "reasoning": "HK weakness signals Asia risk-off, may trigger FII caution",
+        },
+    },
+    # DAX up: Germany/Europe strength → positive for auto, metals
+    "dax": {
+        "positive": {
+            "direction": "positive",
+            "strength": "medium",
+            "affected_sectors": ["auto", "metals", "IT"],
+            "reasoning": "German rally signals Europe strength, lifts auto/metal demand for Indian exports",
+        },
+        "negative": {
+            "direction": "negative",
+            "strength": "low",
+            "affected_sectors": ["auto"],
+            "reasoning": "German weakness may reduce Indian auto/metal export demand",
+        },
+    },
+    # CAC 40 up: Europe risk-on → positive for FMCG, pharma
+    "cac_40": {
+        "positive": {
+            "direction": "positive",
+            "strength": "low",
+            "affected_sectors": ["FMCG", "pharma"],
+            "reasoning": "Europe rally supports risk-on, benefits defensive sectors with European exposure",
+        },
+        "negative": {
+            "direction": "neutral",
+            "strength": "low",
+            "affected_sectors": [],
+            "reasoning": "Minimal direct impact on Indian sectors",
+        },
+    },
+    # Euro Stoxx 50 up: Broad Europe risk-on → positive for IT, banking
+    "euro_stoxx_50": {
+        "positive": {
+            "direction": "positive",
+            "strength": "medium",
+            "affected_sectors": ["IT", "banking"],
+            "reasoning": "Broad Europe rally signals global risk-on, supports FII inflows",
+        },
+        "negative": {
+            "direction": "negative",
+            "strength": "low",
+            "affected_sectors": ["banking"],
+            "reasoning": "Europe weakness signals risk-off, may trigger FII outflows",
         },
     },
 }

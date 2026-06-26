@@ -31,7 +31,7 @@ class SentimentAgent:
         Args:
             api_token: Marketaux API token. If None, loads from environment.
         """
-        self.api_token = api_token or os.getenv("MARKETAUX_API_TOKEN")
+        self.api_token = api_token or os.getenv("MARKETAUX_API_KEY")
         self._tools: Optional[SentimentTools] = None
     
     async def _get_tools(self) -> SentimentTools:

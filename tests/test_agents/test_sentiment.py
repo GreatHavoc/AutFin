@@ -37,7 +37,7 @@ def _base_state(**overrides) -> dict:
 def _clear_env(monkeypatch):
     for key in (
         "GROQ_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY",
-        "MARKETAUX_API_TOKEN",
+        "MARKETAUX_API_KEY",
     ):
         monkeypatch.delenv(key, raising=False)
     global _sentiment_agent
@@ -95,7 +95,7 @@ async def test_agent_processes_sentiment_reports_with_mock_data(monkeypatch):
 @pytest.mark.asyncio
 async def test_error_handling_when_no_api_token(monkeypatch):
     _make_llm_unavailable(monkeypatch)
-    monkeypatch.delenv("MARKETAUX_API_TOKEN", raising=False)
+    monkeypatch.delenv("MARKETAUX_API_KEY", raising=False)
 
     class FailingSentimentTools:
         def __init__(self, api_token=None):

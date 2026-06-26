@@ -662,10 +662,9 @@ def get_kite_status() -> Dict[str, Any]:
         # Try to get margins as a connectivity check
         import asyncio
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # We're inside Streamlit (sync context), can't use await
-                return {"connected": False, "balance": None, "error": "Cannot run async in Streamlit context"}
+            loop = asyncio.get_running_loop()
+            # We're inside Streamlit (sync context), can't use await
+            return {"connected": False, "balance": None, "error": "Cannot run async in Streamlit context"}
         except RuntimeError:
             pass
         return {"connected": True, "balance": None, "error": None}

@@ -1,4 +1,13 @@
-"""Sentiment analysis tools for AutFin."""
+"""Sentiment analysis tools for AutFin.
+
+Multi-source sentiment pipeline:
+  - Marketaux (API, 0.4 weight) — structured news feed
+  - Moneycontrol (scraper, 0.2 weight) — Indian market news
+  - Economic Times (scraper, 0.2 weight) — Indian business news
+  - Reddit (PRAW, 0.2 weight) — retail sentiment
+
+All sentiment scoring via HybridSentimentAnalyzer (FinBERT/VADER/keyword).
+"""
 
 import asyncio
 import logging
@@ -7,11 +16,21 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from src.autfin.tools.sentiment_analyzer import get_sentiment_analyzer
+
 logger = logging.getLogger(__name__)
+
+# Default source weights for multi-source aggregation
+DEFAULT_SOURCE_WEIGHTS = {
+    "marketaux": 0.4,
+    "moneycontrol": 0.2,
+    "economic_times": 0.2,
+    "reddit": 0.2,
+}
 
 
 class SentimentTools:
-    """Tools for sentiment analysis."""
+    """Tools for multi-source sentiment analysis."""
     
     def __init__(self, api_token: Optional[str] = None):
         """
@@ -23,6 +42,9 @@ class SentimentTools:
         self.api_token = api_token
         self.base_url = "https://api.marketaux.com/v1"
         self._client: Optional[httpx.AsyncClient] = None
+        self._analyzer = get_sentiment_analyzer()
+        self._scraper = None  # Lazy-loaded ScraperTools
+        self._reddit = None  # Lazy-loaded RedditSentimentTool
     
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create httpx client."""
@@ -48,73 +70,46 @@ class SentimentTools:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.close()
+
+    # ------------------------------------------------------------------
+    # Lazy-loaded sub-tools
+    # ------------------------------------------------------------------
+
+    def _get_scraper(self):
+        """Lazy-load ScraperTools for Moneycontrol/ET scraping."""
+        if self._scraper is None:
+            from src.autfin.tools.scraper_tools import ScraperTools
+            self._scraper = ScraperTools()
+        return self._scraper
+
+    def _get_reddit(self):
+        """Lazy-load RedditSentimentTool."""
+        if self._reddit is None:
+            from src.autfin.tools.reddit_sentiment import get_reddit_sentiment_tool
+            self._reddit = get_reddit_sentiment_tool()
+        return self._reddit
     
     def _calculate_sentiment_score(self, text: str) -> float:
-        """
-        Calculate sentiment score from text.
-        
-        Uses a simple keyword-based approach.
+        """Calculate sentiment score using HybridSentimentAnalyzer (FinBERT/VADER/keyword).
+
         Returns score in range [-1, 1].
-        
-        Args:
-            text: Text to analyze
-            
-        Returns:
-            Sentiment score (-1 negative, 0 neutral, 1 positive)
         """
         if not text:
             return 0.0
-        
-        text_lower = text.lower()
-        
-        # Positive keywords
-        positive_words = [
-            "gain", "rise", "rising", "up", " rally", "strong", "buoyant",
-            "positive", "bullish", "growth", "profit", "beats", "upgrade",
-            "outperform", "best", "excellent", "better", "advantage",
-            "favourable", "opportunity", "潜力", "潜力", "潜力", "潜力"
-        ]
-        
-        # Negative keywords
-        negative_words = [
-            "drop", "fall", "falling", "down", "plunge", "weak", "bearish",
-            "negative", "sell", "downgrade", "underperform", "worst", "worse",
-            "risk", "concern", "loss", "miss", "decline", "downturn",
-            "recession", "crisis", " trouble", " trouble", " trouble", " trouble"
-        ]
-        
-        # Count occurrences
-        positive_count = sum(text_lower.count(word) for word in positive_words)
-        negative_count = sum(text_lower.count(word) for word in negative_words)
-        
-        # Calculate raw score
-        total = positive_count + negative_count
-        if total == 0:
-            return 0.0
-        
-        # Normalize to [-1, 1]
-        raw_score = (positive_count - negative_count) / total
-        
-        # Apply severity scaling
-        severity = min(1.0, (positive_count + negative_count) / 5)
-        scaled_score = raw_score * (0.3 + 0.7 * severity)
-        
-        return max(-1.0, min(1.0, scaled_score))
+        result = self._analyzer.analyze(text, source_type="news")
+        return result["score"]
     
     async def analyze_text(self, text: str) -> Dict[str, float]:
-        """
-        Analyze sentiment of text.
+        """Analyze sentiment of text using hybrid analyzer.
         
-        Args:
-            text: Text to analyze
-            
         Returns:
             Dictionary with positive, negative, neutral scores
         """
         if not text:
             return {"positive": 0.0, "negative": 0.0, "neutral": 1.0}
         
-        score = self._calculate_sentiment_score(text)
+        result = self._analyzer.analyze(text, source_type="news")
+        score = result["score"]
         
         # Convert to three-part score
         if score > 0:
@@ -130,7 +125,8 @@ class SentimentTools:
             "positive": round(positive, 4),
             "negative": round(negative, 4),
             "neutral": round(neutral, 4),
-            "compound": round(score, 4)
+            "compound": round(score, 4),
+            "method": result["method"],
         }
     
     async def score_news(self, headlines: list) -> Dict[str, Any]:
@@ -402,4 +398,237 @@ class SentimentTools:
             "recent_articles": recent_count,
             "old_articles": old_count,
             "confidence": round(confidence, 4)
+        }
+
+    # ------------------------------------------------------------------
+    # Multi-source sentiment
+    # ------------------------------------------------------------------
+
+    async def get_moneycontrol_sentiment(
+        self, symbol: str, limit: int = 5
+    ) -> Dict[str, Any]:
+        """Scrape Moneycontrol news and analyze sentiment.
+
+        Returns:
+            {source, symbol, score, confidence, articles_count, method}
+        """
+        try:
+            scraper = self._get_scraper()
+            articles = await scraper.scrape_moneycontrol_news(symbol, limit=limit)
+
+            if not articles:
+                return {
+                    "source": "moneycontrol",
+                    "symbol": symbol,
+                    "score": 0.0,
+                    "confidence": 0.0,
+                    "articles_count": 0,
+                    "method": "none",
+                }
+
+            # Score each headline
+            texts = [a.get("title", "") for a in articles if a.get("title")]
+            result = self._analyzer.analyze_batch(texts, source_type="news")
+
+            return {
+                "source": "moneycontrol",
+                "symbol": symbol,
+                "score": result["score"],
+                "confidence": result["confidence"],
+                "articles_count": result["count"],
+                "method": result["method"],
+            }
+        except Exception as e:
+            logger.debug("Moneycontrol sentiment failed for %s: %s", symbol, e)
+            return {
+                "source": "moneycontrol",
+                "symbol": symbol,
+                "score": 0.0,
+                "confidence": 0.0,
+                "articles_count": 0,
+                "method": "error",
+                "error": str(e),
+            }
+
+    async def get_economic_times_sentiment(
+        self, symbol: str, limit: int = 5
+    ) -> Dict[str, Any]:
+        """Scrape Economic Times news and analyze sentiment.
+
+        Returns:
+            {source, symbol, score, confidence, articles_count, method}
+        """
+        try:
+            scraper = self._get_scraper()
+            articles = await scraper.scrape_economic_times(symbol, limit=limit)
+
+            if not articles:
+                return {
+                    "source": "economic_times",
+                    "symbol": symbol,
+                    "score": 0.0,
+                    "confidence": 0.0,
+                    "articles_count": 0,
+                    "method": "none",
+                }
+
+            texts = [a.get("title", "") for a in articles if a.get("title")]
+            result = self._analyzer.analyze_batch(texts, source_type="news")
+
+            return {
+                "source": "economic_times",
+                "symbol": symbol,
+                "score": result["score"],
+                "confidence": result["confidence"],
+                "articles_count": result["count"],
+                "method": result["method"],
+            }
+        except Exception as e:
+            logger.debug("ET sentiment failed for %s: %s", symbol, e)
+            return {
+                "source": "economic_times",
+                "symbol": symbol,
+                "score": 0.0,
+                "confidence": 0.0,
+                "articles_count": 0,
+                "method": "error",
+                "error": str(e),
+            }
+
+    async def get_reddit_sentiment(
+        self, symbol: str, subreddits: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """Fetch Reddit sentiment for a stock.
+
+        Returns:
+            {source, symbol, score, confidence, posts_count, method}
+        """
+        try:
+            reddit = self._get_reddit()
+            result = reddit.analyze(symbol, subreddits=subreddits)
+
+            posts_found = result.get("posts_found", 0)
+            avg_sentiment = result.get("avg_sentiment", 0.0)
+
+            return {
+                "source": "reddit",
+                "symbol": symbol,
+                "score": avg_sentiment,
+                "confidence": min(1.0, posts_found / 10) if posts_found > 0 else 0.0,
+                "posts_count": posts_found,
+                "method": "vader",
+                "volume_signal": result.get("volume_signal", "none"),
+                "top_posts": result.get("top_posts", []),
+            }
+        except Exception as e:
+            logger.debug("Reddit sentiment failed for %s: %s", symbol, e)
+            return {
+                "source": "reddit",
+                "symbol": symbol,
+                "score": 0.0,
+                "confidence": 0.0,
+                "posts_count": 0,
+                "method": "error",
+                "error": str(e),
+            }
+
+    async def get_multi_source_sentiment(
+        self,
+        symbol: str,
+        weights: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, Any]:
+        """Aggregate sentiment from all sources with weighted scoring.
+
+        Sources:
+          - Marketaux (API news) — weight 0.4
+          - Moneycontrol (scraped news) — weight 0.2
+          - Economic Times (scraped news) — weight 0.2
+          - Reddit (retail sentiment) — weight 0.2
+
+        Args:
+            symbol: Stock symbol.
+            weights: Optional override for source weights.
+
+        Returns:
+            {symbol, weighted_score, sources: [{source, score, weight,
+             articles_count}], confidence, category}
+        """
+        if weights is None:
+            weights = DEFAULT_SOURCE_WEIGHTS.copy()
+
+        # Fetch all sources concurrently
+        mc_task = self.get_moneycontrol_sentiment(symbol)
+        et_task = self.get_economic_times_sentiment(symbol)
+        reddit_task = self.get_reddit_sentiment(symbol)
+
+        # Marketaux via existing path (may fail if no token)
+        marketaux_result = None
+        try:
+            marketaux_result = await self.get_news_sentiment([symbol], days=7, limit=10)
+            if marketaux_result.get("status") == "success":
+                agg = marketaux_result.get("aggregate_sentiment", {})
+                marketaux_source = {
+                    "source": "marketaux",
+                    "score": agg.get("weighted_score", 0.0),
+                    "confidence": agg.get("confidence", 0.0),
+                    "articles_count": marketaux_result.get("total_articles", 0),
+                }
+            else:
+                marketaux_source = {
+                    "source": "marketaux",
+                    "score": 0.0,
+                    "confidence": 0.0,
+                    "articles_count": 0,
+                }
+        except Exception:
+            marketaux_source = {
+                "source": "marketaux",
+                "score": 0.0,
+                "confidence": 0.0,
+                "articles_count": 0,
+            }
+
+        # Await concurrent tasks
+        mc_result, et_result, reddit_result = await asyncio.gather(
+            mc_task, et_task, reddit_task, return_exceptions=True
+        )
+
+        # Normalize results (handle exceptions from gather)
+        sources = [marketaux_source]
+        for result in [mc_result, et_result, reddit_result]:
+            if isinstance(result, Exception):
+                sources.append({
+                    "source": "unknown",
+                    "score": 0.0,
+                    "confidence": 0.0,
+                    "articles_count": 0,
+                })
+            else:
+                sources.append(result)
+
+        # Calculate weighted aggregate
+        total_weight = 0.0
+        weighted_sum = 0.0
+        for src in sources:
+            src_name = src.get("source", "unknown")
+            w = weights.get(src_name, 0.0)
+            score = src.get("score", 0.0)
+            confidence = src.get("confidence", 0.0)
+            # Only include sources that actually returned data
+            effective_weight = w * (1.0 if confidence > 0 or src.get("articles_count", 0) > 0 else 0.0)
+            weighted_sum += score * effective_weight
+            total_weight += effective_weight
+
+        weighted_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+
+        # Determine category
+        category = self._get_sentiment_label(weighted_score)
+
+        return {
+            "symbol": symbol,
+            "weighted_score": round(weighted_score, 4),
+            "sources": sources,
+            "weights_used": weights,
+            "confidence": round(total_weight, 4),
+            "category": category,
         }

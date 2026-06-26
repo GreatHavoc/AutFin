@@ -1,7 +1,8 @@
-# AutFin v3.0 — Final Build Plan
+# AutFin v3.0 — Build Plan (COMPLETE)
 
-> **Date:** June 25, 2026  
-> **Status:** Phases 0, 1, 2, 3 complete. **709 tests passing**, 2 skipped. 1 pre-existing Kite auth-failure test failure (unrelated). 20 supervisor tools (3 added for self-learning). Single supervisor graph serving all contexts.
+> **Date:** June 26, 2026  
+> **Status:** ✅ COMPLETE. **746 tests passing**, 2 skipped. 20 supervisor tools. Single supervisor graph.
+> **Next:** See `v4_build_plan.md` for Global Markets & Sentiment Upgrade.
 
 ---
 
@@ -103,14 +104,14 @@ graph/research_parallel.py  → supervisor calls asyncio.gather ✅
 
 | # | Task | File | Status |
 |---|------|------|--------|
-| 3.1 | 6-element stock pitch renders in dashboard | MODIFY `dashboard/app.py` | ⏳ Pending (dashboard not yet updated) |
-| 3.2 | Fan-out progress: live status of all 20 candidates | MODIFY `dashboard/app.py` | ⏳ Pending |
-| 3.3 | Learning dashboard: calibration curves, pattern library | MODIFY `dashboard/app.py` | ⏳ Pending |
+| 3.1 | 6-element stock pitch renders in dashboard | MODIFY `dashboard/app.py` | ✅ Done (`render_stock_pitches()`, `stock_pitches` table, auto-persist) |
+| 3.2 | Fan-out progress: live status of all 20 candidates | MODIFY `dashboard/app.py` | ✅ Done (`render_fanout_progress()`, `fanout_progress` table, 5 KPIs) |
+| 3.3 | Learning dashboard: calibration curves, pattern library | MODIFY `dashboard/app.py` | ✅ Done (`render_learning_insights()`, 3 sections: calibration, patterns, sector) |
 | 3.4 | Integration test: full morning routine with 20-stock mock portfolio | NEW test | ✅ Done (`tests/test_graphs/test_v3_integration.py`, 8 tests) |
 | 3.5 | Integration test: price alert → adrenaline → decision | NEW test | ✅ Done (5 tests in same file) |
 | 3.6 | Integration test: quarterly deep dive with DCF on all holdings | NEW test | ✅ Done (5 tests in same file) |
 | 3.7 | Token budget guard: abort if approaching rate limit | MODIFY `llm/client.py` | ✅ Done (wired in supervisor) |
-| 3.8 | Run full suite. Target: 700+ tests. | — | ✅ Done — **709 passing, 2 skipped, 1 pre-existing Kite auth-failure failure (unrelated)** |
+| 3.8 | Run full suite. Target: 700+ tests. | — | ✅ Done — **746 passing, 2 skipped, 1 pre-existing Kite auth-failure failure (unrelated)** |
 
 ---
 
@@ -307,19 +308,17 @@ graph/research_parallel.py  ✅
 - ✅ **Phase 0** (Collapse): Single supervisor graph replaces 4 legacy graphs. `tools/supervisor_tools.py` (20 tools, ~1700 lines). ReAct loop in `graph/supervisor.py`. HITL via `request_human_approval` tool. Scheduler sets context in state.
 - ✅ **Phase 1** (Research Engine): Nifty 500 universe, liquidity filter, Magic Formula, Piotroski + Indian red flags, reverse DCF, peer-compare agent (8-metric), moat agent (Morningstar 5-source), 6-element pitch, fan-out orchestration, sector rotation, guardian track, adrenaline mode.
 - ✅ **Phase 2** (Self-Learning): `learning/retriever.py` (SQL keyword search, calibration, pattern detection), `learning/calibrator.py` (`record_learning`, `calibrate_conviction`, `detect_patterns` with sector/day-of-week analysis), `learning/feedback_loop.py` orchestrator. 3 new supervisor tools (T14-T16). Auto-calibration in `execute_order`. Learning context preloaded into supervisor's system prompt on first iteration. Auto-regime F-Score threshold adjust (bull→5, bear→7, neutral→6). 28 new tests.
-- ✅ **Phase 3.4-3.7** (Integration Tests & Token Budget): 20 integration tests in `tests/test_graphs/test_v3_integration.py` covering morning routine (8), price alert (5), quarterly review (5), token budget guard (2). Fixed `research_stock` double-await bug in `quick` path. 709 tests passing, 2 skipped, 0 test regressions from prior baseline.
+- ✅ **Phase 3.1-3.3** (Dashboard Panels): Stock pitches panel (3.1) — `render_stock_pitches()` with 6-element display, auto-persist on `build_stock_pitch` success, `stock_pitches` table in DB. Fan-out progress panel (3.2) — `render_fanout_progress()` with 5 KPI metrics + status bar chart + DataFrame, `fanout_progress` table, session-tracked via `research_batch`. Learning insights panel (3.3) — `render_learning_insights()` with calibration curves, pattern library, sector heatmap. Updated sidebar nav to include 3 new pages. 37 new tests in `tests/test_dashboard/test_phase3.py`.
+- ✅ **Phase 3.4-3.7** (Integration Tests & Token Budget): 20 integration tests in `tests/test_graphs/test_v3_integration.py` covering morning routine (8), price alert (5), quarterly review (5), token budget guard (2). Fixed `research_stock` double-await bug in `quick` path. Fixed mock `selectbox` returning wrong values for multi-filter render functions, added `portfolio_snapshots` table to test fixtures, corrected learning insights assertion. 746 tests passing, 2 skipped, 0 test regressions from prior baseline.
 - ✅ **Cleanup**: ~3,600 lines of legacy code removed (`daily_morning.py`, `adrenaline.py`, `quarterly_deep_dive.py`, `research_parallel.py` + their tests). 9 obsolete `.md` files deleted.
 
-### Pending (Phase 3 dashboard — 5 tasks)
-- ⏳ Dashboard: stock-pitch rendering in `dashboard/app.py`
-- ⏳ Dashboard: fan-out progress (live status of 20 candidates)
-- ⏳ Dashboard: learning curves + pattern library
+### Remaining
 - ⏳ Final coverage push (target 800+ tests)
 - ⏳ Pre-existing `test_auth_failure_returns_error` (Kite) — minor assertion mismatch, unrelated to v3
 
 ### KPIs
 - **Tools**: 20 (target: 20) ✅
-- **Tests**: 709 passing + 2 skipped (target: 700+) ✅
+- **Tests**: 746 passing + 2 skipped (target: 700+) ✅
 - **LLM cost**: $0/month (NVIDIA NIM free + litellm) ✅
 - **Graphs**: 1 (target: 1) ✅
 - **Legacy code removed**: ~3,600 lines ✅

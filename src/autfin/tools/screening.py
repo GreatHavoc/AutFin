@@ -350,14 +350,13 @@ async def fetch_yfinance_bulk(symbols: list[str]) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 async def detect_market_regime() -> dict[str, Any]:
-    """Detect current market regime (bull/bear/neutral) from Nifty 50 performance.
+    """Detect current market regime (bull/bear/neutral) from Nifty 50 and Bank Nifty.
 
-    Uses 50-day and 200-day SMA crossover + recent momentum:
-      - Bull: Nifty > 200-SMA AND 50-SMA > 200-SMA
-      - Bear: Nifty < 200-SMA AND 50-SMA < 200-SMA
-      - Neutral: mixed signals
+    Uses 50-day and 200-day SMA crossover + recent momentum on Nifty 50.
+    Bank Nifty SMA is tracked separately for banking sector regime.
 
-    Returns: {regime: str, nifty_price: float, sma_50: float, sma_200: float, confidence: float}
+    Returns: {regime: str, nifty_price: float, sma_50: float, sma_200: float,
+              confidence: float, bank_nifty_regime: str}
     """
     try:
         import yfinance as yf
@@ -366,7 +365,8 @@ async def detect_market_regime() -> dict[str, Any]:
         hist = nifty.history(period="1y")
 
         if hist.empty or len(hist) < 200:
-            return {"regime": "neutral", "nifty_price": 0, "sma_50": 0, "sma_200": 0, "confidence": 0}
+            return {"regime": "neutral", "nifty_price": 0, "sma_50": 0, "sma_200": 0,
+                    "confidence": 0, "bank_nifty_regime": "neutral"}
 
         close = hist["Close"]
         current = float(close.iloc[-1])
@@ -386,16 +386,35 @@ async def detect_market_regime() -> dict[str, Any]:
             regime = "neutral"
             confidence = 0.5
 
+        # Bank Nifty regime for banking sector context
+        bank_nifty_regime = "neutral"
+        try:
+            bank_nifty = yf.Ticker("^NSEBANK")
+            bn_hist = bank_nifty.history(period="1y")
+            if not bn_hist.empty and len(bn_hist) >= 200:
+                bn_close = bn_hist["Close"]
+                bn_current = float(bn_close.iloc[-1])
+                bn_sma_50 = float(bn_close.rolling(50).mean().iloc[-1])
+                bn_sma_200 = float(bn_close.rolling(200).mean().iloc[-1])
+                if bn_current > bn_sma_200 and bn_sma_50 > bn_sma_200:
+                    bank_nifty_regime = "bull"
+                elif bn_current < bn_sma_200 and bn_sma_50 < bn_sma_200:
+                    bank_nifty_regime = "bear"
+        except Exception:
+            pass
+
         return {
             "regime": regime,
             "nifty_price": round(current, 2),
             "sma_50": round(sma_50, 2),
             "sma_200": round(sma_200, 2),
             "confidence": round(confidence, 3),
+            "bank_nifty_regime": bank_nifty_regime,
         }
     except Exception as e:
         logger.debug("Market regime detection failed: %s", e)
-        return {"regime": "neutral", "nifty_price": 0, "sma_50": 0, "sma_200": 0, "confidence": 0}
+        return {"regime": "neutral", "nifty_price": 0, "sma_50": 0, "sma_200": 0,
+                "confidence": 0, "bank_nifty_regime": "neutral"}
 
 
 def get_fscore_threshold(regime: str) -> int:

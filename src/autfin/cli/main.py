@@ -648,9 +648,7 @@ async def modify_order_command(order_id: str, qty: str = "", price: str = ""):
         kite = KiteTools()
         console.print(f"[cyan]Modifying order {order_id}...[/cyan]")
 
-        result = asyncio.get_event_loop().run_until_complete(
-            kite.modify_order(order_id=order_id, quantity=new_qty, price=new_price)
-        )
+        result = await kite.modify_order(order_id=order_id, quantity=new_qty, price=new_price)
 
         if result.get("status") == "success":
             console.print(f"[green]Order {order_id} modified successfully.[/green]")
@@ -680,9 +678,7 @@ async def cancel_order_command(order_id: str):
         kite = KiteTools()
         console.print(f"[cyan]Cancelling order {order_id}...[/cyan]")
 
-        result = asyncio.get_event_loop().run_until_complete(
-            kite.cancel_order(order_id=order_id)
-        )
+        result = await kite.cancel_order(order_id=order_id)
 
         if result.get("status") == "success":
             console.print(f"[green]Order {order_id} cancelled successfully.[/green]")

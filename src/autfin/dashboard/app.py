@@ -152,6 +152,21 @@ def render_sidebar():
                 delta=format_pct(snapshot.get("total_pnl_pct", 0)),
             )
 
+        # Market snapshot (Nifty / Bank Nifty) if available
+        try:
+            market_snap = snapshot.get("market_snapshot", {}) if snapshot else {}
+            quotes = market_snap.get("quotes", {}) if market_snap else {}
+            nifty_data = quotes.get("^NSEI", {}) or quotes.get("NSEI", {})
+            bank_data = quotes.get("^NSEBANK", {}) or quotes.get("NSEBANK", {})
+            if nifty_data or bank_data:
+                st.divider()
+                if nifty_data:
+                    st.metric("Nifty 50", f"{nifty_data.get('ltp', 0):,.1f}")
+                if bank_data:
+                    st.metric("Bank Nifty", f"{bank_data.get('ltp', 0):,.1f}")
+        except Exception:
+            pass
+
         st.divider()
 
         # Navigation
@@ -160,7 +175,8 @@ def render_sidebar():
             [
                 "Overview", "Trades", "Signals", "Performance",
                 "Stock Pitches", "Fan-Out Progress",
-                "Learning Insights", "Paper Trading", "System",
+                "Learning Insights", "Global Markets", "Sentiment",
+                "Paper Trading", "System",
             ],
             index=0,
             label_visibility="collapsed",
@@ -963,6 +979,202 @@ def render_paper_trading():
     except Exception as e:
         st.error(f"Paper trading engine unavailable: {e}")
 
+
+# ---------------------------------------------------------------------------
+# Panel: Global Markets
+# ---------------------------------------------------------------------------
+
+def render_global_markets():
+    """Render global markets panel — indices heatmap, commodities, rates."""
+    st.header("Global Markets")
+
+    try:
+        import pandas as pd
+
+        # Fetch macro context
+        import asyncio
+
+        async def _fetch_macro():
+            from src.autfin.tools.supervisor_tools import analyze_macro_context
+            return await analyze_macro_context()
+
+        macro = asyncio.run(_fetch_macro())
+
+        if macro.get("status") != "success":
+            st.warning(f"Macro data unavailable: {macro.get('message', 'unknown error')}")
+            return
+
+        indices = macro.get("indices", {})
+        rates = macro.get("rates", {})
+        sector_weights = macro.get("sector_weights", {})
+
+        # --- India headline ---
+        nifty = indices.get("Nifty 50", {})
+        bank_nifty = indices.get("Bank Nifty", {})
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(
+                "Nifty 50",
+                f"{nifty.get('ltp', 0):,.1f}",
+                delta=f"{nifty.get('change_pct', 0):+.2f}%",
+            )
+        with col2:
+            st.metric(
+                "Bank Nifty",
+                f"{bank_nifty.get('ltp', 0):,.1f}",
+                delta=f"{bank_nifty.get('change_pct', 0):+.2f}%",
+            )
+        with col3:
+            india_impact = macro.get("india_impact", "neutral")
+            impact_color = "normal" if india_impact == "neutral" else ("positive" if india_impact == "bullish" else "inverse")
+            st.metric("India Impact", india_impact.upper())
+
+        st.divider()
+
+        # --- Global indices table ---
+        st.subheader("Global Indices")
+        if indices:
+            idx_df = pd.DataFrame([
+                {
+                    "Index": name,
+                    "LTP": f"{v.get('ltp', 0):,.2f}",
+                    "Change %": f"{v.get('change_pct', 0):+.2f}%",
+                }
+                for name, v in indices.items()
+                if name not in ("Nifty 50", "Bank Nifty") and v.get("ltp", 0) > 0
+            ])
+            if not idx_df.empty:
+                st.dataframe(idx_df, use_container_width=True, hide_index=True)
+
+        # --- Rates ---
+        st.subheader("Rates & FX")
+        rate_col1, rate_col2, rate_col3 = st.columns(3)
+        with rate_col1:
+            st.metric("US 10Y", f"{rates.get('us_10y', 0):.3f}%")
+        with rate_col2:
+            india_10y = rates.get("india_10y")
+            st.metric("India 10Y", f"{india_10y:.3f}%" if india_10y else "N/A")
+        with rate_col3:
+            st.metric("USD/INR", f"{rates.get('usd_inr', 0):.2f}")
+
+        # --- Sector weights ---
+        st.subheader("Sector Weights (Macro-Adjusted)")
+        if sector_weights:
+            sw_df = pd.DataFrame([
+                {"Sector": name, "Weight": f"{v.get('weight', 0):.0%}", "Bias": v.get('bias', 'neutral')}
+                for name, v in sector_weights.items()
+            ])
+            st.dataframe(sw_df, use_container_width=True, hide_index=True)
+
+        # --- Narrative ---
+        st.subheader("Macro Narrative")
+        st.info(macro.get("narrative", "No narrative available."))
+
+    except Exception as e:
+        st.error(f"Global markets panel error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Panel: Sentiment
+# ---------------------------------------------------------------------------
+
+def render_sentiment():
+    """Render sentiment panel — multi-source sentiment breakdown."""
+    st.header("Sentiment Analysis")
+
+    try:
+        import pandas as pd
+
+        # Get symbols from holdings or use defaults
+        from src.autfin.dashboard.data import get_dashboard_overview
+        overview = get_dashboard_overview()
+        holdings = overview.get("snapshot", {}).get("holdings", [])
+        symbols = [h.get("tradingsymbol", "") for h in holdings if h.get("tradingsymbol")]
+
+        if not symbols:
+            symbols = ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ITC"]
+
+        # Symbol selector
+        selected = st.multiselect(
+            "Select symbols",
+            options=symbols,
+            default=symbols[:3],
+            key="sentiment_symbols",
+        )
+
+        if not selected:
+            st.info("Select at least one symbol.")
+            return
+
+        # Fetch multi-source sentiment for each symbol
+        import asyncio
+
+        async def _fetch_multi(symbol):
+            from src.autfin.tools.sentiment_tools import SentimentTools
+            tools = SentimentTools()
+            try:
+                result = await tools.get_multi_source_sentiment(symbol)
+                return result
+            finally:
+                await tools.close()
+
+        results = []
+        for symbol in selected:
+            try:
+                r = asyncio.run(_fetch_multi(symbol))
+                results.append(r)
+            except Exception as e:
+                results.append({"symbol": symbol, "weighted_score": 0.0, "sources": [], "error": str(e)})
+
+        # --- Aggregate sentiment cards ---
+        st.subheader("Sentiment Overview")
+        cols = st.columns(min(len(results), 5))
+        for i, r in enumerate(results):
+            with cols[i % len(cols)]:
+                score = r.get("weighted_score", 0.0)
+                category = r.get("category", "neutral")
+                st.metric(
+                    r.get("symbol", "?"),
+                    f"{score:+.3f}",
+                    delta=category,
+                    delta_color="normal" if score >= 0 else "inverse",
+                )
+
+        st.divider()
+
+        # --- Source breakdown ---
+        st.subheader("Source Breakdown")
+        for r in results:
+            symbol = r.get("symbol", "?")
+            sources = r.get("sources", [])
+            if sources:
+                with st.expander(f"{symbol} — {len(sources)} sources"):
+                    src_df = pd.DataFrame([
+                        {
+                            "Source": s.get("source", "?"),
+                            "Score": f"{s.get('score', 0):+.4f}",
+                            "Confidence": f"{s.get('confidence', 0):.2f}",
+                            "Articles": s.get("articles_count", s.get("posts_count", 0)),
+                        }
+                        for s in sources
+                    ])
+                    st.dataframe(src_df, use_container_width=True, hide_index=True)
+
+        # --- Reddit volume signal ---
+        st.subheader("Reddit Volume")
+        for r in results:
+            sources = r.get("sources", [])
+            reddit = next((s for s in sources if s.get("source") == "reddit"), None)
+            if reddit and reddit.get("posts_count", 0) > 0:
+                st.write(
+                    f"**{r.get('symbol', '?')}**: {reddit['posts_count']} posts "
+                    f"(volume: {reddit.get('volume_signal', 'N/A')})"
+                )
+
+    except Exception as e:
+        st.error(f"Sentiment panel error: {e}")
+
+
 def main():
     """Run the Streamlit dashboard."""
     if not STREAMLIT_AVAILABLE:
@@ -990,6 +1202,10 @@ def main():
         render_learning_insights()
     elif page == "Learnings":
         render_learnings()
+    elif page == "Global Markets":
+        render_global_markets()
+    elif page == "Sentiment":
+        render_sentiment()
     elif page == "Paper Trading":
         render_paper_trading()
     elif page == "System":
