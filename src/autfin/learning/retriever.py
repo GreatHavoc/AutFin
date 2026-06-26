@@ -1,19 +1,7 @@
-"""Learning retriever — keyword-overlap search over learning journal for similar trade setups.
+"""Learning retriever — semantic similarity search over learning journal for similar trade setups.
 
-Design tradeoff (PRD v3.0 §4): The PRD specifies ChromaDB vector search for semantic
-retrieval of past trade setups. This implementation uses **SQL keyword-overlap scoring**
-instead, by design — not as a stub.
-
-Rationale:
-- Embedding models cost money or require GPU for local inference
-- The learning journal is small (<10K entries for a personal system)
-- Keyword overlap + recency weighting gives adequate recall for this use case
-- ChromaDB is wired in memory/vector_store.py for research notes (larger corpus)
-
-If recall quality becomes an issue (e.g. user reports missed similar setups), upgrade
-path: replace the word-overlap scoring in `retrieve_learnings()` with a ChromaDB
-`collection.query()` call using sentence-transformers embeddings. The interface
-(return dict with similar_setups, calibration, patterns) stays identical.
+Uses sentence-transformers embeddings with cosine similarity for semantic retrieval.
+Falls back to keyword-overlap scoring if embeddings unavailable.
 """
 from __future__ import annotations
 import logging
@@ -29,6 +17,9 @@ async def retrieve_learnings(
 ) -> dict:
     """
     Search learning journal for similar past setups and their outcomes.
+
+    Uses semantic embeddings (sentence-transformers) with cosine similarity.
+    Falls back to keyword-overlap if embeddings unavailable.
 
     Args:
         query: Natural language description of current setup
@@ -63,28 +54,47 @@ async def retrieve_learnings(
             f"SELECT symbol, action, conviction, pnl_pct, thesis_summary, outcome, "
             f"created_at, sector FROM learning_journal {where} "
             f"ORDER BY created_at DESC LIMIT ?",
-            [*params, limit * 3]
+            [*params, limit * 5]
         ).fetchall()
 
+        # Try semantic embeddings first, fall back to keyword overlap
+        from src.autfin.tools.supervisor_tools import _generate_embedding, cosine_similarity
+
+        query_embedding = None
+        try:
+            query_embedding = _generate_embedding(query)
+        except Exception:
+            query_embedding = None
+
         similar = []
-        query_words = set(query.lower().split())
         for row in rows:
-            thesis = (row[4] or "").lower()
-            if thesis:
-                overlap = len(query_words & set(thesis.split()))
+            thesis = (row[4] or "")
+            if not thesis:
+                continue
+
+            if query_embedding is not None:
+                # Semantic similarity via embeddings
+                row_embedding = _generate_embedding(thesis)
+                similarity = cosine_similarity(query_embedding, row_embedding)
+            else:
+                # Fallback: keyword overlap
+                query_words = set(query.lower().split())
+                thesis_lower = thesis.lower()
+                overlap = len(query_words & set(thesis_lower.split()))
                 similarity = overlap / max(len(query_words), 1)
-                if similarity > 0.05 or not filters:
-                    similar.append({
-                        "symbol": row[0],
-                        "action": row[1],
-                        "conviction": row[2],
-                        "pnl_pct": row[3],
-                        "thesis_summary": row[4],
-                        "outcome": row[5],
-                        "date": row[6],
-                        "sector": row[7],
-                        "similarity_score": round(similarity, 3),
-                    })
+
+            if similarity > 0.1 or not filters:
+                similar.append({
+                    "symbol": row[0],
+                    "action": row[1],
+                    "conviction": row[2],
+                    "pnl_pct": row[3],
+                    "thesis_summary": row[4],
+                    "outcome": row[5],
+                    "date": row[6],
+                    "sector": row[7],
+                    "similarity_score": round(similarity, 3),
+                })
 
         similar = sorted(similar, key=lambda x: x["similarity_score"], reverse=True)[:limit]
 

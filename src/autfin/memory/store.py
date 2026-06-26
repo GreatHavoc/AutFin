@@ -209,6 +209,22 @@ class AutFinStore:
             {"key": doc.key, "value": doc.value, "metadata": doc.metadata}
             for doc in results
         ]
+
+    async def _list_ns_keys(self, namespace: str) -> List[str]:
+        """List all keys in a namespace.
+
+        Args:
+            namespace: Namespace to list keys from
+
+        Returns:
+            List of keys in the namespace
+        """
+        results = await self._store.asearch(
+            namespace=(namespace,),
+            filter={},
+            limit=10000,
+        )
+        return [doc.key for doc in results]
     
     # Synchronous wrappers for convenience
     def put(
@@ -288,20 +304,29 @@ def get_store(mode: Optional[str] = None) -> AutFinStore:
     Factory function to get a configured store instance.
     Uses singleton pattern — same instance returned for same mode.
 
-    Always defaults to InMemoryStore. Persistent SQLite stores should be
-    created explicitly via create_store("persistent") inside an async context
-    with a running event loop.
+    Defaults to persistent SQLite store for production. Falls back to
+    InMemoryStore if SQLite store is unavailable.
 
     Args:
-        mode: Store mode ("in-memory" or "persistent")
+        mode: Store mode ("in-memory" or "persistent"). Defaults to env var or persistent.
 
     Returns:
         Configured AutFinStore instance
     """
     global _default_store
 
-    # Always use in-memory for the singleton — safe for tests, sync contexts,
-    # and module imports. Production persistent stores are created separately.
     if _default_store is None:
-        _default_store = AutFinStore(mode="in-memory")
+        store_mode = mode or os.getenv("AUTFIN_STORE_MODE", "persistent")
+        try:
+            _default_store = AutFinStore(mode=store_mode)
+            import logging
+            logging.getLogger(__name__).info(
+                "Initialized store in '%s' mode", store_mode
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to init '%s' store (%s), falling back to in-memory", store_mode, e
+            )
+            _default_store = AutFinStore(mode="in-memory")
     return _default_store

@@ -29,6 +29,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import interrupt
 
 from src.autfin.state.agent_state import AgentState
+from src.autfin.graph.error_handler import safe_node, RetryPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -274,8 +275,6 @@ async def supervisor_node(
             "messages": [AIMessage(content=result)],
             "errors": errors,
             "iteration_count": (state.get("iteration_count", 0) or 0) + 1,
-            "total_tokens": llm._call_count * 1000,  # Approximate — actual tracked via metrics
-            "total_cost": 0.0,  # Free-tier models cost $0
         }
 
     logger.info("Supervisor: ReAct loop produced no output — no action needed")
@@ -405,7 +404,15 @@ def build_supervisor_graph() -> StateGraph:
     """
     builder = StateGraph(AgentState)
 
-    builder.add_node("supervisor", supervisor_node)
+    builder.add_node(
+        "supervisor",
+        safe_node(
+            supervisor_node,
+            node_name="supervisor",
+            circuit_breaker_name="llm",
+            degrade_on_failure=True,
+        ),
+    )
     builder.add_node("human_review", human_review_node)
 
     builder.add_edge(START, "supervisor")

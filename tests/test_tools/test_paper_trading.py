@@ -12,6 +12,7 @@ from src.autfin.paper_trading.engine import (
     PaperPosition,
     PaperOrder,
     PaperTradingEngine,
+    SlippageModel,
     get_paper_engine,
     reset_paper_engine,
 )
@@ -21,17 +22,27 @@ from src.autfin.paper_trading.engine import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+# Zero-slippage config for testing exact-fill behavior
+ZERO_SLIPPAGE = SlippageModel(base_slippage_pct=0.0, max_slippage_pct=0.0, impact_factor=0.0)
+
+
 @pytest.fixture
 def engine():
-    """Fresh PaperTradingEngine with default 100k cash, no DB."""
-    return PaperTradingEngine(initial_cash=100000.0)
+    """Fresh PaperTradingEngine with default 100k cash, no DB, zero slippage."""
+    return PaperTradingEngine(initial_cash=100000.0, slippage_model=ZERO_SLIPPAGE)
 
 
 @pytest.fixture
 def engine_with_db(tmp_path):
-    """PaperTradingEngine with SQLite persistence."""
+    """PaperTradingEngine with SQLite persistence and zero slippage."""
     db_path = str(tmp_path / "test_paper.db")
-    return PaperTradingEngine(initial_cash=100000.0, db_path=db_path)
+    return PaperTradingEngine(initial_cash=100000.0, db_path=db_path, slippage_model=ZERO_SLIPPAGE)
+
+
+@pytest.fixture
+def engine_with_slippage():
+    """PaperTradingEngine with default slippage model."""
+    return PaperTradingEngine(initial_cash=100000.0)
 
 
 # ---------------------------------------------------------------------------
@@ -332,3 +343,50 @@ class TestEdgeCases:
     def test_order_with_tag(self, engine):
         order = engine.place_order("RELIANCE", "BUY", 10, "MARKET", price=2500.0, tag="research_buy")
         assert order.tag == "research_buy"
+
+
+# ---------------------------------------------------------------------------
+# SlippageModel tests — v4.2 realism improvement
+# ---------------------------------------------------------------------------
+
+class TestSlippageModel:
+    def test_zero_slippage_returns_original_price(self):
+        m = SlippageModel(base_slippage_pct=0.0, max_slippage_pct=0.0, impact_factor=0.0)
+        assert m.calculate_slippage(2500.0, 10, "BUY") == 2500.0
+        assert m.calculate_slippage(2500.0, 10, "SELL") == 2500.0
+
+    def test_buy_pays_more_with_slippage(self):
+        m = SlippageModel(base_slippage_pct=0.1, max_slippage_pct=0.5, impact_factor=0.0)
+        result = m.calculate_slippage(2500.0, 1, "BUY")
+        assert result > 2500.0
+
+    def test_sell_receives_less_with_slippage(self):
+        m = SlippageModel(base_slippage_pct=0.1, max_slippage_pct=0.5, impact_factor=0.0)
+        result = m.calculate_slippage(2500.0, 1, "SELL")
+        assert result < 2500.0
+
+    def test_max_slippage_capped(self):
+        m = SlippageModel(base_slippage_pct=5.0, max_slippage_pct=0.3, impact_factor=1.0)
+        result = m.calculate_slippage(2500.0, 100000, "BUY")
+        max_price = 2500.0 * (1 + 0.3 / 100)
+        assert result <= max_price
+
+    def test_market_impact_scales_with_order_value(self):
+        m = SlippageModel(base_slippage_pct=0.0, max_slippage_pct=5.0, impact_factor=0.001)
+        small = m.calculate_slippage(100.0, 1, "BUY")
+        large = m.calculate_slippage(100.0, 100000, "BUY")
+        assert large > small
+
+    def test_default_model_parameters(self):
+        m = SlippageModel()
+        assert m.base_slippage_pct == 0.05
+        assert m.max_slippage_pct == 0.3
+        assert m.impact_factor == 0.0001
+
+    def test_slippage_applied_in_fills(self, engine_with_slippage):
+        """Verify slippage is applied when no zero-slippage override."""
+        e = engine_with_slippage
+        order = e.place_order("RELIANCE", "BUY", 10, "MARKET", price=2500.0)
+        # Slippage can result in slight variation from exact price
+        assert order.filled_price >= 2500.0  # BUY: pay more or equal
+        assert order.filled_price <= 2500.0 * 1.01  # cap at 1% over (above base for small order)

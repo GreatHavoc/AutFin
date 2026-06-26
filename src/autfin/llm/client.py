@@ -255,7 +255,7 @@ class LLMClient:
                         messages.append({
                             "role": "tool",
                             "tool_call_id": tc.id,
-                            "content": result_str[:8000],
+                            "content": _compress_tool_result(result_str),
                         })
                     continue
 
@@ -370,18 +370,148 @@ class LLMClient:
 
 # ================== HELPERS ==================
 
+# Per-tool input validation schemas
+TOOL_PARAM_RULES = {
+    "execute_order": {
+        "symbol": {"type": str, "max_len": 20, "upper": True},
+        "action": {"type": str, "allowed": ["BUY", "SELL"]},
+        "quantity": {"type": int, "min": 1, "max": 100000},
+        "price": {"type": float, "min": 0.01},
+    },
+    "log_decision": {
+        "symbol": {"type": str, "max_len": 20, "upper": True},
+        "action": {"type": str, "allowed": ["BUY", "SELL", "HOLD"]},
+        "conviction": {"type": float, "min": 0.0, "max": 1.0},
+    },
+    "research_stock": {
+        "symbol": {"type": str, "max_len": 20, "upper": True},
+    },
+    "screen_candidates": {},
+    "validate_thesis": {
+        "symbol": {"type": str, "max_len": 20, "upper": True},
+    },
+    "run_risk_checks": {
+        "symbol": {"type": str, "max_len": 20, "upper": True},
+    },
+    "allocate_capital": {
+        "symbol": {"type": str, "max_len": 20, "upper": True},
+    },
+    "build_stock_pitch": {
+        "symbol": {"type": str, "max_len": 20, "upper": True},
+    },
+    "retrieve_learnings": {},
+    "record_learning": {},
+    "calibrate_conviction": {},
+    "detect_patterns": {},
+    "request_human_approval": {},
+    "check_guardian": {},
+    "analyze_macro_context": {},
+    "get_market_status": {},
+    "get_portfolio_state": {},
+    "get_market_quotes": {
+        "symbol": {"type": str, "max_len": 20, "upper": True},
+    },
+    "finalize_session": {},
+}
+
+
+def _validate_tool_args(func_name: str, args: dict) -> tuple[dict, str | None]:
+    """Validate and sanitize tool arguments from LLM. Returns (cleaned_args, error_msg)."""
+    rules = TOOL_PARAM_RULES.get(func_name)
+    if rules is None:
+        return args, None
+
+    cleaned = {}
+    for key, val in args.items():
+        rule = rules.get(key)
+        if rule is None:
+            cleaned[key] = val
+            continue
+
+        # Type coercion
+        expected = rule.get("type")
+        if expected is not None:
+            try:
+                val = expected(val)
+            except (ValueError, TypeError):
+                return cleaned, f"Invalid type for {key}: expected {expected.__name__}"
+
+        # String constraints
+        if isinstance(val, str):
+            if rule.get("upper"):
+                val = val.upper().strip()
+            max_len = rule.get("max_len")
+            if max_len and len(val) > max_len:
+                val = val[:max_len]
+
+        # Numeric constraints
+        if isinstance(val, (int, float)):
+            min_val = rule.get("min")
+            max_val = rule.get("max")
+            if min_val is not None and val < min_val:
+                val = min_val
+            if max_val is not None and val > max_val:
+                val = max_val
+
+        # Allowed values
+        allowed = rule.get("allowed")
+        if allowed and val not in allowed:
+            return cleaned, f"Invalid value for {key}: {val}. Must be one of {allowed}"
+
+        cleaned[key] = val
+
+    return cleaned, None
+
+
+def _compress_tool_result(result_str: str, max_chars: int = 8000) -> str:
+    """Intelligently compress tool result to fit within max_chars.
+
+    Strategy:
+    1. If already fits, return as-is
+    2. Try to find natural break point (last closing brace) in last 30%
+    3. Fall back to head + tail + truncation marker
+    """
+    if len(result_str) <= max_chars:
+        return result_str
+
+    # Try to find last complete JSON object or section in the truncated slice
+    truncated = result_str[:max_chars]
+    last_brace = truncated.rfind("}")
+    if last_brace > max_chars * 0.7:
+        # Found a closing brace in the natural break zone — preserve it
+        return truncated[:last_brace + 1]
+
+    # Head + tail compression: take first 60% + last 25% + truncation marker
+    head_size = int(max_chars * 0.6)
+    tail_size = int(max_chars * 0.25)
+    head = result_str[:head_size]
+    tail = result_str[-tail_size:]
+    truncated_chars = len(result_str) - head_size - tail_size
+    return f"{head}\n\n... [truncated {truncated_chars} chars] ...\n\n{tail}"
+
 
 async def _execute_tool(
     tool_call: Any,
     tool_callables: Dict[str, Callable],
 ) -> Any:
-    """Execute a single tool call from the LLM's response."""
+    """Execute a single tool call from the LLM's response with input validation."""
     func_name = tool_call.function.name
-    func_args = json.loads(tool_call.function.arguments)
+
+    try:
+        raw_args = json.loads(tool_call.function.arguments)
+    except (json.JSONDecodeError, TypeError):
+        return {"status": "error", "message": "Invalid JSON in tool arguments"}
+
+    # Validate and sanitize arguments
+    args, error = _validate_tool_args(func_name, raw_args)
+    if error:
+        return {"status": "error", "message": error}
+
     fn = tool_callables.get(func_name)
     if fn is None:
-        return f"Error: unknown tool '{func_name}'"
-    result = fn(**func_args)
+        return {"status": "error", "message": f"Unknown tool: {func_name}"}
+
+    result = fn(**args)
     if asyncio.iscoroutine(result):
         result = await result
     return result

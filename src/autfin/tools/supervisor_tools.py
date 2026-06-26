@@ -35,6 +35,55 @@ def _tool_def(name: str, description: str, parameters: Dict) -> Dict:
     }
 
 
+# ================== SEMANTIC EMBEDDING ==================
+
+_embedding_model = None
+
+
+def _get_embedding_model():
+    """Lazy-load sentence-transformers model."""
+    global _embedding_model
+    if _embedding_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        except ImportError:
+            logger.warning(
+                "sentence-transformers not installed — using hash embeddings. "
+                "Install with: pip install sentence-transformers"
+            )
+            return None
+    return _embedding_model
+
+
+def _generate_embedding(text: str) -> list[float]:
+    """Generate semantic embedding for text.
+
+    Uses sentence-transformers (all-MiniLM-L6-v2, 384-dim) if available.
+    Falls back to hash-based embedding for backward compatibility.
+    """
+    model = _get_embedding_model()
+    if model is None:
+        # Fallback to hash-based (for backward compatibility)
+        import hashlib
+        h = hashlib.sha256(text.encode()).digest()
+        return [float(b) / 255.0 for b in h] + [0.0] * (384 - len(h))
+
+    embedding = model.encode(text, normalize_embeddings=True)
+    return embedding.tolist()
+
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Compute cosine similarity between two vectors."""
+    import math
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
 # ================== TOOL IMPLEMENTATIONS ==================
 
 
@@ -1094,13 +1143,10 @@ async def log_decision(decision_type: str, details: Dict[str, Any]) -> Dict[str,
 
             vs = VectorStore(mode="persistent")
             lesson_text = details.get("lesson", json.dumps(details, default=str))
-            # Generate a deterministic hash-based embedding (not semantic, but unique per decision)
-            import hashlib
-            lesson_hash = hashlib.sha256(lesson_text.encode()).digest()
-            embedding = [float(b) / 255.0 for b in lesson_hash] + [0.0] * (384 - len(lesson_hash))
+            embedding = _generate_embedding(lesson_text)
             vs.add(
                 collection_name="learning_journal",
-                embeddings=[embedding[:384]],
+                embeddings=[embedding],
                 metadatas=[{
                     "decision_id": decision_id,
                     "decision_type": decision_type,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import sqlite3
 import time
 import uuid
@@ -15,6 +16,50 @@ logger = logging.getLogger(__name__)
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+@dataclass
+class SlippageModel:
+    """Simulates realistic market slippage for paper trading.
+
+    Components:
+      - Base slippage: random component (0 to base_slippage_pct)
+      - Market impact: scales with order value (larger orders = more impact)
+      - Max cap: prevents extreme slippage for illiquid stocks
+    """
+
+    base_slippage_pct: float = 0.05
+    max_slippage_pct: float = 0.3
+    impact_factor: float = 0.0001
+
+    def calculate_slippage(self, price: float, quantity: int, action: str) -> float:
+        """Calculate slippage-adjusted fill price.
+
+        Args:
+            price: Market price of the stock
+            quantity: Number of shares
+            action: BUY or SELL
+
+        Returns:
+            Adjusted fill price with slippage applied
+        """
+        order_value = price * quantity
+
+        # Base slippage (random component)
+        base = self.base_slippage_pct / 100.0
+        random_slippage = random.uniform(0, base)
+
+        # Market impact component (per ₹1L of order value)
+        impact = self.impact_factor * (order_value / 100000)
+
+        # Total slippage percentage, capped at max
+        total_slippage = min(random_slippage + impact, self.max_slippage_pct / 100.0)
+
+        # Apply direction: BUY pays more, SELL receives less
+        if action == "BUY":
+            return price * (1 + total_slippage)
+        else:
+            return price * (1 - total_slippage)
 
 
 @dataclass
@@ -83,7 +128,7 @@ class PaperTradingEngine:
     filled only if the limit condition is met.
     """
 
-    def __init__(self, initial_cash: float = 100000.0, db_path: Optional[str] = None):
+    def __init__(self, initial_cash: float = 100000.0, db_path: Optional[str] = None, slippage_model: Optional[SlippageModel] = None):
         self.initial_cash = initial_cash
         self.cash = initial_cash
         self.positions: Dict[str, PaperPosition] = {}
@@ -92,6 +137,7 @@ class PaperTradingEngine:
         self.trade_history: List[Dict[str, Any]] = []
         self.total_pnl: float = 0.0
         self._db_path = db_path
+        self.slippage = slippage_model or SlippageModel()
         self._init_db()
 
     def _init_db(self):
@@ -161,16 +207,21 @@ class PaperTradingEngine:
         return order
 
     def _fill_order(self, order: PaperOrder, fill_price: float):
+        # Apply slippage to fill price
+        adjusted_price = self.slippage.calculate_slippage(
+            fill_price, order.quantity, order.action
+        )
+
         order.status = "COMPLETE"
         order.filled_quantity = order.quantity
-        order.filled_price = fill_price
+        order.filled_price = adjusted_price
         order.filled_at = _now_iso()
 
         key = f"{order.exchange}:{order.symbol}"
         sell_pnl = 0.0
         sell_pnl_pct = 0.0
         if order.action == "BUY":
-            cost = order.filled_quantity * fill_price
+            cost = order.filled_quantity * adjusted_price
             if self.cash < cost:
                 order.status = "REJECTED"
                 order.filled_quantity = 0
@@ -183,14 +234,14 @@ class PaperTradingEngine:
                 total_cost = pos.cost_basis + cost
                 pos.quantity = total_qty
                 pos.avg_price = total_cost / total_qty if total_qty > 0 else 0
-                pos.last_price = fill_price
+                pos.last_price = adjusted_price
             else:
                 self.positions[key] = PaperPosition(
                     symbol=order.symbol,
                     exchange=order.exchange,
                     quantity=order.filled_quantity,
-                    avg_price=fill_price,
-                    last_price=fill_price,
+                    avg_price=adjusted_price,
+                    last_price=adjusted_price,
                     product=order.product,
                 )
         else:
@@ -202,19 +253,19 @@ class PaperTradingEngine:
                 order.status = "REJECTED"
                 return
 
-            revenue = order.filled_quantity * fill_price
+            revenue = order.filled_quantity * adjusted_price
             self.cash += revenue
 
-            sell_pnl = (fill_price - pos.avg_price) * order.filled_quantity
+            sell_pnl = (adjusted_price - pos.avg_price) * order.filled_quantity
             self.total_pnl += sell_pnl
 
             pos.quantity -= order.filled_quantity
-            pos.last_price = fill_price
+            pos.last_price = adjusted_price
             if pos.quantity == 0:
                 del self.positions[key]
 
             sell_pnl_pct = (
-                ((fill_price - pos.avg_price) / pos.avg_price) * 100
+                ((adjusted_price - pos.avg_price) / pos.avg_price) * 100
                 if pos.avg_price > 0
                 else 0
             )
@@ -225,7 +276,7 @@ class PaperTradingEngine:
             "symbol": order.symbol,
             "action": order.action,
             "quantity": order.filled_quantity,
-            "price": fill_price,
+            "price": adjusted_price,
             "value": order.trade_value,
             "pnl": sell_pnl if order.action == "SELL" else 0.0,
             "pnl_pct": sell_pnl_pct if order.action == "SELL" else 0.0,
