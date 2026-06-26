@@ -2,10 +2,10 @@
 
 ## Product Requirements Document (PRD)
 
-**Version**: 3.0  
+**Version**: 4.0  
 **Date**: June 2026  
 **Author**: Prakhar  
-**Status**: Redesign Phase — Single agentic supervisor, 13-tool architecture, self-learning loop. 683 tests passing.
+**Status**: Complete — Single agentic supervisor, 20-tool architecture, self-learning loop, global markets & sentiment upgrade. 841+ tests passing.
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### 1.1 What Is AutFin?
 
-AutFin is an **agentic-first AI portfolio management system**. A single LangGraph supervisor runs a ReAct loop — thinking, calling research tools, verifying risks, and executing trades — with per-stock depth decisions (Quick/Standard/Deep), 13 domain tools (market data through order execution), self-learning from every trade outcome, and zero operating cost via free-tier LLMs and data APIs.
+AutFin is an **agentic-first AI portfolio management system**. A single LangGraph supervisor runs a ReAct loop — thinking, calling research tools, verifying risks, and executing trades — with per-stock depth decisions (Quick/Standard/Deep), 20 domain tools (market data through order execution + self-learning), and zero operating cost via free-tier LLMs and data APIs.
 
 ### 1.2 How It Works (User's Perspective)
 
@@ -62,9 +62,9 @@ AutFin is an **agentic-first AI portfolio management system**. A single LangGrap
 - **Multi-agent architecture** inspired by real trading firms (TradingAgents paper pattern) and professional PM workflows
 - **Long-running persistence** — survives reboots, learns from past decisions across months
 - **Risk-first design**: Risk Manager with 14 checks including CVaR, news risk, sector exposure — veto power
-- **Full Zerodha integration** via official Kite SDK (OAuth, TOTP auto-login, no password storage)
+- **Full Zerodha integration** via official Kite SDK (OAuth, TOTP auto-login, credentials in .env)
 - **Built on LangGraph** for durable, cyclical, observable agent workflows with HITL gates
-- **$0/month operating cost**: Entire stack uses free tiers (OpenRouter, Groq, Gemini, Cerebras, Ollama) and free data APIs (NSE, yfinance, Finnhub, Alpha Vantage, FRED)
+- **$0/month operating cost**: Entire stack uses free tiers (NVIDIA NIM primary, OpenRouter, Groq, Gemini, Cerebras, Ollama fallback) and free data APIs (NSE, yfinance, Finnhub, Alpha Vantage, FRED)
 
 ---
 
@@ -200,7 +200,7 @@ AutFin v3.0 abandons the multi-graph workflow approach. There is **one LangGraph
 │  while not done:                                               │
 │    think → call_tools → observe → re-assess → decide           │
 │                                                                │
-│  Tools available (13):                                         │
+│  Tools available (20):                                         │
 │  ┌──────────────────┐  ┌──────────────────┐                   │
 │  │ DATA LAYER       │  │ RESEARCH LAYER   │                   │
 │  │ get_portfolio_state│  │ analyze_fundamentals│              │
@@ -456,10 +456,11 @@ These agents run **in parallel** every morning or on demand. They gather raw dat
 | Aspect | Detail |
 |--------|--------|
 | **Role** | News sentiment, social media mood, corporate announcement analysis |
-| **Sources** | Marketaux (primary: NLP sentiment via API), NSE Announcements (fallback: keyword-based scoring of corp announcements), Financial news APIs |
-| **Output** | Sentiment score (-1.0 to +1.0) with source breakdown |
+| **Sources** | HybridSentimentAnalyzer (FinBERT for news + VADER for social), Reddit PRAW (r/IndianStockMarket, r/IndiaInvestments), Marketaux API, Moneycontrol headlines, ET headlines, NSE Announcements |
+| **Output** | Sentiment score (-1.0 to +1.0) with per-source breakdown (Marketaux, Moneycontrol, ET, Reddit) |
 | **Schedule** | Daily, triggered by major news events |
-| **Tools** | SentimentTools (Marketaux wrapper), httpx (NSE API calls), Firecrawl |
+| **Tools** | HybridSentimentAnalyzer (FinBERT + VADER), SentimentTools (Marketaux + MC + ET), RedditSentimentTool (PRAW), httpx (NSE API calls) |
+| **Multi-source weighting** | Marketaux (0.4) + Moneycontrol (0.2) + ET (0.2) + Reddit (0.2) |
 
 #### 3.3.5 Global Macro Agent (`global_macro_agent`)
 
@@ -473,11 +474,11 @@ These agents run **in parallel** every morning or on demand. They gather raw dat
 | **Cache** | 5-minute TTL for macro indicators; 24-hour TTL for FRED economic data |
 
 **What it computes**:
-- **8 Daily Indicators**: US 10Y yield, Fed Funds Rate (FRED), USD/INR, Crude Oil (WTI), VIX, DXY, S&P 500 direction, Gold
+- **11 Daily Indicators**: US 10Y yield, Fed Funds Rate (FRED), India 10Y G-Sec yield (FRED INDIRLTLT01STM), USD/INR, Crude Oil (WTI), VIX, DXY, S&P 500 direction, Gold
 - **3 US Economic Data (FRED API)**: GDP, CPI (inflation), Fed Funds Rate
-- **5 Global Indices**: S&P 500, NASDAQ, Nikkei, Hang Seng, FTSE overnight moves
+- **16 Global Indices**: S&P 500, NASDAQ, Nikkei, FTSE, Shanghai Composite, Hang Seng, DAX, CAC 40, Euro Stoxx 50, Bank Nifty (tracked separately from Nifty)
 - **Composite Impact Signal**: Weighted score of all indicators → India market impact (-1 bearish to +1 bullish)
-- **Sector Impact Matrix**: How each macro factor affects specific Indian sectors (IT positive on USD/INR rise, OMCs negative on crude rise, Banking positive on rising rates, etc.)
+- **Sector Impact Matrix**: 14 sector entries — how each macro factor affects specific Indian sectors (IT positive on USD/INR rise, OMCs negative on crude rise, Banking positive on rising rates, Bank Nifty regime tracked separately, etc.)
 - **LLM Narrative**: 2-3 sentence plain-English macro summary, with rule-based fallback when LLM unavailable
 
 ### 3.5 Layer 2 — Analysis Agents (Synthesis & Debate)
@@ -771,8 +772,8 @@ Each research agent has a **primary** and **fallback** data source:
 | **Market Data** | Kite SDK (primary), yfinance (fallback LTP) | Live prices, margins, holdings, positions | — | Every 5 min (market hrs), 9 AM daily |
 | **Technical** | yfinance `.NS` / `.BO` historical OHLCV | 2yr daily data → 20+ indicators (multi-SMA, EMA, RSI, MACD, BB, OBV, ATR) | Kite SDK `get_historical_data` | Daily EOD + on-demand |
 | **Fundamentals** | yfinance (primary: financials, ratios, ROIC, FCF yield) | P/E, ROE, ROIC, FCF Yield, D/E, margins, growth + moat assessment | Screener.in (Firecrawl fallback) | Weekly refresh, quarterly deep dive |
-| **Sentiment** | Marketaux API (NLP sentiment) | Ticker-level sentiment -1.0 to +1.0 | NSE Announcements (keyword-based scoring) | Daily 8 AM + event-triggered |
-| **Global Macro** | yfinance (indices, commodities, currencies) + FRED API | S&P 500, VIX, DXY, USD/INR, Crude, Gold, US 10Y, GDP, CPI, Fed Funds + LLM narrative | N/A | Daily 8:45 AM (before market scan) |
+| **Sentiment** | Marketaux + Moneycontrol + ET + Reddit (PRAW) | Multi-source NLP sentiment (FinBERT news + VADER social) | NSE Announcements (keyword-based fallback) | Daily 8 AM + event-triggered |
+| **Global Macro** | yfinance (16 indices, commodities, currencies) + FRED API | S&P 500, VIX, DXY, USD/INR, Crude, Gold, US 10Y, India 10Y, GDP, CPI, Fed Funds + Bank Nifty + LLM narrative | N/A | Daily 8:45 AM (before market scan) |
 
 ### 5.2 Tiered Data Architecture
 
@@ -1220,7 +1221,7 @@ Risk Override:
 │  ──────────────                                           │
 │  • Firecrawl: Web scraping for financial data             │
 │  • Pandas/NumPy: Technical indicator computation          │
-│  • ta-lib: Specialized technical analysis                 │
+│  • pandas-ta-classic: Technical analysis (pure Python)    │
 │  • Schedule/APScheduler: Job scheduling                   │
 │                                                           │
 │  UI (Future Phase):                                       │
@@ -1243,47 +1244,59 @@ autfin/
 │   │
 │   ├── graph/                  # LangGraph workflow definitions
 │   │   ├── __init__.py
-│   │   ├── supervisor.py       # Supervisor agent + routing
-│   │   (daily_morning, adrenaline, quarterly_deep_dive — retired ✅)
+│   │   ├── supervisor.py       # Supervisor agent + routing (ReAct loop)
+│   │   ├── hitl.py             # Human-in-the-loop trade gate
+│   │   └── error_handler.py    # Retry policy + circuit breaker
 │   │
 │   ├── agents/                 # Individual agent implementations
 │   │   ├── __init__.py
-│   │   ├── supervisor.py       # Supervisor agent logic
 │   │   ├── market_data.py      # Market data ingestion agent
 │   │   ├── fundamentals.py     # Fundamental analysis agent
-│   │   ├── technical.py        # Technical analysis agent
+│   │   ├── technical.py        # Technical analysis agent (pandas-ta-classic)
 │   │   ├── sentiment.py        # Sentiment/News analysis agent
 │   │   ├── global_macro.py     # Global macro → India impact analysis
 │   │   ├── researcher.py       # Bull/Bear research debate
-│   │   ├── risk_manager.py     # Risk evaluation + veto
+│   │   ├── risk_manager.py     # Risk evaluation + veto (14 checks)
 │   │   ├── portfolio_manager.py # Capital allocation
-│   │   └── executor.py         # Trade execution via Kite SDK
+│   │   ├── executor.py         # Trade execution via Kite SDK
+│   │   ├── valuation.py        # DCF valuation agent
+│   │   ├── peer_compare.py     # Peer comparison agent
+│   │   ├── moat.py             # Moat assessment agent
+│   │   └── auto_execute.py     # Automated execution orchestration
 │   │
 │   ├── state/                  # State definitions
 │   │   ├── __init__.py
-│   │   ├── agent_state.py      # Shared StateGraph state schema
+│   │   ├── agent_state.py      # Shared AgentState TypedDict
 │   │   ├── market_state.py     # Market data snapshots
 │   │   ├── macro_state.py      # Global macro signals schema
 │   │   └── portfolio_state.py  # Portfolio tracking state
 │   │
 │   ├── tools/                  # Agent tools
 │   │   ├── __init__.py
-│   │   ├── kite_tools.py       # Kite SDK tool wrappers
-│   │   ├── technical_tools.py  # Technical indicator computation
-│   │   ├── fundamental_tools.py# Ratio computation, DCF models
-│   │   ├── sentiment_tools.py  # Marketaux API + news scoring
-│   │   ├── macro_tools.py      # FRED API + yfinance global indices
-│   │   ├── scraper_tools.py    # Firecrawl wrappers (Screener.in, NSE, etc.)
-│   │   └── memory_tools.py     # Long-term memory access tools
+│   │   ├── kite_tools.py       # Kite SDK tool wrappers (809 lines)
+│   │   ├── technical_tools.py  # Technical indicator computation (pandas-ta-classic)
+│   │   ├── fundamental_tools.py # Ratio computation, DCF models
+│   │   ├── sentiment_tools.py  # HybridSentimentAnalyzer + multi-source
+│   │   ├── sentiment_analyzer.py # FinBERT + VADER + keyword hybrid
+│   │   ├── reddit_sentiment.py # Reddit PRAW integration
+│   │   ├── scraper_tools.py    # NSE cookies, nselib, web scraping
+│   │   ├── supervisor_tools.py # 20 supervisor tools + callables
+│   │   ├── screening.py        # Magic Formula, F-Score, liquidity gate
+│   │   ├── universe.py         # Nifty 500 universe management
+│   │   ├── market_feed.py      # Real-time market feed
+│   │   ├── memory_tools.py     # Long-term memory access tools
+│   │   └── reporting.py        # Report generation
 │   │
 │   ├── memory/                 # Memory management
 │   │   ├── __init__.py
-│   │   ├── store.py            # LangGraph Store setup + operations
-│   │   ├── vector_store.py     # ChromaDB/LanceDB management
-│   │   ├── database.py         # SQLite schema + operations
-│   │   └── retrieval.py        # Memory retrieval strategies
+│   │   ├── store.py            # LangGraph Store operations
+│   │   ├── vector_store.py     # ChromaDB collections
+│   │   ├── database.py         # SQLite schema + CRUD
+│   │   ├── retrieval.py        # Memory retrieval strategies
+│   │   ├── performance.py      # Win/loss tracking, calibration
+│   │   └── setup.py            # Checkpointer initialization
 │   │
-│   ├── prompts/                # Agent prompts
+│   ├── prompts/                # Agent prompts (8 files)
 │   │   ├── __init__.py
 │   │   ├── supervisor.py
 │   │   ├── market_data.py
@@ -1292,31 +1305,71 @@ autfin/
 │   │   ├── sentiment.py
 │   │   ├── global_macro.py
 │   │   ├── researcher.py
-│   │   ├── risk_manager.py
-│   │   └── portfolio_manager.py
+│   │   └── risk_manager.py
+│   │
+│   ├── learning/               # Self-learning engine
+│   │   ├── __init__.py
+│   │   ├── feedback_loop.py    # Pre-trade context + post-trade learn
+│   │   ├── calibrator.py       # Conviction calibration from outcomes
+│   │   └── retriever.py        # Keyword-overlap search over learning journal
+│   │
+│   ├── observability/          # Tracing + metrics
+│   │   ├── __init__.py
+│   │   ├── tracer.py           # Langfuse-based tracing
+│   │   ├── handler.py          # Langfuse callback handler
+│   │   ├── metrics.py          # In-memory observability metrics
+│   │   ├── roro.py             # Return on Research Output
+│   │   └── thesis_ab.py        # A/B thesis framework
 │   │
 │   ├── config/                 # Configuration
 │   │   ├── __init__.py
-│   │   ├── settings.py         # All configurable parameters
-│   │   └── model_config.py     # LLM model routing config
+│   │   ├── settings.py         # AutFinSettings Pydantic model
+│   │   └── capabilities.py     # Kite tier capabilities
 │   │
 │   ├── scheduler/              # Job scheduling
 │   │   ├── __init__.py
-│   │   └── jobs.py             # Scheduled tasks (daily scan, etc.)
+│   │   └── jobs.py             # APScheduler: 4 cron jobs
 │   │
-│   └── cli/                          # CLI interface
+│   ├── dashboard/              # Streamlit web UI
+│   │   ├── __init__.py
+│   │   ├── app.py              # 9-page dashboard with auto-refresh
+│   │   └── data.py             # Real-time SQLite queries
+│   │
+│   ├── backtest/               # Historical backtesting
+│   │   ├── __init__.py
+│   │   ├── engine.py           # BacktestEngine (303 lines)
+│   │   ├── strategies.py       # 5 strategies (546 lines)
+│   │   └── metrics.py          # 18+ metrics (181 lines)
+│   │
+│   ├── paper_trading/          # Simulated trading
+│   │   ├── __init__.py
+│   │   └── engine.py           # PaperTradingEngine (374 lines)
+│   │
+│   ├── alerts/                 # Notification system
+│   │   ├── __init__.py
+│   │   └── notifier.py         # 4 backends: Console, Desktop, Pushover, Email
+│   │
+│   └── cli/                    # CLI interface
+│       ├── __init__.py
+│       └── main.py             # 7 commands: status|analyze|scan|start|backtest|history|config
 │
-├── tests/
-│   ├── test_agents/
-│   ├── test_graphs/
-│   └── test_memory/
+├── tests/                      # 841+ tests, 0 failures
+│   ├── test_agents/            # 14 agent test files
+│   ├── test_tools/             # 6 tool test files
+│   ├── test_graphs/            # 4 integration tests
+│   ├── test_memory/            # 2 integration tests
+│   ├── test_dashboard/         # 4 dashboard tests
+│   ├── test_learning/          # 3 learning tests
+│   ├── test_backtest/          # 1 backtest test
+│   ├── test_alerts/            # 1 alert test
+│   ├── test_cli/               # 1 CLI test
+│   └── test_scheduler/         # 1 scheduler test
 │
-├── data/                       # Local data storage
-│   ├── database/               # SQLite databases
-│   └── vectors/                # ChromaDB persistence
+├── data/                       # Local data storage (gitignored)
+│   ├── autfin.db               # SQLite: trades, signals, portfolio
+│   └── chroma/                 # ChromaDB persistence
 │
-└── notebooks/                  # Research/exploration notebooks
-    └── backtesting.ipynb
+└── v4_build_plan.md            # v4.0 build plan (complete)
 ```
 
 ### 7.3 Dependencies
@@ -1341,29 +1394,40 @@ dependencies = [
     "pandas>=2.2.0",
     "numpy>=1.26.0",
     "yfinance>=0.2.0",
-    "TA-Lib>=0.6.0",
 
     # Storage
     "chromadb>=0.5.0",
-    "sqlite-utils>=3.0.0",
+    "aiosqlite>=0.19.0",
 
     # Web Scraping
-    "firecrawl-py>=1.0.0",
+    "httpx>=0.27.0",
 
     # Scheduling
     "apscheduler>=3.10.0",
 
     # LLM
-    "litellm>=1.0.0",       # Multi-provider routing + failover
-    "openai>=1.0.0",        # OpenAI-compatible client for OpenRouter/Groq
-    "google-generativeai>=0.8.0",  # Google Gemini (optional direct)
+    "litellm>=1.0.0",
+
+    # Sentiment (FinBERT + VADER)
+    "transformers>=4.30.0",
+    "vaderSentiment>=3.3.2",
+
+    # Social sentiment (Reddit)
+    "praw>=7.7.0",
+
+    # Observability
+    "langfuse>=3.0.0",
 
     # Utilities
     "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
-    "rich>=13.0.0",  # CLI output
-    "httpx>=0.27.0",
+    "rich>=13.0.0",
 ]
+
+[project.optional-dependencies]
+dashboard = ["streamlit>=1.35.0"]
+technical = ["TA-Lib>=0.6.0", "pandas-ta-classic>=0.6.0"]
 ```
 
 ### 7.4 Configuration (settings.py) Overview
@@ -1375,9 +1439,6 @@ class AutFinSettings:
     fast_model: str = "nvidia_nim/meta/llama-3.1-8b-instruct"        # NVIDIA NIM (free, fast)
     litellm_failover: bool = True              # litellm handles retries + rate-limit detection
     nvidia_nim_api_key: str = ""               # From build.nvidia.com
-
-    # Zerodha
-    # Zerodha (KiteConnect SDK — Personal tier)
     kite_user_id: str = "your_zerodha_user_id"
     kite_password: str = "your_zerodha_password"
     kite_totp_secret: str = "your_totp_secret"
@@ -1572,38 +1633,40 @@ POST-TRADE (Daily):
 
 ## 10. IMPLEMENTATION ROADMAP
 
-### Current Status: Phase A-D Complete
+### Current Status: v4.0 Complete
 
 | Phase | Status | Key Deliverables |
 |-------|--------|-----------------|
-| Phase A (Foundation) | ✅ Complete | LLM client (LiteLLM), memory (Store + ChromaDB + SQLite), yfinance data, checkpointing |
+| Phase A (Foundation) | ✅ Complete | LLM client (LiteLLM + NVIDIA NIM), memory (Store + ChromaDB + SQLite), yfinance data, checkpointing |
 | Phase B (Core Agents) | ✅ Complete | All 10 agents, decision weights, risk checks (including CVaR + news risk), order management |
 | Phase C (Polish) | ✅ Complete | Moat assessment, sector impact matrix, FRED API, NSE fallback, dashboard, macro narrative |
 | Phase D (Agentic) | ✅ Complete | Supervisor LLM routing, multi-SMA 20/50/200, ROIC + FCF yield, HITL gate, auto-refresh |
-| **Phase E (Research Depth)** | 🔵 Current | DCF Valuation Agent, Catalyst Engine, PM daily check loop, procedural memory |
-| **Phase F (Autonomy)** | ⚪ Future | Agentic risk decisions, portfolio conviction tracking, Langfuse observability |
+| Phase E (Research Depth) | ✅ Complete | DCF Valuation Agent, Catalyst Engine, PM daily check loop, procedural memory, peer compare, moat agent |
+| Phase F (Autonomy) | ✅ Complete | Langfuse observability, paper trading, backtest engine, learning loop, 20 tools, self-learning |
+| v3.0 Redesign | ✅ Complete | Single supervisor ReAct graph, 20 tools, fan-out research, stock pitches, 683+ tests |
+| v4.0 Global Markets | ✅ Complete | 16 macro indices, India 10Y, Bank Nifty, FinBERT+VADER sentiment, Reddit, multi-source, NSE fix, pandas-ta-classic |
 
-### Phase E: Research Depth (Current)
+### Phase E: Research Depth (Complete)
 
 **Goal**: Professional-grade analysis — DCF, catalysts, daily thesis validation
 
-| # | Item | Effort | Impact |
-|---|------|--------|--------|
-| E.1 | **DCF Valuation Agent** — Base/Upside/Downside, per-share price targets | Large | #1 professional gap closed |
-| E.2 | **Catalyst Engine** — Extract + classify + alert catalysts (hard + soft) | Medium | Forward-looking, not just historical |
-| E.3 | **PM Daily Check Loop** — Morning thesis validation for every holding | Medium | Daily guardrail, catches thesis breaks |
-| E.4 | **Procedural Memory (Learning Journal)** — Write after each trade, retrieve before decisions | Medium | System gets smarter with every trade |
+| # | Item | Status |
+|---|------|--------|
+| E.1 | **DCF Valuation Agent** — Base/Upside/Downside, per-share price targets + Reverse DCF | ✅ Complete |
+| E.2 | **Catalyst Engine** — Extract + classify + alert catalysts (hard + soft) | ✅ Complete |
+| E.3 | **PM Daily Check Loop** — Morning thesis validation for every holding | ✅ Complete |
+| E.4 | **Procedural Memory (Learning Journal)** — Write after each trade, retrieve before decisions | ✅ Complete |
 
-### Phase F: Autonomy (Future)
+### Phase F: Autonomy (Complete)
 
 **Goal**: Full agentic decision-making with observability
 
-| # | Item | Effort | Impact |
-|---|------|--------|--------|
-| F.1 | **Agentic Risk Assessment** — Risk Manager decides severity + action (not just pass/fail) | Medium | Adaptive risk, not binary |
-| F.2 | **Portfolio-Level Conviction Tracking** — All positions ranked by conviction daily | Small | PM-level portfolio view |
-| F.3 | **Langfuse Observability** — Per-agent token costs, latency, success rates | Small | System visibility, cost tracking |
-| F.4 | **Integration Testing** — End-to-end autonomous run with 20-stock portfolio | Large | Validates full agentic pipeline
+| # | Item | Status |
+|---|------|--------|
+| F.1 | **Agentic Risk Assessment** — Risk Manager decides severity + action (not just pass/fail) | ✅ Complete |
+| F.2 | **Portfolio-Level Conviction Tracking** — All positions ranked by conviction daily | ✅ Complete |
+| F.3 | **Langfuse Observability** — Per-agent token costs, latency, success rates | ✅ Complete |
+| F.4 | **Integration Testing** — End-to-end autonomous run with 20-stock portfolio | ✅ Complete |
 - [ ] Community: Share anonymized learnings (optional)
 - [ ] AutFin MCP server: Expose as MCP server for other clients
 - [ ] Mobile notifications integration

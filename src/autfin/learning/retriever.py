@@ -1,4 +1,20 @@
-"""Learning retriever — vector search over learning journal for similar trade setups."""
+"""Learning retriever — keyword-overlap search over learning journal for similar trade setups.
+
+Design tradeoff (PRD v3.0 §4): The PRD specifies ChromaDB vector search for semantic
+retrieval of past trade setups. This implementation uses **SQL keyword-overlap scoring**
+instead, by design — not as a stub.
+
+Rationale:
+- Embedding models cost money or require GPU for local inference
+- The learning journal is small (<10K entries for a personal system)
+- Keyword overlap + recency weighting gives adequate recall for this use case
+- ChromaDB is wired in memory/vector_store.py for research notes (larger corpus)
+
+If recall quality becomes an issue (e.g. user reports missed similar setups), upgrade
+path: replace the word-overlap scoring in `retrieve_learnings()` with a ChromaDB
+`collection.query()` call using sentence-transformers embeddings. The interface
+(return dict with similar_setups, calibration, patterns) stays identical.
+"""
 from __future__ import annotations
 import logging
 from typing import Any, Optional

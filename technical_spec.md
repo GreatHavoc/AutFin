@@ -1,6 +1,6 @@
 # AutFin — Technical Specification
 
-**Version**: 3.0 | **Date**: June 2026 | **Status**: Redesign — Single supervisor ReAct graph, 13-tool architecture, self-learning engine
+**Version**: 4.0 | **Date**: June 2026 | **Status**: Complete — Single supervisor ReAct graph, 20-tool architecture, self-learning engine, global markets & sentiment upgrade
 
 ---
 
@@ -27,7 +27,7 @@
 | **Fundamentals** | yfinance (primary) + Screener.in | — | yfinance: ROIC, FCF yield, moat, health score. Screener.in: Firecrawl fallback for deep Indian fundamentals. |
 | **Global Macro** | yfinance + FRED API | REST (free keys) | yfinance: S&P, NASDAQ, VIX, DXY, INR, crude, gold, US 10Y. FRED: GDP, CPI, Fed Funds with 24h cache. |
 | **Web Scraping** | Firecrawl | `firecrawl-py>=1.0.0` | 500 credits/mo free tier. Screener.in + Moneycontrol fallback. |
-| **Technical Analysis** | pandas + numpy (pure Python) | `pandas>=2.2.0`, `numpy>=1.26.0` | SMA 20/50/200, EMA, RSI, MACD, ADX, Bollinger, ATR, OBV. Multi-period + golden/death cross. |
+| **Technical Analysis** | pandas-ta-classic (pure Python) | `pandas-ta-classic>=0.6.0` (optional TA-Lib) | SMA 20/50/200, EMA, RSI, MACD, ADX, Bollinger, ATR, OBV. Multi-period + golden/death cross. |
 | **Scheduling** | APScheduler | `>=3.10.0` | Cron-style job scheduling |
 | **Data** | Pandas + NumPy | `pandas>=2.2.0`, `numpy>=1.26.0` | All numerical computation |
 | **HTTP** | httpx | `>=0.27.0` | Async HTTP client |
@@ -57,17 +57,21 @@ autfin/
 │   │   ├── hitl.py                        # Human-in-the-loop trade gate. 294 lines.
 │   │   └── error_handler.py               # Retry policy + circuit breaker. 548 lines.
 │   │
-│   ├── agents/                            # 10 specialized worker agents
+│   ├── agents/                            # 13 specialized worker agents
 │   │   ├── __init__.py
 │   │   ├── market_data.py                 # Balance, Price, Market Data (404 lines)
 │   │   ├── fundamentals.py                # Ratios, Health Score, Moat (1191 lines)
-│   │   ├── technical.py                   # SMA 20/50/200, Indicators, Signals (766 lines)
+│   │   ├── technical.py                   # SMA 20/50/200, Indicators, Signals (777 lines)
 │   │   ├── sentiment.py                   # Marketaux + NSE fallback (499 lines)
-│   │   ├── global_macro.py                # yfinance + FRED API + Sector Matrix (915 lines)
+│   │   ├── global_macro.py                # yfinance + FRED API + 16 Indices + Sector Matrix
 │   │   ├── researcher.py                  # Weighted synthesis + LLM recommendation (951 lines)
 │   │   ├── risk_manager.py                # 14 checks: VaR, CVaR, news risk (1005 lines)
 │   │   ├── portfolio_manager.py           # Capital allocation, tax, top-up (613 lines)
-│   │   └── executor.py                    # Kite SDK order execution, 3 modes (399 lines)
+│   │   ├── executor.py                    # Kite SDK order execution, 3 modes (421 lines)
+│   │   ├── valuation.py                   # DCF valuation agent
+│   │   ├── peer_compare.py                # Peer comparison agent
+│   │   ├── moat.py                        # Moat assessment agent
+│   │   └── auto_execute.py                # Automated execution orchestration
 │   │
 │   ├── state/                        # State type definitions
 │   │   ├── __init__.py
@@ -78,12 +82,19 @@ autfin/
 │   │
 │   ├── tools/                             # Agent tool implementations
 │   │   ├── __init__.py
-│   │   ├── kite_tools.py                   # KiteConnect SDK wrappers (559 lines)
-│   │   ├── fundamental_tools.py            # Ratio computation stub (14 lines)
-│   │   ├── sentiment_tools.py              # Marketaux API calls (405 lines)
-│   │   ├── technical_tools.py              # Indicator computation (435+ lines) ✅ NEW
-│   │   ├── scraper_tools.py                # Firecrawl: Screener.in, NSE, Moneycontrol (315 lines) ✅ NEW
-│   │   └── memory_tools.py                 # Store/Vector Store retrieval
+│   │   ├── kite_tools.py                   # KiteConnect SDK wrappers (809 lines)
+│   │   ├── fundamental_tools.py            # Ratio computation, DCF models
+│   │   ├── sentiment_tools.py              # HybridSentimentAnalyzer + multi-source (339+ lines)
+│   │   ├── sentiment_analyzer.py           # FinBERT + VADER + keyword hybrid
+│   │   ├── reddit_sentiment.py             # Reddit PRAW integration
+│   │   ├── technical_tools.py              # Indicator computation (pandas-ta-classic)
+│   │   ├── scraper_tools.py                # NSE cookies, nselib, web scraping (315+ lines)
+│   │   ├── supervisor_tools.py             # 20 supervisor tools + callables
+│   │   ├── screening.py                    # Magic Formula, F-Score, liquidity gate
+│   │   ├── universe.py                     # Nifty 500 universe management
+│   │   ├── market_feed.py                  # Real-time market feed
+│   │   ├── memory_tools.py                 # Store/Vector Store retrieval
+│   │   └── reporting.py                    # Report generation
 │   │
 │   ├── memory/                             # Long-term memory layer
 │   │   ├── __init__.py
@@ -127,8 +138,7 @@ autfin/
 │   │   ├── handler.py
 │   │   ├── metrics.py
 │   │   ├── roro.py                          # Return on Research Output
-│   │   ├── thesis_ab.py                     # A/B thesis framework
-│   │   └── catalyst_impact.py               # Catalyst impact quantification
+│   │   └── thesis_ab.py                     # A/B thesis framework
 │   │
 │   ├── paper_trading/                       # Simulated trading (✅ Phase F)
 │   │   ├── __init__.py
@@ -152,10 +162,11 @@ autfin/
 │       ├── __init__.py
 │       └── main.py                          # 7 commands: status|analyze|scan|start|backtest|history|config (916 lines)
 │
-├── tests/                               # 683 tests, 0 failures (✅ all agent test files exist)
+├── tests/                               # 841+ tests, 0 failures
 │   ├── test_agents/
 │   │   ├── test_market_data.py           # 6 tests ✅
 │   │   ├── test_global_macro.py          # 8 tests ✅
+│   │   ├── test_global_macro_v4.py       # 13 tests ✅ (v4.0)
 │   │   ├── test_fundamentals.py          # 6 tests ✅
 │   │   ├── test_technical.py             # 6 tests ✅
 │   │   ├── test_sentiment.py             # 6 tests ✅
@@ -164,20 +175,31 @@ autfin/
 │   │   ├── test_portfolio_manager.py
 │   │   ├── test_executor.py
 │   │   └── test_auto_execute.py
+│   ├── test_tools/
+│   │   ├── test_kite_tools.py
+│   │   ├── test_sentiment_analyzer.py    # 23 tests ✅ (v4.0)
+│   │   ├── test_reddit_and_multi_source.py # 17 tests ✅ (v4.0)
+│   │   └── test_nse_fix.py              # 10 tests ✅ (v4.0)
 │   ├── test_graphs/
-│   │   ├── test_supervisor.py            # (pending)
-│   │   └── test_hitl.py
+│   │   ├── test_v3_integration.py
+│   │   ├── test_v4_integration.py        # 15 tests ✅ (v4.0)
+│   │   ├── test_hitl.py
+│   │   └── test_error_handler.py
 │   ├── test_memory/
 │   │   ├── test_store.py
 │   │   ├── test_vector_store.py
 │   │   ├── test_database.py
 │   │   ├── test_performance.py
 │   │   └── test_memory_integration.py
-│   ├── test_tools/
-│   │   └── test_kite_tools.py
+│   ├── test_learning/
+│   │   ├── test_calibrator.py
+│   │   ├── test_retriever.py
+│   │   └── test_feedback_loop.py
+│   ├── test_dashboard/
+│   │   ├── test_phase3.py               # 37 tests ✅
+│   │   └── test_phase4.py              # 13 tests ✅ (v4.0)
 │   ├── test_llm/
 │   │   └── test_client.py
-│   ├── test_dashboard/
 │   ├── test_backtest/
 │   ├── test_alerts/
 │   ├── test_cli/
@@ -896,31 +918,37 @@ async def build_research_context(
 
 ```bash
 # ===== REQUIRED =====
-# OpenRouter (primary LLM — free tier)
-OPENROUTER_API_KEY=sk-or-v1-...
+# NVIDIA NIM (primary LLM — free, 1M context)
+NVIDIA_NIM_API_KEY=...
 
-# Google Gemini (fallback LLM — free tier)
-GEMINI_API_KEY=...
-
-# Groq (speed layer — free tier)
-GROQ_API_KEY=gsk_...
-
-# Marketaux (news sentiment — free tier)
+# Marketaux (news sentiment — free tier, 100 req/day)
 MARKETAUX_API_KEY=...
 
 # FRED (macro data — free tier)
 FRED_API_KEY=...
 
-# Firecrawl (web scraping — free tier)
-FIRECRAWL_API_KEY=fc-...
-
-# ===== OPTIONAL =====
-# ===== REQUIRED: Zerodha KiteConnect SDK (Personal tier) =====
+# ===== OPTIONAL: Zerodha KiteConnect SDK (Personal tier) =====
 KITE_API_KEY=your_kite_api_key
 KITE_API_SECRET=your_kite_api_secret
 KITE_USER_ID=your_zerodha_user_id
 KITE_PASSWORD=your_zerodha_password
 KITE_TOTP_SECRET=your_totp_secret_from_zerodha_console
+
+# ===== OPTIONAL: Observability =====
+LANGFUSE_PUBLIC_KEY=...
+LANGFUSE_SECRET_KEY=...
+LANGFUSE_HOST=https://cloud.langfuse.com
+
+# ===== OPTIONAL: Alternative LLM providers (via litellm) =====
+OPENROUTER_API_KEY=sk-or-v1-...
+GROQ_API_KEY=gsk_...
+GEMINI_API_KEY=...
+CEREBRAS_API_KEY=...
+
+# ===== OPTIONAL: Social sentiment =====
+REDDIT_CLIENT_ID=...
+REDDIT_CLIENT_SECRET=...
+REDDIT_USER_AGENT=AutFin/1.0
 ```
 
 ### 9.2 Settings (typed config)
@@ -1129,39 +1157,49 @@ autfin config set deployment_pacing aggressive
 ```
 ✅ PHASE A-D — v2.x Foundation (COMPLETE)
   ✅ All 10 agents implemented (market_data through executor)
-  ✅ 3 graphs: daily_morning, adrenaline, quarterly_deep_dive
+  ✅ 3 graphs: daily_morning, adrenaline, quarterly_deep_dive (all retired)
   ✅ 4 tools: kite, technical, fundamental, sentiment, scraper
   ✅ 8 prompts, dashboard (7 pages), scheduler, CLI, alerts
   ✅ 683 tests passing, 0 failures
 
-📐 PHASE E — v3.0 Redesign (DESIGN APPROVED — PENDING BUILD)
-  Target: Single supervisor ReAct loop, 13 tools, self-learning
-  ────────────────────────────────────────────────────────
-  CREATE:
-    □ tools/supervisor_tools.py    — 13 tool definitions + callables
-    □ learning/calibrator.py        — Conviction calibration from outcomes
-    □ learning/retriever.py         — Vector search over learning journal
-    □ graph/supervisor.py (REBUILD) — ReAct loop, one graph, context-driven
+✅ PHASE E — Research Depth (COMPLETE)
+  ✅ DCF Valuation Agent (3-scenario + Reverse DCF)
+  ✅ Peer Compare Agent (8-metric sector ranking)
+  ✅ Moat Agent (Morningstar 5-source framework)
+  ✅ Catalyst Engine (hard + soft catalyst extraction)
 
-  MODIFY:
-    □ state/agent_state.py    — Add context, depth, learning_context keys
-    □ scheduler/jobs.py       — Set context in state instead of picking graph
-    □ config/settings.py      — Add depth tiers, learning config
+✅ PHASE F — Autonomy (COMPLETE)
+  ✅ Langfuse observability (tracer, handler, metrics, RORO, thesis A/B)
+  ✅ Paper trading engine (order lifecycle, P&L tracking)
+  ✅ Backtest engine (5 strategies, 18+ metrics, Indian market costs)
+  ✅ Learning loop (feedback_loop, calibrator, retriever)
+  ✅ Alerts (Console, Desktop, Pushover, Email backends)
 
-  RETIRED ✅ (logic absorbed into supervisor tools):
-    ✅ graph/daily_morning.py
-    ✅ graph/adrenaline.py
-    ✅ graph/quarterly_deep_dive.py
-    ✅ graph/research_parallel.py
+✅ v3.0 Redesign (COMPLETE)
+  ✅ Single supervisor ReAct graph (graph/supervisor.py)
+  ✅ 20 tools in supervisor_tools.py (1700+ lines)
+  ✅ Fan-out research: screen → 20 candidates × 6 agents → converge
+  ✅ Stock pitches (6-element buy-side standard)
+  ✅ HITL gate (graph/hitl.py)
+  ✅ Error handler with retry + circuit breaker
+  ✅ 746+ tests passing
 
-📋 PHASE F — Self-Learning (AFTER v3.0 SUPERVISOR BUILD)
-  □ Conviction calibration auto-adjusts from trade outcomes
-  □ Pattern detection: "morning setups that work vs fail"
-  □ Strategy drift over 100+ trades
-  □ Kelly sizing adapts based on conviction tier win rates
+✅ v4.0 Global Markets & Sentiment (COMPLETE)
+  ✅ 16 macro indices (+5: Shanghai, Hang Seng, DAX, CAC 40, Euro Stoxx 50)
+  ✅ India 10Y G-Sec yield via FRED (INDIRLTLT01STM)
+  ✅ Bank Nifty tracked separately from Nifty
+  ✅ 14-sector impact matrix (was 8)
+  ✅ HybridSentimentAnalyzer: FinBERT (news) + VADER (social) + keyword fallback
+  ✅ Reddit PRAW integration (r/IndianStockMarket, r/IndiaInvestments)
+  ✅ Multi-source sentiment: Marketaux (0.4) + MC (0.2) + ET (0.2) + Reddit (0.2)
+  ✅ NSE announcements fix (cookie-based session)
+  ✅ nselib integration (corporate actions + event calendar)
+  ✅ pandas-ta-classic replaces custom numpy indicators + optional TA-Lib
+  ✅ asyncio.get_event_loop() deprecation fix (4 files)
+  ✅ 841+ tests passing
 
+TEST COVERAGE: 841+ tests, all passing
 COST: $0/month (all free-tier tools)
-TEST COVERAGE: 683 tests, all passing
 ```
 
 ---
