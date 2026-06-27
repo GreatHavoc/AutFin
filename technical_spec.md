@@ -1,6 +1,6 @@
 # AutFin — Technical Specification
 
-**Version**: 4.1 | **Date**: June 2026 | **Status**: Complete — Single supervisor ReAct graph, 20-tool architecture, self-learning engine, global markets & sentiment upgrade, reliability improvements
+**Version**: 5.0 | **Date**: June 2026 | **Status**: Complete — 27 improvements across 4 waves: critical bug fixes, architecture improvements, new capabilities (Kelly criterion, anomaly detection, episodic memory, LLM-as-Judge, reconciliation), production polish. 828+ tests passing.
 
 ---
 

@@ -94,8 +94,11 @@ def _build_base_report(trade: dict[str, Any], mode: str) -> dict[str, Any]:
     qty = int(float(trade["qty"]))
     price = float(trade["price"])
     trade_value = round(qty * price, 2)
+    # SEBI Strategy ID — required by Apr 2026 algo framework
+    strategy_id = trade.get("strategy_id") or f"AF-{trade.get('strategy', 'CORE')[:8].upper()}"
     return {
         "decision_id": decision_id,
+        "strategy_id": strategy_id,
         "symbol": str(trade["symbol"]),
         "action": str(trade["action"]).upper(),
         "qty": qty,

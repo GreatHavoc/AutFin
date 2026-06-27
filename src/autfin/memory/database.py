@@ -153,6 +153,49 @@ def init_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_fanout_status ON fanout_progress(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_fanout_created ON fanout_progress(created_at)")
 
+        # Runs table (v5.0) — per-invocation structured trace
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS runs (
+                id TEXT PRIMARY KEY,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                status TEXT NOT NULL DEFAULT 'running',
+                trigger TEXT,
+                mode TEXT,
+                symbols_researched TEXT,
+                trades_executed INTEGER DEFAULT 0,
+                total_tokens INTEGER DEFAULT 0,
+                total_cost REAL DEFAULT 0.0,
+                errors_count INTEGER DEFAULT 0,
+                duration_ms INTEGER,
+                metadata_json TEXT
+            )
+        """)
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status)")
+
+        # SEBI audit trail (v5.0) — Strategy ID tags per SEBI Apr 2026 circular
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sebi_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT,
+                strategy_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                action TEXT NOT NULL,
+                quantity INTEGER,
+                price REAL,
+                order_type TEXT,
+                exchange TEXT DEFAULT 'NSE',
+                timestamp TEXT NOT NULL,
+                compliance_notes TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sebi_strategy ON sebi_audit(strategy_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sebi_run ON sebi_audit(run_id)")
+
         # Migration: if old columns exist, copy data then drop them
         _migrate_learning_journal(cursor)
 

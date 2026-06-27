@@ -2,10 +2,10 @@
 
 ## Product Requirements Document (PRD)
 
-**Version**: 4.1  
+**Version**: 5.0  
 **Date**: June 2026  
 **Author**: Prakhar  
-**Status**: Complete — Single agentic supervisor, 20-tool architecture, self-learning loop, global markets & sentiment upgrade. 914+ tests passing.
+**Status**: Complete — 27 improvements across 4 waves: critical bug fixes, architecture improvements, new capabilities, and production polish. 828+ tests passing.
 
 ---
 
