@@ -150,6 +150,16 @@ async def executor_agent(
     auto_execute_max_amount = float(settings.auto_execute_max_amount or 0.0)
     kite_auto_login_configured = bool(settings.kite_user_id and settings.kite_password and settings.kite_totp_secret)
 
+    # Market hours check — NSE: 9:15 AM to 3:30 PM IST, Mon-Fri
+    # Skipped in paper/recommendation mode, or when state["skip_market_hours_check"] = True
+    from datetime import datetime, timezone, timedelta
+    _ist = timezone(timedelta(hours=5, minutes=30))
+    _now_ist = datetime.now(_ist)
+    _market_open = _now_ist.hour == 9 and _now_ist.minute >= 15 or 10 <= _now_ist.hour <= 14 or _now_ist.hour == 15 and _now_ist.minute <= 30
+    _is_weekday = _now_ist.weekday() < 5  # Mon=0..Fri=4
+    _market_hours = _market_open and _is_weekday
+    _skip_market_check = state.get("skip_market_hours_check", False)
+
     execution_reports: list[dict[str, Any]] = []
     messages: list[Any] = []
     errors: list[str] = list(state.get("errors", []) or [])
@@ -283,6 +293,18 @@ async def executor_agent(
             symbol = report["symbol"]
             qty = report["qty"]
             trade_value = report["trade_value"]
+
+            # Block real orders outside market hours (paper/recommendation always allowed)
+            # Only enforced when state["enforce_market_hours"] is explicitly True
+            if execution_mode == "auto-small" and not _market_hours and state.get("enforce_market_hours", False):
+                report["status"] = "rejected"
+                report["message"] = (
+                    f"Order rejected: market closed (NSE hours: 9:15-15:30 IST). "
+                    f"Current time: {_now_ist.strftime('%H:%M IST %A')}."
+                )
+                execution_reports.append(report)
+                messages.append(AIMessage(content=f"Executor: {report['message']}"))
+                continue
 
             if execution_mode == "recommendation":
                 report["status"] = "recommended"

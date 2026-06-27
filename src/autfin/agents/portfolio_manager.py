@@ -193,28 +193,36 @@ def _get_holding_period(symbol: str) -> tuple[int, str]:
         conn = sqlite3.connect(_DB_PATH)
         try:
             cursor = conn.cursor()
-            # Find earliest BUY trade for this symbol
-            cursor.execute(
-                """
-                SELECT timestamp FROM trades
-                WHERE symbol = ? AND action = 'BUY'
-                ORDER BY timestamp ASC LIMIT 1
-                """,
-                (symbol,),
-            )
-            row = cursor.fetchone()
-            if not row:
+            # Find earliest BUY trade for this symbol — check both trades and paper_trades tables
+            entry_date_str = None
+            for table, ts_col in [("trades", "timestamp"), ("paper_trades", "filled_at")]:
+                try:
+                    cursor.execute(
+                        f"""
+                        SELECT {ts_col} FROM {table}
+                        WHERE symbol = ? AND action = 'BUY'
+                        ORDER BY {ts_col} ASC LIMIT 1
+                        """,
+                        (symbol,),
+                    )
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        entry_date_str = row[0]
+                        break
+                except Exception:
+                    continue
+
+            if not entry_date_str:
                 return 0, "STCG"
 
-            entry_date_str = row[0]
             # Parse ISO format timestamp
             entry_date = datetime.fromisoformat(entry_date_str.replace("Z", "+00:00"))
             now = datetime.now(timezone.utc)
             days_held = (now - entry_date).days
 
-            # Indian equity tax classification:
-            # STCG: held < 12 months (taxed at 15%)
-            # LTCG: held >= 12 months (exempt up to ₹1 lakh/year, then 10%)
+            # Indian equity tax classification (FY 2026-27):
+            # STCG (Sec 111A): held < 12 months (taxed at 20%)
+            # LTCG (Sec 112A): held >= 12 months (exempt up to ₹1.25 lakh/year, then 12.5%)
             tax_class = "LTCG" if days_held >= 365 else "STCG"
             return days_held, tax_class
         finally:

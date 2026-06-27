@@ -58,11 +58,11 @@ async def retrieve_learnings(
         ).fetchall()
 
         # Try semantic embeddings first, fall back to keyword overlap
-        from src.autfin.tools.supervisor_tools import _generate_embedding, cosine_similarity
+        from src.autfin.memory.embeddings import generate_embedding, cosine_similarity
 
         query_embedding = None
         try:
-            query_embedding = _generate_embedding(query)
+            query_embedding = generate_embedding(query)
         except Exception:
             query_embedding = None
 
@@ -74,7 +74,7 @@ async def retrieve_learnings(
 
             if query_embedding is not None:
                 # Semantic similarity via embeddings
-                row_embedding = _generate_embedding(thesis)
+                row_embedding = generate_embedding(thesis)
                 similarity = cosine_similarity(query_embedding, row_embedding)
             else:
                 # Fallback: keyword overlap

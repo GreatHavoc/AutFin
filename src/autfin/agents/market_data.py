@@ -391,12 +391,38 @@ async def market_data_agent(state: AgentState, config: RunnableConfig | None = N
     price_state = await price_fetcher(full_state)
     
     # Step 3: Merge results
-    return {
+    merged = {
         **balance_state,
         **price_state,
         "agent": "market_data",
         "next": None,  # Will be set by supervisor
     }
+
+    # Step 4: Update peak_portfolio_value for drawdown circuit breaker
+    try:
+        holdings = merged.get("holdings", []) or []
+        positions = merged.get("positions", []) or []
+        quotes = (merged.get("market_snapshot") or {}).get("quotes", {})
+
+        current_value = 0.0
+        for h in holdings:
+            sym = h.get("tradingsymbol") or h.get("symbol") or ""
+            qty = float(h.get("qty", 0) or 0)
+            ltp = float((quotes.get(sym) or {}).get("ltp", 0) or h.get("ltp", 0) or 0)
+            current_value += qty * ltp
+        for p in positions:
+            sym = p.get("tradingsymbol") or p.get("symbol") or ""
+            qty = float(p.get("qty", 0) or 0)
+            ltp = float((quotes.get(sym) or {}).get("ltp", 0) or p.get("ltp", 0) or 0)
+            current_value += qty * ltp
+
+        if current_value > 0:
+            prev_peak = float(state.get("peak_portfolio_value", 0.0) or 0.0)
+            merged["peak_portfolio_value"] = max(prev_peak, current_value)
+    except Exception:
+        pass  # Non-critical — don't fail market data fetch
+
+    return merged
 
 
 # ================== UTILITY FUNCTIONS ==================

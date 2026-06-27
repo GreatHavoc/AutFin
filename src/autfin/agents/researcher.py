@@ -1061,6 +1061,20 @@ class ResearcherAgent:
                         f"{cat.get('description', '')}"
                     )
 
+                # Step 6.5: Bias conviction by catalyst strength (Pillar 4 integration)
+                up_hard = sum(1 for c in catalysts if c.get("direction") == "up" and c.get("type") == "hard")
+                down_hard = sum(1 for c in catalysts if c.get("direction") == "down" and c.get("type") == "hard")
+                up_soft = sum(1 for c in catalysts if c.get("direction") == "up" and c.get("type") == "soft")
+                down_soft = sum(1 for c in catalysts if c.get("direction") == "down" and c.get("type") == "soft")
+                catalyst_lift = (up_hard * 0.10 + up_soft * 0.05) - (down_hard * 0.10 + down_soft * 0.05)
+                catalyst_lift = max(-0.15, min(0.15, catalyst_lift))  # Cap at ±0.15
+                if catalyst_lift != 0:
+                    old_conv = recommendation.get("conviction_score", 0.5)
+                    new_conv = max(0.0, min(1.0, old_conv + catalyst_lift))
+                    recommendation["conviction_score"] = new_conv
+                    recommendation["catalyst_adjustment"] = catalyst_lift
+                    research_notes.append(f"\n*Catalyst adjustment: {catalyst_lift:+.2f} (was {old_conv:.2f}, now {new_conv:.2f})*")
+
             # Step 7: Variant view (Pillar 2.3)
             variant_view = await self._generate_variant_view(signals, recommendation)
             if variant_view:

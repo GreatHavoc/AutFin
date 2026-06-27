@@ -313,6 +313,7 @@ class PaperTradingEngine:
             "value": order.trade_value,
             "pnl": sell_pnl if order.action == "SELL" else 0.0,
             "pnl_pct": sell_pnl_pct if order.action == "SELL" else 0.0,
+            "has_pnl": order.action == "SELL",  # Only SELL trades have meaningful P&L
             "filled_at": order.filled_at,
         }
         self.trade_history.append(trade)

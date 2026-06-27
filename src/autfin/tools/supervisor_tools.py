@@ -36,52 +36,9 @@ def _tool_def(name: str, description: str, parameters: Dict) -> Dict:
 
 
 # ================== SEMANTIC EMBEDDING ==================
+# Delegates to shared memory.embeddings module (single model instance)
 
-_embedding_model = None
-
-
-def _get_embedding_model():
-    """Lazy-load sentence-transformers model."""
-    global _embedding_model
-    if _embedding_model is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-        except ImportError:
-            logger.warning(
-                "sentence-transformers not installed — using hash embeddings. "
-                "Install with: pip install sentence-transformers"
-            )
-            return None
-    return _embedding_model
-
-
-def _generate_embedding(text: str) -> list[float]:
-    """Generate semantic embedding for text.
-
-    Uses sentence-transformers (all-MiniLM-L6-v2, 384-dim) if available.
-    Falls back to hash-based embedding for backward compatibility.
-    """
-    model = _get_embedding_model()
-    if model is None:
-        # Fallback to hash-based (for backward compatibility)
-        import hashlib
-        h = hashlib.sha256(text.encode()).digest()
-        return [float(b) / 255.0 for b in h] + [0.0] * (384 - len(h))
-
-    embedding = model.encode(text, normalize_embeddings=True)
-    return embedding.tolist()
-
-
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Compute cosine similarity between two vectors."""
-    import math
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(x * x for x in b))
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
+from src.autfin.memory.embeddings import generate_embedding as _generate_embedding, cosine_similarity
 
 
 # ================== TOOL IMPLEMENTATIONS ==================
@@ -1495,16 +1452,30 @@ async def analyze_macro_context() -> Dict[str, Any]:
         elif indices.get("Nifty 50", {}).get("change_pct", 0) < -0.5:
             india_impact = "bearish"
 
-        sector_weights = {
-            "IT": {"weight": 0.18, "bias": "neutral"},
-            "Bank": {"weight": 0.20, "bias": "neutral"},
-            "Pharma": {"weight": 0.10, "bias": "neutral"},
-            "Auto": {"weight": 0.08, "bias": "neutral"},
-            "FMCG": {"weight": 0.12, "bias": "neutral"},
-            "Energy": {"weight": 0.15, "bias": "neutral"},
-            "Metals": {"weight": 0.07, "bias": "neutral"},
-            "Infrastructure": {"weight": 0.10, "bias": "neutral"},
-        }
+        # Use real compute_sector_impact() instead of hardcoded weights
+        try:
+            from src.autfin.agents.global_macro import compute_sector_impact
+            sector_impact_raw = compute_sector_impact(macro_signals)
+            sector_weights = {}
+            for sector, info in sector_impact_raw.items():
+                sector_weights[sector] = {
+                    "weight": 0.10,  # Base weight — adjusted by impact direction
+                    "bias": info.get("impact_direction", "neutral"),
+                    "strength": info.get("strength", "low"),
+                    "drivers": info.get("drivers", []),
+                    "reasoning": info.get("reasoning", ""),
+                }
+        except Exception:
+            # Fallback to minimal defaults
+            sector_weights = {
+                "IT": {"weight": 0.15, "bias": "neutral"},
+                "Bank": {"weight": 0.20, "bias": "neutral"},
+                "Pharma": {"weight": 0.10, "bias": "neutral"},
+                "Auto": {"weight": 0.08, "bias": "neutral"},
+                "FMCG": {"weight": 0.12, "bias": "neutral"},
+                "Energy": {"weight": 0.15, "bias": "neutral"},
+                "Metals": {"weight": 0.07, "bias": "neutral"},
+            }
 
         narrative = f"Global indices mixed. India impact: {india_impact}."
 
