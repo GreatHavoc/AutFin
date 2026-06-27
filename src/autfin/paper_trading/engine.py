@@ -62,6 +62,134 @@ class SlippageModel:
             return price * (1 - total_slippage)
 
 
+# Indian market cap category thresholds (market cap in ₹Cr)
+LARGECAP_THRESHOLD = 20000    # >₹20K Cr = largecap
+MIDCAP_THRESHOLD = 5000       # ₹5K-20K Cr = midcap
+# <₹5K Cr = smallcap
+
+# Base spread estimates by category (% of price)
+SPREAD_LARGE_CAP = 0.08       # 0.08% — tight spreads (RELIANCE, TCS, INFY)
+SPREAD_MID_CAP = 0.30         # 0.30% — moderate spreads
+SPREAD_SMALL_CAP = 1.00       # 1.00% — wide spreads (illiquid)
+
+# Time-of-day multipliers (market hours 9:15-15:30 IST)
+# Spreads widen at open/close, narrow mid-day
+TIME_OPEN_MULTIPLIER = 1.5    # First 30 min (9:15-9:45)
+TIME_CLOSE_MULTIPLIER = 1.3   # Last 30 min (15:00-15:30)
+TIME_MIDDAY_MULTIPLIER = 1.0  # Normal hours
+
+# VIX multiplier: spread widens with volatility
+VIX_LOW = 12.0
+VIX_HIGH = 25.0
+VIX_SPREAD_MULTIPLIER_RANGE = (1.0, 2.0)  # (low vol, high vol)
+
+
+@dataclass
+class SpreadModel:
+    """Estimates bid-ask spread for Indian equities.
+
+    Spread is the dominant cost for mid/smallcap stocks, often larger
+    than slippage. This model estimates spread based on:
+      - Market cap category (largecap/midcap/smallcap)
+      - Time of day (wider at open/close)
+      - VIX level (wider in high volatility)
+      - Order value (larger orders consume more of the book)
+    """
+
+    # Override base spreads if needed
+    largecap_spread_pct: float = SPREAD_LARGE_CAP
+    midcap_spread_pct: float = SPREAD_MID_CAP
+    smallcap_spread_pct: float = SPREAD_SMALL_CAP
+
+    def estimate_spread_pct(
+        self,
+        market_cap_cr: Optional[float] = None,
+        vix: Optional[float] = None,
+        hour: Optional[int] = None,
+        minute: Optional[int] = None,
+    ) -> float:
+        """Estimate the bid-ask spread as a percentage of price.
+
+        Args:
+            market_cap_cr: Market cap in ₹Cr (determines category)
+            vix: Current India VIX level
+            hour: Current hour (IST, 0-23)
+            minute: Current minute (0-59)
+
+        Returns:
+            Spread percentage (e.g., 0.30 for 0.30%)
+        """
+        # 1. Base spread by market cap category
+        if market_cap_cr is not None:
+            if market_cap_cr >= LARGECAP_THRESHOLD:
+                base = self.largecap_spread_pct
+            elif market_cap_cr >= MIDCAP_THRESHOLD:
+                base = self.midcap_spread_pct
+            else:
+                base = self.smallcap_spread_pct
+        else:
+            # Default to midcap if unknown
+            base = self.midcap_spread_pct
+
+        # 2. Time-of-day multiplier
+        time_mult = TIME_MIDDAY_MULTIPLIER
+        if hour is not None:
+            if hour == 9 and (minute or 0) < 45:
+                time_mult = TIME_OPEN_MULTIPLIER
+            elif hour == 15 and (minute or 0) >= 0:
+                time_mult = TIME_CLOSE_MULTIPLIER
+            elif hour < 9 or hour > 15:
+                time_mult = TIME_CLOSE_MULTIPLIER  # After-hours = close spread
+
+        # 3. VIX multiplier
+        vix_mult = 1.0
+        if vix is not None:
+            vix_clamped = max(VIX_LOW, min(VIX_HIGH, vix))
+            vix_range = VIX_HIGH - VIX_LOW
+            vix_pct = (vix_clamped - VIX_LOW) / vix_range if vix_range > 0 else 0.5
+            low_mult, high_mult = VIX_SPREAD_MULTIPLIER_RANGE
+            vix_mult = low_mult + vix_pct * (high_mult - low_mult)
+
+        return base * time_mult * vix_mult
+
+    def calculate_spread_cost(
+        self,
+        price: float,
+        quantity: int,
+        action: str,
+        market_cap_cr: Optional[float] = None,
+        vix: Optional[float] = None,
+    ) -> float:
+        """Calculate spread-adjusted fill price.
+
+        Args:
+            price: Mid-market price
+            quantity: Number of shares
+            action: BUY or SELL
+            market_cap_cr: Market cap in ₹Cr
+            vix: Current India VIX
+
+        Returns:
+            Price adjusted for bid-ask spread
+        """
+        now = datetime.now()
+        spread_pct = self.estimate_spread_pct(
+            market_cap_cr=market_cap_cr,
+            vix=vix,
+            hour=now.hour,
+            minute=now.minute,
+        )
+
+        # Spread is half on each side — midpoint to best bid/ask
+        spread_half = spread_pct / 200.0  # Convert % to fraction, then half
+
+        # BUY hits the ask (pay more), SELL hits the bid (receive less)
+        if action == "BUY":
+            return price * (1 + spread_half)
+        else:
+            return price * (1 - spread_half)
+
+
 @dataclass
 class PaperPosition:
     symbol: str
@@ -128,23 +256,23 @@ class PaperTradingEngine:
     filled only if the limit condition is met.
     """
 
-    def __init__(self, initial_cash: float = 100000.0, db_path: Optional[str] = None, slippage_model: Optional[SlippageModel] = None):
+    def __init__(self, initial_cash: float = 100000.0, db_path: Optional[str] = None, slippage_model: Optional[SlippageModel] = None, spread_model: Optional[SpreadModel] = None):
         self.initial_cash = initial_cash
         self.cash = initial_cash
         self.positions: Dict[str, PaperPosition] = {}
         self.orders: Dict[str, PaperOrder] = {}
+        self.trade_history: List[Dict] = []
         self.order_history: List[PaperOrder] = []
-        self.trade_history: List[Dict[str, Any]] = []
-        self.total_pnl: float = 0.0
-        self._db_path = db_path
+        self.db_path = db_path
         self.slippage = slippage_model or SlippageModel()
+        self.spread = spread_model or SpreadModel()
         self._init_db()
 
     def _init_db(self):
-        if not self._db_path:
+        if not self.db_path:
             return
         try:
-            conn = sqlite3.connect(self._db_path)
+            conn = sqlite3.connect(self.db_path)
             conn.execute(
                 """CREATE TABLE IF NOT EXISTS paper_orders (
                     order_id TEXT PRIMARY KEY, symbol TEXT, exchange TEXT,
@@ -243,6 +371,10 @@ class PaperTradingEngine:
         # Apply slippage to fill price
         adjusted_price = self.slippage.calculate_slippage(
             fill_price, order.quantity, order.action
+        )
+        # Apply spread on top of slippage
+        adjusted_price = self.spread.calculate_spread_cost(
+            adjusted_price, order.quantity, order.action
         )
 
         order.status = "COMPLETE"
@@ -393,10 +525,10 @@ class PaperTradingEngine:
         return self.positions.get(f"{exchange}:{symbol}")
 
     def _persist_order(self, order: PaperOrder):
-        if not self._db_path:
+        if not self.db_path:
             return
         try:
-            conn = sqlite3.connect(self._db_path)
+            conn = sqlite3.connect(self.db_path)
             conn.execute(
                 """INSERT OR REPLACE INTO paper_orders VALUES
                 (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
@@ -415,11 +547,11 @@ class PaperTradingEngine:
             pass
 
     def _persist_position(self, key: str):
-        if not self._db_path:
+        if not self.db_path:
             return
         pos = self.positions.get(key)
         try:
-            conn = sqlite3.connect(self._db_path)
+            conn = sqlite3.connect(self.db_path)
             if pos:
                 conn.execute(
                     """INSERT OR REPLACE INTO paper_positions VALUES (?,?,?,?,?,?,?)""",
