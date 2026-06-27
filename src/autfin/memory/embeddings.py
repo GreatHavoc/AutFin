@@ -8,11 +8,16 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from typing import List
 
 logger = logging.getLogger(__name__)
 
-# Module-level singleton — loaded once, shared across all callers
+# Suppress HuggingFace warnings — model is cached locally, no download needed
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
+
+# Module-level singleton — loaded once per process
 _model = None
 _model_loaded = False
 
@@ -25,12 +30,18 @@ def _get_model():
     _model_loaded = True
     try:
         from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
+        _model = SentenceTransformer(
+            "all-MiniLM-L6-v2",
+            local_files_only=True,  # Don't check hub, use local cache only
+        )
     except ImportError:
         logger.warning(
             "sentence-transformers not installed — using hash embeddings. "
             "Install with: pip install sentence-transformers"
         )
+        _model = None
+    except Exception as e:
+        logger.debug("Failed to load sentence-transformers: %s — using hash fallback", e)
         _model = None
     return _model
 
