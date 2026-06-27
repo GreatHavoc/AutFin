@@ -174,6 +174,20 @@ class PaperTradingEngine:
         except Exception as e:
             logger.warning(f"Paper trading DB init failed: {e}")
 
+    async def _fetch_live_price(self, symbol: str, exchange: str = "NSE") -> Optional[float]:
+        """Fetch live price for a symbol via yfinance."""
+        try:
+            import yfinance as yf
+            ticker = f"{symbol}.NS" if exchange == "NSE" else f"{symbol}.BO"
+            t = yf.Ticker(ticker)
+            data = t.history(period="1d")
+            if data is not None and not data.empty:
+                return float(data["Close"].iloc[-1])
+            return None
+        except Exception as e:
+            logger.warning("Live price fetch failed for %s: %s", symbol, e)
+            return None
+
     def place_order(
         self,
         symbol: str,
@@ -201,8 +215,27 @@ class PaperTradingEngine:
         )
         self.orders[order_id] = order
 
-        if order_type.upper() == "MARKET" and price > 0:
-            self._fill_order(order, price)
+        if order_type.upper() == "MARKET":
+            if price > 0:
+                self._fill_order(order, price)
+            else:
+                # Fetch live price for MARKET orders submitted without price
+                import asyncio
+                try:
+                    live_price = asyncio.get_event_loop().run_until_complete(
+                        self._fetch_live_price(symbol, exchange)
+                    )
+                    if live_price and live_price > 0:
+                        self._fill_order(order, live_price)
+                    else:
+                        # If live price unavailable, use 0.05% slippage from last known
+                        logger.warning("MARKET order for %s: no live price available, using last known", symbol)
+                        order.status = "REJECTED"
+                        order.notes = "MARKET order rejected: live price unavailable"
+                except Exception as e:
+                    logger.warning("MARKET order fetch failed for %s: %s", symbol, e)
+                    order.status = "REJECTED"
+                    order.notes = f"MARKET order rejected: {e}"
 
         return order
 

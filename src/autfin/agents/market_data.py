@@ -351,9 +351,7 @@ async def price_fetcher(state: AgentState, config: RunnableConfig | None = None)
                     "errors": errors,
                 }
             
-            # Cache empty result to avoid repeated failures
-            _cache.set(cache_key, {"market_snapshot": {}})
-            
+            # DON'T cache empty results on failure — allow retry on next call
             return {
                 "market_snapshot": {},
                 "errors": errors,
@@ -362,8 +360,7 @@ async def price_fetcher(state: AgentState, config: RunnableConfig | None = None)
     except Exception as e:
         errors.append(f"Price fetcher failed: {str(e)}")
         
-        # Cache empty result to avoid repeated failures
-        _cache.set("price_data", {"market_snapshot": {}})
+        # DON'T cache empty results on failure — allow retry on next call
         
         return {
             "market_snapshot": {},

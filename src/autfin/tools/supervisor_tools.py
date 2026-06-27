@@ -290,11 +290,30 @@ async def screen_candidates(
 
         screened = []
 
-        for sym in symbols[:300]:  # Cap at 300 for performance
-            try:
-                t = yf.Ticker(f"{sym.removesuffix('.NS')}.NS")
-                info = t.info or {}
+        # Batch-parallel: fetch ticker.info for up to 300 symbols concurrently
+        target_syms = symbols[:300]
+        ns_syms = [s.removesuffix('.NS') + ".NS" for s in target_syms]
 
+        def _fetch_info(ticker_str: str) -> dict | None:
+            try:
+                import yfinance as yf
+                t = yf.Ticker(ticker_str)
+                return t.info or {}
+            except Exception:
+                return None
+
+        # Use thread pool to parallelize I/O-bound yfinance calls
+        import concurrent.futures
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
+            infos = await loop.run_in_executor(
+                pool, lambda: list(map(_fetch_info, ns_syms))
+            )
+
+        for sym, info in zip(target_syms, infos):
+            if not info:
+                continue
+            try:
                 mcap = (info.get("marketCap") or 0) / 1e7
                 avg_vol = info.get("averageVolume") or info.get("averageDailyVolume10Day") or 0
                 prev_close = info.get("regularMarketPreviousClose") or info.get("previousClose") or 0
@@ -327,7 +346,7 @@ async def screen_candidates(
                     })
 
             except Exception:
-                continue  # Skip stocks that fail to fetch
+                continue  # Skip stocks that fail to parse
 
         screened.sort(key=lambda x: x["score"], reverse=True)
         top = screened[:max_results]
@@ -539,11 +558,16 @@ async def research_stock(symbol: str, depth: str = "standard") -> Dict[str, Any]
             for key, task in tasks.items():
                 results[key] = await task
         else:
-            fundamentals_result = await agent_tasks["fundamentals"]
-            technical_result = await agent_tasks["technical"]
-            sentiment_result = await agent_tasks["sentiment"]
-            valuation_result = await agent_tasks["valuation"]
-            peer_macro_result = await agent_tasks["peer_macro"]
+            # Standard depth — parallel await all agents
+            fundamentals_result, technical_result, sentiment_result, valuation_result, peer_macro_result = (
+                await asyncio.gather(
+                    agent_tasks["fundamentals"],
+                    agent_tasks["technical"],
+                    agent_tasks["sentiment"],
+                    agent_tasks["valuation"],
+                    agent_tasks["peer_macro"],
+                )
+            )
             results = {
                 "fundamentals": fundamentals_result,
                 "technical": technical_result,
@@ -1305,8 +1329,10 @@ async def check_guardian() -> Dict[str, Any]:
         sell_signals = []
         alerts = []
 
-        STOP_LOSS_PCT = -15.0
-        PROFIT_TARGET_PCT = 50.0
+        from src.autfin.config.settings import get_settings
+        _settings = get_settings()
+        STOP_LOSS_PCT = -abs(_settings.default_stop_loss_pct) * 100  # 8% → -8.0
+        PROFIT_TARGET_PCT = _settings.profit_target_pct * 100  # 15% → 15.0
         DEGRADATION_THRESHOLD_PCT = -25.0
 
         for holding in holdings:

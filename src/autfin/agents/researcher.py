@@ -282,26 +282,35 @@ def analyze_signals(research_results: dict) -> dict:
     sentiment_reports = research_results.get("sentiment_reports", {})
     macro_signals = research_results.get("macro_signals", {})
     
-    # Process technical signals
-    if isinstance(technical_reports, dict) and "reports" in technical_reports:
-        tech_reports = technical_reports.get("reports", {})
-        for symbol, report in tech_reports.items():
-            if isinstance(report, dict) and "signal" in report:
-                signal = parse_technical_signal(report)
-                signals["technical"].append(signal)
-                signals["summary"]["total_signals"] += 1
-                if signal["direction"] == "bullish":
-                    signals["summary"]["bullish_count"] += 1
-                elif signal["direction"] == "bearish":
-                    signals["summary"]["bearish_count"] += 1
-                else:
-                    signals["summary"]["neutral_count"] += 1
+    # Process technical signals — handles both nested {"reports": {...}} and flat {symbol: {...}}
+    _tech_items = {}
+    if isinstance(technical_reports, dict):
+        if "reports" in technical_reports:
+            _tech_items = technical_reports["reports"]
+        else:
+            # Flat format: {symbol: report_dict, ...}
+            _tech_items = {k: v for k, v in technical_reports.items() if isinstance(v, dict)}
+    for symbol, report in _tech_items.items():
+        if isinstance(report, dict) and "signal" in report:
+            signal = parse_technical_signal(report)
+            signals["technical"].append(signal)
+            signals["summary"]["total_signals"] += 1
+            if signal["direction"] == "bullish":
+                signals["summary"]["bullish_count"] += 1
+            elif signal["direction"] == "bearish":
+                signals["summary"]["bearish_count"] += 1
+            else:
+                signals["summary"]["neutral_count"] += 1
     
-    # Process fundamentals signals
-    if isinstance(fundamentals_reports, dict) and "reports" in fundamentals_reports:
-        fund_reports = fundamentals_reports.get("reports", {})
-        for symbol, report in fund_reports.items():
-            if isinstance(report, dict) and "health_score" in report:
+    # Process fundamentals signals — handles both nested and flat formats
+    _fund_items = {}
+    if isinstance(fundamentals_reports, dict):
+        if "reports" in fundamentals_reports:
+            _fund_items = fundamentals_reports["reports"]
+        else:
+            _fund_items = {k: v for k, v in fundamentals_reports.items() if isinstance(v, dict)}
+    for symbol, report in _fund_items.items():
+        if isinstance(report, dict) and "health_score" in report:
                 signal = parse_fundamentals_signal(report)
                 signals["fundamentals"].append(signal)
                 signals["summary"]["total_signals"] += 1
@@ -1028,7 +1037,9 @@ class ResearcherAgent:
                 recommendation["self_audit"] = self_audit
                 if self_audit.get("revised_conviction") is not None:
                     old_conv = recommendation.get("conviction_score", 0.5)
-                    recommendation["conviction_score"] = self_audit["revised_conviction"]
+                    # Clamp revised conviction to [0.0, 1.0]
+                    revised = max(0.0, min(1.0, float(self_audit["revised_conviction"])))
+                    recommendation["conviction_score"] = revised
                     recommendation["pre_audit_conviction"] = old_conv
                 research_notes.append("")
                 research_notes.append("### Self-Audit Findings")

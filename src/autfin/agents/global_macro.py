@@ -367,10 +367,6 @@ async def fetch_macro_indicators() -> Dict[str, Any]:
             "^VIX": "vix",
             "DX-Y.NYB": "dxy",
         }
-        for ticker, key in index_map.items():
-            data = _fetch(ticker, key)
-            if data:
-                indicators["data"][key] = data
 
         # Commodities
         commodity_map = {
@@ -380,25 +376,41 @@ async def fetch_macro_indicators() -> Dict[str, Any]:
             "NG=F": "natural_gas",
             "BZ=F": "global_oil_prices",
         }
-        for ticker, key in commodity_map.items():
-            data = _fetch(ticker, key)
-            if data:
-                indicators["data"][key] = data
 
         # India-specific indices
         india_map = {
             "^NSEI": "nifty_50",
             "^NSEBANK": "bank_nifty",
         }
-        for ticker, key in india_map.items():
-            data = _fetch(ticker, key)
-            if data:
-                indicators["data"][key] = data
 
-        # USD/INR
-        usdinr = _fetch("USDINR=X", "inr_usd")
-        if usdinr:
-            indicators["data"]["inr_usd"] = usdinr
+        # Combine all tickers for parallel fetch
+        all_tickers = {}
+        all_tickers.update(index_map)
+        all_tickers.update(commodity_map)
+        all_tickers.update(india_map)
+        all_tickers["USDINR=X"] = "inr_usd"
+
+        # Parallel fetch using ThreadPoolExecutor
+        import concurrent.futures
+
+        def _fetch_ticker(ticker_label: tuple) -> tuple:
+            ticker, label = ticker_label
+            try:
+                result = _fetch(ticker, label)
+                return (label, result)
+            except Exception:
+                return (label, None)
+
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+            fetch_tasks = [(t, k) for t, k in all_tickers.items()]
+            results = await loop.run_in_executor(
+                pool, lambda: list(map(_fetch_ticker, fetch_tasks))
+            )
+
+        for label, data in results:
+            if data:
+                indicators["data"][label] = data
 
         # India 10Y bond yield (use短期国债 proxy — yfinance has limited bond data)
         # Skip if not available; mark as unavailable
