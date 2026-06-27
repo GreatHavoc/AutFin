@@ -650,7 +650,104 @@ class RiskManagerAgent:
                 f"Peak: ₹{peak_value:,.0f}, Current: ₹{current_value:,.0f}. "
                 f"HALTING all new buys until recovery."
             )
-        return True, f"Drawdown OK: {drawdown:.1%} (halt at {halt_pct:.1%})"
+        return True, f"Drawdown OK: {drawdown:.1%} (halt at {halt_pct:.1f}%)"
+
+    def check_correlation_risk(self, portfolio: Dict) -> Tuple[bool, str]:
+        """
+        Check if portfolio is over-correlated with the market (Nifty50).
+
+        When average pairwise correlation with Nifty50 > 0.65, the portfolio
+        has minimal diversification benefit and is vulnerable to market-wide drawdowns.
+
+        Uses yfinance to fetch 60-day rolling correlation.
+
+        Args:
+            portfolio: Current portfolio with holdings
+
+        Returns:
+            Tuple of (passes, reason)
+        """
+        holdings = portfolio.get("holdings", [])
+        if len(holdings) < 2:
+            return True, "Correlation check skipped — fewer than 2 holdings"
+
+        symbols = []
+        for h in holdings:
+            sym = h.get("tradingsymbol") or h.get("symbol") or ""
+            if sym:
+                symbols.append(sym)
+
+        if len(symbols) < 2:
+            return True, "Correlation check skipped — fewer than 2 valid symbols"
+
+        try:
+            import yfinance as yf
+            import numpy as np
+
+            # Fetch 60-day history for all holdings + Nifty50
+            tickers = [f"{s}.NS" for s in symbols[:15]] + ["^NSEI"]
+            data = yf.download(tickers, period="3mo", progress=False, group_by="ticker")
+
+            if data is None or data.empty:
+                return True, "Correlation check skipped — no price data available"
+
+            # Compute daily returns
+            returns = {}
+            for sym in symbols[:15]:
+                try:
+                    col = f"{sym}.NS"
+                    if col in data.columns:
+                        prices = data[col]["Close"].dropna()
+                        if len(prices) >= 20:
+                            returns[sym] = prices.pct_change().dropna()
+                except Exception:
+                    continue
+
+            nifty_col = "^NSEI"
+            if nifty_col not in data.columns:
+                return True, "Correlation check skipped — Nifty50 data unavailable"
+
+            nifty_returns = data[nifty_col]["Close"].pct_change().dropna()
+
+            if not returns or len(nifty_returns) < 20:
+                return True, "Correlation check skipped — insufficient data"
+
+            # Compute average correlation with Nifty50
+            correlations = []
+            for sym, ret in returns.items():
+                common_idx = ret.index.intersection(nifty_returns.index)
+                if len(common_idx) >= 20:
+                    corr = float(np.corrcoef(
+                        ret.loc[common_idx].values,
+                        nifty_returns.loc[common_idx].values,
+                    )[0, 1])
+                    correlations.append((sym, corr))
+
+            if not correlations:
+                return True, "Correlation check skipped — no valid correlations computed"
+
+            avg_corr = sum(c for _, c in correlations) / len(correlations)
+            max_corr_sym = max(correlations, key=lambda x: abs(x[1]))
+            min_corr_sym = min(correlations, key=lambda x: abs(x[1]))
+
+            THRESHOLD = 0.65
+            if avg_corr > THRESHOLD:
+                return False, (
+                    f"Portfolio average Nifty50 correlation {avg_corr:.2f} > {THRESHOLD} threshold. "
+                    f"Most correlated: {max_corr_sym[0]} ({max_corr_sym[1]:.2f}), "
+                    f"Least: {min_corr_sym[0]} ({min_corr_sym[1]:.2f}). "
+                    f"Consider adding uncorrelated assets (gold, pharma, IT)."
+                )
+
+            return True, (
+                f"Correlation OK: avg={avg_corr:.2f} (threshold {THRESHOLD}). "
+                f"Range: {min_corr_sym[0]}={min_corr_sym[1]:.2f} to "
+                f"{max_corr_sym[0]}={max_corr_sym[1]:.2f}"
+            )
+
+        except Exception as e:
+            logger.warning("Correlation check failed: %s", e)
+            return True, f"Correlation check skipped — computation failed: {e}"
 
     def calculate_risk_score(self, risk_report: Dict) -> int:
         """

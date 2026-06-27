@@ -1083,6 +1083,47 @@ async def retrieve_learnings(query: str, filters: Optional[Dict[str, Any]] = Non
         }
 
 
+async def validate_reasonability(details: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Gate unrealistic LLM-generated recommendations before they reach the user.
+
+    Checks:
+    - Target upside > 20% in 1 week is suspicious
+    - Conviction > 0.95 without justification is suspicious
+    - Stop-loss > 25% is too wide
+    - Risk/reward < 1:2 is unfavorable
+
+    Returns {valid: bool, warnings: list[str], blocked: bool}.
+    """
+    warnings = []
+    blocked = False
+
+    target_upside_pct = details.get("target_upside_pct", 0)
+    if target_upside_pct > 20:
+        warnings.append(f"Target upside {target_upside_pct:.1f}% in short timeframe is unrealistic")
+        blocked = True
+
+    conviction = details.get("conviction", details.get("conviction_score", 0))
+    if conviction > 0.95:
+        warnings.append(f"Conviction {conviction:.2f} > 0.95 — unusually high, verify evidence")
+        blocked = True
+
+    stop_loss_pct = abs(details.get("stop_loss_pct", 0))
+    if stop_loss_pct > 25:
+        warnings.append(f"Stop-loss {stop_loss_pct:.1f}% is wider than 25% — unusual for Indian equities")
+        blocked = True
+
+    risk_reward = details.get("risk_reward_ratio", 0)
+    if risk_reward > 0 and risk_reward < 2.0:
+        warnings.append(f"Risk/Reward 1:{risk_reward:.1f} below 1:2 minimum")
+
+    return {
+        "valid": not blocked,
+        "blocked": blocked,
+        "warnings": warnings,
+    }
+
+
 async def log_decision(decision_type: str, details: Dict[str, Any]) -> Dict[str, Any]:
     """
     Write a decision to the learning journal.
