@@ -199,6 +199,39 @@ def init_database():
         # Migration: if old columns exist, copy data then drop them
         _migrate_learning_journal(cursor)
 
+        # ── Runs table (per-invocation trace) ────────────────
+        # Drop old v1 runs table if schema is incompatible
+        try:
+            cols = {r[1] for r in cursor.execute("PRAGMA table_info(runs)").fetchall()}
+            if "run_id" not in cols:
+                cursor.execute("DROP TABLE IF EXISTS runs")
+        except Exception:
+            pass
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL UNIQUE,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                status TEXT NOT NULL DEFAULT 'running',
+                query TEXT,
+                mode TEXT,
+                model_deep TEXT,
+                model_fast TEXT,
+                total_tokens INTEGER DEFAULT 0,
+                total_cost_inr REAL DEFAULT 0.0,
+                nodes_visited TEXT DEFAULT '[]',
+                decisions_made INTEGER DEFAULT 0,
+                trades_executed INTEGER DEFAULT 0,
+                error_message TEXT,
+                duration_ms REAL,
+                metadata_json TEXT DEFAULT '{}'
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status)")
+
         conn.commit()
     finally:
         conn.close()
@@ -230,6 +263,68 @@ def init_database_if_not_exists():
     """Initialize database if it doesn't exist."""
     if not DB_PATH.exists():
         init_database()
+
+
+def record_run_start(
+    run_id: str,
+    query: str = "",
+    mode: str = "recommendation",
+    model_deep: str = "",
+    model_fast: str = "",
+) -> None:
+    """Record the start of an invocation run."""
+    import datetime
+    conn = get_connection()
+    try:
+        conn.execute(
+            """INSERT OR REPLACE INTO runs (run_id, started_at, status, query, mode, model_deep, model_fast)
+               VALUES (?, ?, 'running', ?, ?, ?, ?)""",
+            (run_id, datetime.datetime.now().isoformat(), query, mode, model_deep, model_fast),
+        )
+    finally:
+        conn.close()
+
+
+def record_run_end(
+    run_id: str,
+    status: str = "completed",
+    error_message: str = None,
+    total_tokens: int = 0,
+    total_cost_inr: float = 0.0,
+    nodes_visited: list = None,
+    decisions_made: int = 0,
+    trades_executed: int = 0,
+    duration_ms: float = 0.0,
+    metadata: dict = None,
+) -> None:
+    """Record the end of an invocation run."""
+    import datetime
+    import json
+    conn = get_connection()
+    try:
+        conn.execute(
+            """UPDATE runs SET
+                finished_at = ?, status = ?, error_message = ?,
+                total_tokens = ?, total_cost_inr = ?,
+                nodes_visited = ?, decisions_made = ?, trades_executed = ?,
+                duration_ms = ?, metadata_json = ?
+               WHERE run_id = ?""",
+            (
+                datetime.datetime.now().isoformat(),
+                status,
+                error_message,
+                total_tokens,
+                total_cost_inr,
+                json.dumps(nodes_visited or []),
+                decisions_made,
+                trades_executed,
+                duration_ms,
+                json.dumps(metadata or {}),
+                run_id,
+            ),
+        )
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
