@@ -12,6 +12,15 @@ from src.autfin.llm.client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
+# Regime-conditional correlation thresholds
+# In crisis, correlations spike — lower the threshold to catch overexposure earlier
+REGIME_CORRELATION_THRESHOLDS = {
+    "low_vol": 0.70,    # Relaxed — low vol = correlations are naturally lower
+    "normal": 0.65,     # Baseline
+    "high_vol": 0.55,   # Tighter — correlations tend to rise in high vol
+    "crisis": 0.45,     # Much tighter — correlations converge toward 1.0 in crises
+}
+
 
 # Risk limits configuration
 RISK_LIMITS = {
@@ -656,10 +665,9 @@ class RiskManagerAgent:
         """
         Check if portfolio is over-correlated with the market (Nifty50).
 
-        When average pairwise correlation with Nifty50 > 0.65, the portfolio
-        has minimal diversification benefit and is vulnerable to market-wide drawdowns.
-
-        Uses yfinance to fetch 60-day rolling correlation.
+        Uses regime-conditional thresholds — in crisis regimes, correlations
+        spike toward 1.0, so the threshold is lowered to catch overexposure
+        earlier. Uses yfinance to fetch 60-day rolling correlation.
 
         Args:
             portfolio: Current portfolio with holdings
@@ -679,6 +687,16 @@ class RiskManagerAgent:
 
         if len(symbols) < 2:
             return True, "Correlation check skipped — fewer than 2 valid symbols"
+
+        # Get current regime for conditional threshold
+        try:
+            from src.autfin.risk.regime import get_regime_detector
+            regime_state = get_regime_detector().current_regime
+            current_regime = regime_state.regime
+        except Exception:
+            current_regime = "normal"
+
+        THRESHOLD = REGIME_CORRELATION_THRESHOLDS.get(current_regime, 0.65)
 
         try:
             import yfinance as yf
@@ -730,17 +748,17 @@ class RiskManagerAgent:
             max_corr_sym = max(correlations, key=lambda x: abs(x[1]))
             min_corr_sym = min(correlations, key=lambda x: abs(x[1]))
 
-            THRESHOLD = 0.65
             if avg_corr > THRESHOLD:
                 return False, (
-                    f"Portfolio average Nifty50 correlation {avg_corr:.2f} > {THRESHOLD} threshold. "
-                    f"Most correlated: {max_corr_sym[0]} ({max_corr_sym[1]:.2f}), "
+                    f"Portfolio average Nifty50 correlation {avg_corr:.2f} > {THRESHOLD} threshold "
+                    f"(regime={current_regime}). "
+                    f"Most correlated: {max_corr_sym[0]} ({max_corr_sym[1]:2f}), "
                     f"Least: {min_corr_sym[0]} ({min_corr_sym[1]:.2f}). "
                     f"Consider adding uncorrelated assets (gold, pharma, IT)."
                 )
 
             return True, (
-                f"Correlation OK: avg={avg_corr:.2f} (threshold {THRESHOLD}). "
+                f"Correlation OK: avg={avg_corr:.2f} (threshold {THRESHOLD}, regime={current_regime}). "
                 f"Range: {min_corr_sym[0]}={min_corr_sym[1]:.2f} to "
                 f"{max_corr_sym[0]}={max_corr_sym[1]:.2f}"
             )
