@@ -19,12 +19,12 @@ class AutFinSettings(BaseSettings):
         description="Store mode: 'in-memory' or 'persistent' (SQLite)"
     )
     deep_model: str = Field(
-        default="nvidia_nim/nvidia/nemotron-3-super-120b-a12b",
-        description="Primary — Nemotron 3 Super 120B (NVIDIA, 1M context, free)"
+        default="nvidia_nim/minimaxai/minimax-m3",
+        description="Primary — MiniMax M3 via NVIDIA NIM (1M context, 61 tps, free)"
     )
     fast_model: str = Field(
         default="nvidia_nim/meta/llama-3.1-8b-instruct",
-        description="Fast model — NVIDIA NIM Llama 3.1 8B (free, fast)"
+        description="Fast model — Llama 3.1 8B via NVIDIA NIM (912ms, 63 tps, free)"
     )
     nvidia_model: str = Field(
         default="nvidia_nim/meta/llama-3.3-70b-instruct",

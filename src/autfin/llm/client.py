@@ -8,6 +8,7 @@ Returns None on failure — agents handle degradation autonomously.
 import asyncio
 import json
 import logging
+import random
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -15,6 +16,56 @@ logger = logging.getLogger(__name__)
 
 # Module-level token accumulator (read by budget guard node)
 _token_accumulator = {"tokens": 0, "cost": 0.0}
+
+# Module-level rate limiter — prevents 429s across all LLM calls
+_rate_limiter = {
+    "last_call_time": 0.0,
+    "min_interval": 1.0,        # Min seconds between calls (1 RPM = 1 req/sec)
+    "backoff_until": 0.0,       # Unix timestamp when backoff expires
+    "consecutive_429": 0,       # Count of consecutive 429 errors
+}
+
+
+async def _wait_for_rate_limit():
+    """Enforce rate limiting before each LLM call."""
+    now = time.monotonic()
+
+    # If in backoff period, wait until it expires
+    backoff_remaining = _rate_limiter["backoff_until"] - now
+    if backoff_remaining > 0:
+        wait = backoff_remaining + random.uniform(0.1, 0.5)  # Add jitter
+        logger.debug("Rate limiter: waiting %.1fs for backoff to expire", wait)
+        await asyncio.sleep(wait)
+
+    # Enforce minimum interval between calls
+    elapsed = now - _rate_limiter["last_call_time"]
+    if elapsed < _rate_limiter["min_interval"]:
+        wait = _rate_limiter["min_interval"] - elapsed + random.uniform(0.05, 0.2)
+        logger.debug("Rate limiter: enforcing %.2fs gap between calls", wait)
+        await asyncio.sleep(wait)
+
+    _rate_limiter["last_call_time"] = time.monotonic()
+
+
+def _on_rate_limit_error():
+    """Handle a 429 error — increase backoff exponentially."""
+    _rate_limiter["consecutive_429"] += 1
+    # Exponential backoff: 5s, 10s, 20s, 40s, 60s max
+    backoff = min(5 * (2 ** (_rate_limiter["consecutive_429"] - 1)), 60.0)
+    _rate_limiter["backoff_until"] = time.monotonic() + backoff
+    _rate_limiter["min_interval"] = min(2.0, _rate_limiter["min_interval"] + 0.2)
+    logger.warning(
+        "Rate limited (429 #%d) — backing off for %.0fs, min_interval=%.1fs",
+        _rate_limiter["consecutive_429"], backoff, _rate_limiter["min_interval"],
+    )
+
+
+def _on_success():
+    """Reset rate limiter state on successful call."""
+    _rate_limiter["consecutive_429"] = 0
+    # Gradually reduce interval back toward 1.0s
+    if _rate_limiter["min_interval"] > 1.0:
+        _rate_limiter["min_interval"] = max(1.0, _rate_limiter["min_interval"] - 0.1)
 
 
 def get_token_usage():
@@ -133,6 +184,9 @@ class LLMClient:
         last_error = None
         for attempt in range(self.max_retries + 1):
             try:
+                # Wait for rate limiter before each call
+                await _wait_for_rate_limit()
+
                 t_start = time.monotonic()
                 response = await _litellm.acompletion(
                     model=target_model,
@@ -143,6 +197,7 @@ class LLMClient:
                 )
                 elapsed_ms = (time.monotonic() - t_start) * 1000
                 self._call_count += 1
+                _on_success()
 
                 usage = getattr(response, "usage", None)
                 prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
@@ -156,16 +211,17 @@ class LLMClient:
                 self._error_count += 1
                 last_error = e
                 error_str = str(e).lower()
-                # Detect rate limiting (429) — wait longer before retry
+                # Detect rate limiting (429) — exponential backoff
                 is_rate_limited = "429" in error_str or "rate" in error_str or "too many" in error_str
+                if is_rate_limited:
+                    _on_rate_limit_error()
                 if attempt < self.max_retries:
-                    wait_time = 2.0 if is_rate_limited else 0.5
+                    wait_time = random.uniform(3.0, 6.0) if is_rate_limited else 0.5
                     logger.debug(
                         "LLM call attempt %d/%d failed on %s%s: %s — retrying in %.1fs",
                         attempt + 1, self.max_retries + 1, target_model,
                         " (RATE LIMITED)" if is_rate_limited else "", e, wait_time,
                     )
-                    import asyncio
                     await asyncio.sleep(wait_time)
                 else:
                     logger.warning("LLM call failed on %s after %d attempts: %s", target_model, self.max_retries + 1, e)
