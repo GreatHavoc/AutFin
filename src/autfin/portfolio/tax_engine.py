@@ -306,3 +306,133 @@ class TaxEngine:
         if not (-0.99 < rate < 10.0):
             return None
         return round(rate, 4)
+
+    def generate_gain_harvest_orders(self) -> List[Dict[str, Any]]:
+        """Generate SELL orders to harvest LTCG gains within the ₹1.25L exemption.
+
+        Returns list of order dicts ready for paper trading engine execution.
+        Each order includes sell_price, rebuy_price, and rationale.
+        """
+        candidates = self.find_gain_harvest_candidates()
+        if not candidates:
+            return []
+
+        orders = []
+        for c in candidates:
+            sell_value = c["quantity"] * c["estimated_price"]
+            orders.append({
+                "symbol": c["symbol"],
+                "action": "SELL",
+                "quantity": c["quantity"],
+                "price": c["estimated_price"],
+                "order_type": "LIMIT",
+                "total_value": round(sell_value, 2),
+                "tax_class": "LTCG",
+                "tax_cost": 0.0,
+                "realized_gain": c["realized_gain"],
+                "days_held": c["days_held"],
+                "rebuy": True,  # Signal to rebuy at same price after fill
+                "rebuy_price": c["estimated_price"],
+                "rebuy_quantity": c["quantity"],
+                "rationale": (
+                    f"LTCG gain harvest: ₹{c['realized_gain']:.0f} gain realized at zero tax "
+                    f"({c['days_held']}d held, within ₹1.25L exemption). "
+                    f"Rebuy to reset cost basis higher."
+                ),
+                "strategy_id": "TAX-LTCG-HARVEST",
+            })
+
+        total_gain = sum(o["realized_gain"] for o in orders)
+        logger.info(
+            "Generated %d LTCG harvest orders: ₹%.0f total gain, ₹0 tax cost",
+            len(orders), total_gain,
+        )
+        return orders
+
+    def generate_loss_harvest_orders(self) -> List[Dict[str, Any]]:
+        """Generate SELL orders to harvest tax losses for offset against gains.
+
+        Returns list of order dicts ready for paper trading engine execution.
+        Prioritizes by loss amount (largest first) and STCG losses (offset at 20%).
+        """
+        candidates = self.find_harvest_candidates()
+        if not candidates:
+            return []
+
+        summary = self.compute_tax_summary()
+        stcg_gains = summary["stcg_gains"]
+        ltcg_gains = summary["ltcg_gains"]
+
+        orders = []
+        remaining_stcg_to_offset = stcg_gains
+        remaining_ltcg_to_offset = ltcg_gains
+
+        for c in candidates:
+            loss_amount = c["unrealized_loss"]
+            tax_class = c["tax_class"]
+            sell_value = c["quantity"] * c["estimated_price"]
+
+            # Determine how much of this loss is useful
+            if tax_class == "STCG":
+                # STCG losses offset STCG gains at 20% rate
+                useful_loss = min(loss_amount, remaining_stcg_to_offset)
+                tax_benefit = useful_loss * STCG_TAX_RATE
+                remaining_stcg_to_offset -= useful_loss
+            else:
+                # LTCG losses offset LTCG gains (exemption first, then 12.5%)
+                useful_loss = min(loss_amount, remaining_ltcg_to_offset)
+                tax_benefit = useful_loss * LTCG_TAX_RATE
+                remaining_ltcg_to_offset -= useful_loss
+
+            orders.append({
+                "symbol": c["symbol"],
+                "action": "SELL",
+                "quantity": c["quantity"],
+                "price": c["estimated_price"],
+                "order_type": "LIMIT",
+                "total_value": round(sell_value, 2),
+                "tax_class": tax_class,
+                "loss_amount": loss_amount,
+                "useful_loss": round(useful_loss, 2),
+                "tax_benefit": round(tax_benefit, 2),
+                "days_held": c["days_held"],
+                "rebuy": True,  # Signal to rebuy at same price after fill
+                "rebuy_price": c["estimated_price"],
+                "rebuy_quantity": c["quantity"],
+                "rationale": (
+                    f"Tax-loss harvest: ₹{loss_amount:.0f} loss ({tax_class}, {c['days_held']}d held). "
+                    f"Tax benefit: ₹{tax_benefit:.0f} (offsets {tax_class} gains). "
+                    f"Rebuy to maintain position."
+                ),
+                "strategy_id": f"TAX-{tax_class}-LOSS-HARVEST",
+            })
+
+            # Stop if we've offset all gains
+            if remaining_stcg_to_offset <= 0 and remaining_ltcg_to_offset <= 0:
+                break
+
+        total_benefit = sum(o["tax_benefit"] for o in orders)
+        logger.info(
+            "Generated %d loss harvest orders: ₹%.0f total tax benefit",
+            len(orders), total_benefit,
+        )
+        return orders
+
+    def get_harvest_summary(self) -> Dict[str, Any]:
+        """Get a combined summary of harvest opportunities (gain + loss)."""
+        gain_orders = self.generate_gain_harvest_orders()
+        loss_orders = self.generate_loss_harvest_orders()
+
+        return {
+            "gain_harvest": {
+                "orders": gain_orders,
+                "total_gain": sum(o["realized_gain"] for o in gain_orders),
+                "tax_cost": 0.0,  # Always zero for LTCG within exemption
+            },
+            "loss_harvest": {
+                "orders": loss_orders,
+                "total_loss": sum(o.get("loss_amount", 0) for o in loss_orders),
+                "total_tax_benefit": sum(o.get("tax_benefit", 0) for o in loss_orders),
+            },
+            "total_orders": len(gain_orders) + len(loss_orders),
+        }
