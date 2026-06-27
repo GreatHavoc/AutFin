@@ -131,6 +131,78 @@ def _recommendation_message(report: dict[str, Any]) -> str:
     )
 
 
+def _kelly_sized_qty(
+    trade: dict[str, Any],
+    available_cash: float,
+    current_drawdown: float = 0.0,
+) -> dict[str, Any]:
+    """Recompute trade qty using Kelly criterion if opportunity data is available.
+
+    If the trade dict contains 'win_rate', 'avg_win', 'avg_loss', and 'conviction',
+    this function recalculates the optimal position size using Kelly with regime gates.
+    Otherwise, returns the trade unchanged.
+
+    Args:
+        trade: Trade dict with optional Kelly opportunity data
+        available_cash: Available cash for BUY orders
+        current_drawdown: Current portfolio drawdown (0.0 = at peak)
+
+    Returns:
+        Trade dict with potentially updated qty and kelly metadata
+    """
+    win_rate = trade.get("win_rate")
+    avg_win = trade.get("avg_win")
+    avg_loss = trade.get("avg_loss")
+    conviction = trade.get("conviction")
+
+    # Only apply Kelly if all opportunity data is present
+    if win_rate is None or avg_win is None or avg_loss is None or conviction is None:
+        return trade
+
+    try:
+        from src.autfin.risk.kelly import kelly_fraction
+        from src.autfin.risk.regime import get_regime_detector
+
+        regime = get_regime_detector().current_regime
+        kelly = kelly_fraction(
+            win_rate=float(win_rate),
+            avg_win=float(avg_win),
+            avg_loss=float(avg_loss),
+            regime=regime.regime,
+            drawdown_pct=current_drawdown,
+            conviction=float(conviction),
+        )
+
+        if kelly["position_pct"] <= 0:
+            # Kelly says don't trade — reduce qty to 0
+            trade = dict(trade)
+            trade["qty"] = 0
+            trade["kelly_skip"] = True
+            trade["kelly_rationale"] = kelly["rationale"]
+            return trade
+
+        price = float(trade.get("price", 0))
+        if price <= 0:
+            return trade
+
+        # Compute optimal allocation
+        alloc_value = available_cash * kelly["position_pct"]
+        optimal_qty = max(1, int(alloc_value / price))
+
+        # Only override if Kelly suggests fewer shares (never increase)
+        current_qty = int(float(trade.get("qty", 0)))
+        if optimal_qty < current_qty:
+            trade = dict(trade)
+            trade["qty"] = optimal_qty
+            trade["kelly_sized"] = True
+            trade["kelly_position_pct"] = kelly["position_pct"]
+            trade["kelly_rationale"] = kelly["rationale"]
+
+        return trade
+    except Exception:
+        return trade
+
+
 async def executor_agent(
     state: AgentState,
     config: RunnableConfig | None = None,
@@ -289,6 +361,25 @@ async def executor_agent(
             valid, reason = _validate_trade(trade)
             if not valid:
                 errors.append(f"Executor skipped invalid trade: {reason}")
+                continue
+
+            # Apply Kelly sizing if opportunity data is present
+            current_drawdown = float(state.get("current_drawdown", 0.0) or 0.0)
+            trade = _kelly_sized_qty(trade, available_cash, current_drawdown)
+
+            # Skip trades Kelly says don't take
+            if trade.get("kelly_skip"):
+                report = _build_base_report(trade, execution_mode)
+                report["status"] = "kelly_skipped"
+                report["message"] = (
+                    f"Kelly criterion says skip: {trade.get('kelly_rationale', 'negative edge')}"
+                )
+                execution_reports.append(report)
+                messages.append(AIMessage(content=f"Executor: {report['message']}"))
+                continue
+
+            # Re-validate after Kelly sizing
+            if int(float(trade.get("qty", 0))) <= 0:
                 continue
 
             report = _build_base_report(trade, execution_mode)

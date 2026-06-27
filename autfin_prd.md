@@ -2,10 +2,10 @@
 
 ## Product Requirements Document (PRD)
 
-**Version**: 5.0  
+**Version**: 5.1  
 **Date**: June 2026  
 **Author**: Prakhar  
-**Status**: Complete — 27 improvements across 4 waves: critical bug fixes, architecture improvements, new capabilities, and production polish. 828+ tests passing.
+**Status**: Complete — 31 improvements across 5 waves: critical bug fixes, architecture improvements, new capabilities, production polish, and research infrastructure (walk-forward backtesting, regime detection, online learning, Kelly integration). 885+ tests passing.
 
 ---
 

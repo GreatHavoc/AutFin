@@ -129,7 +129,7 @@ async def record_learning(
     outcome: str = "completed",
     sector: str | None = None,
 ) -> bool:
-    """Record a trade outcome in the learning journal."""
+    """Record a trade outcome in the learning journal and update online calibration."""
     try:
         from src.autfin.memory.database import get_connection
         db = get_connection()
@@ -147,6 +147,22 @@ async def record_learning(
             "Learning recorded: %s %s @ conv %.2f → %.1f%%",
             action, symbol, conviction, pnl_pct * 100,
         )
+
+        # Update online learner with this trade outcome
+        try:
+            from src.autfin.learning.online import get_online_learner
+            learner = get_online_learner()
+            # Convert PnL to binary outcome: 1.0 = win, 0.0 = loss
+            binary_outcome = 1.0 if pnl_pct > 0 else 0.0
+            learner.update(
+                conviction=conviction,
+                outcome=binary_outcome,
+                sector=sector,
+                pnl_pct=pnl_pct,
+            )
+        except Exception as e:
+            logger.debug("Online learner update failed: %s", e)
+
         return True
     except Exception as e:
         logger.warning("Failed to record learning: %s", e)

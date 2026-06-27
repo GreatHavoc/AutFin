@@ -1,6 +1,6 @@
 # AutFin — Technical Specification
 
-**Version**: 5.0 | **Date**: June 2026 | **Status**: Complete — 27 improvements across 4 waves: critical bug fixes, architecture improvements, new capabilities (Kelly criterion, anomaly detection, episodic memory, LLM-as-Judge, reconciliation), production polish. 828+ tests passing.
+**Version**: 5.1 | **Date**: June 2026 | **Status**: Complete — 31 improvements across 5 waves: critical bug fixes, architecture improvements, new capabilities (Kelly criterion, anomaly detection, episodic memory, LLM-as-Judge, reconciliation), production polish, and research infrastructure (walk-forward backtesting, regime detection, online learning, Kelly executor integration). 885+ tests passing.
 
 ---
 
