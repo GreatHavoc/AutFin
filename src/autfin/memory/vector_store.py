@@ -4,7 +4,16 @@ from typing import Any, Dict, List, Optional
 from pathlib import Path
 import chromadb
 from chromadb.config import Settings
+from chromadb import EmbeddingFunction, Documents, Embeddings
 from ..config.settings import AutFinSettings
+
+
+class AutFinEmbeddingFunction(EmbeddingFunction):
+    """ChromaDB embedding function that uses our sentence-transformers model."""
+
+    def __call__(self, input: Documents) -> Embeddings:
+        from .embeddings import generate_embedding
+        return [generate_embedding(doc) for doc in input]
 
 
 # Required collections for AutFin
@@ -61,16 +70,20 @@ def get_or_create_collection(
 ) -> chromadb.Collection:
     """
     Get or create a ChromaDB collection.
-    
+
+    Uses AutFinEmbeddingFunction to ensure consistent 384-dim embeddings
+    from sentence-transformers (not ChromaDB's default).
+
     Args:
         client: ChromaDB client instance
         name: Collection name
         metadata: Optional collection metadata (e.g., "hnsw:config")
-    
+
     Returns:
-        ChromaDB Collection instance
+        chromadb.Collection instance
     """
-    return client.get_or_create_collection(name=name, metadata=metadata)
+    ef = AutFinEmbeddingFunction()
+    return client.get_or_create_collection(name=name, metadata=metadata, embedding_function=ef)
 
 
 def initialize_collections(
