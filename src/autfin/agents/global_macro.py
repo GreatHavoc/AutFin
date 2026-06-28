@@ -1125,15 +1125,12 @@ class GlobalMacroAgent:
         if not raw:
             return None
 
-        try:
-            cleaned = raw.strip()
-            if cleaned.startswith("```"):
-                lines = cleaned.split("\n")
-                cleaned = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-            return json.loads(cleaned)
-        except json.JSONDecodeError:
-            logger.warning("Macro agentic output not JSON")
-            return None
+        from src.autfin.utils import extract_json
+        result = extract_json(raw)
+        if result:
+            return result
+        logger.warning("Macro agentic output not JSON")
+        return None
 
     async def global_macro_agent(self, state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
         """

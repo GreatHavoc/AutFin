@@ -1001,15 +1001,12 @@ class FundamentalsAgent:
         if not raw:
             return None
 
-        try:
-            cleaned = raw.strip()
-            if cleaned.startswith("```"):
-                lines = cleaned.split("\n")
-                cleaned = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-            return json.loads(cleaned)
-        except json.JSONDecodeError:
-            logger.warning(f"Fundamentals agentic output not JSON for {symbol}")
-            return None
+        from src.autfin.utils import extract_json
+        result = extract_json(raw)
+        if result:
+            return result
+        logger.warning(f"Fundamentals agentic output not JSON for {symbol}")
+        return None
 
     async def fundamentals_agent(self, state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
         """

@@ -448,24 +448,12 @@ class LLMClient:
         if not raw:
             return None
 
-        # Strip markdown code fences if present
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            lines = cleaned.split("\n")
-            # Remove first and last fence lines
-            if lines[-1].strip() == "```":
-                lines = lines[1:-1]
-            else:
-                lines = lines[1:]
-            cleaned = "\n".join(lines).strip()
-
-        try:
-            import json
-
-            return json.loads(cleaned)
-        except Exception as e:
-            logger.warning(f"Failed to parse LLM JSON response: {e}")
-            return None
+        from src.autfin.utils import extract_json
+        result = extract_json(raw)
+        if result:
+            return result
+        logger.warning(f"Failed to parse LLM JSON response")
+        return None
 
     def get_stats(self) -> Dict[str, Any]:
         """Return usage statistics."""

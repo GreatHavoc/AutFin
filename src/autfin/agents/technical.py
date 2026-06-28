@@ -661,15 +661,12 @@ class TechnicalAgent:
         if not raw:
             return None
 
-        try:
-            cleaned = raw.strip()
-            if cleaned.startswith("```"):
-                lines = cleaned.split("\n")
-                cleaned = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-            return json.loads(cleaned)
-        except json.JSONDecodeError:
-            logger.warning("Technical agentic output not JSON for %s", symbol)
-            return None
+        from src.autfin.utils import extract_json
+        result = extract_json(raw)
+        if result:
+            return result
+        logger.warning("Technical agentic output not JSON for %s", symbol)
+        return None
 
 
 # ================== TECHNICAL AGENT ASYNC WORKER ==================
