@@ -154,7 +154,7 @@ class LLMClient:
         fast_model: str = "nvidia_nim/meta/llama-3.1-8b-instruct",
         temperature: float = 0.0,
         max_retries: int = 1,
-        timeout: float = 30.0,
+        timeout: float = 130.0,
     ):
         """
         Initialize LLM client. v3.0: litellm handles all provider routing.
