@@ -247,7 +247,8 @@ async def supervisor_node(
             tools=SUPERVISOR_TOOLS,
             tool_callables=SUPERVISOR_CALLABLES,
             model=llm.deep_model,
-            max_tokens=2048,
+            max_tokens=4096,
+            max_iterations=20,
             state=state,
         )
     except Exception as exc:

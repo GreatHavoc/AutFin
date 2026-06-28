@@ -339,6 +339,7 @@ class LLMClient:
             # Some LLMs (NVIDIA NIM) require a user message before tools
             messages.append({"role": "user", "content": "Begin."})
 
+        tool_iterations = 0
         for iteration in range(max_iterations):
             try:
                 t_start = time.monotonic()
@@ -367,6 +368,7 @@ class LLMClient:
 
                 if message.tool_calls:
                     messages.append(message)
+                    tool_iterations += 1
 
                     tool_results = await asyncio.gather(
                         *[_execute_tool(tc, tool_callables) for tc in message.tool_calls],
@@ -406,7 +408,7 @@ class LLMClient:
                     continue
                 return None
 
-        logger.error("Tool-calling loop exceeded max iterations (%d)", max_iterations)
+        logger.error("Tool-calling loop exceeded max iterations (%d)", tool_iterations)
         return None
 
     async def generate_json(
