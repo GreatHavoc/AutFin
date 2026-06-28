@@ -359,7 +359,7 @@ async def fetch_macro_indicators() -> Dict[str, Any]:
             "^IXIC": "nasdaq_composite",
             "^N225": "nikkei_225",
             "^FTSE": "ftse_100",
-            "^SSEC": "shanghai_composite",
+            "000001.SS": "shanghai_composite",
             "^HSI": "hang_seng",
             "^GDAXI": "dax",
             "^FCHI": "cac_40",
