@@ -1120,7 +1120,7 @@ class GlobalMacroAgent:
             tools=MACRO_TOOLS,
             tool_callables=MACRO_CALLABLES,
             model=llm.deep_model,
-            max_tokens=2048,
+            max_tokens=4096,
         )
         if not raw:
             return None

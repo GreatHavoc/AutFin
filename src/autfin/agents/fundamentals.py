@@ -988,7 +988,8 @@ class FundamentalsAgent:
             "recommendation (STRONG_BUY/BUY/HOLD/SELL/STRONG_SELL),\n"
             "strength (-5 to +5), conviction (0.0-1.0), risks (list), catalysts (list),\n"
             "dcf_target_price, dcf_upside_pct, dcf_downside_pct.\n"
-            "Output ONLY the JSON object — no markdown, no explanation."
+            "CRITICAL: Do NOT show your reasoning. Do NOT show calculations.\n"
+            "Output ONLY the JSON object — no markdown, no explanation, no preamble."
         )
 
         raw = await llm.generate_with_tools(
@@ -996,7 +997,7 @@ class FundamentalsAgent:
             tools=FUNDAMENTALS_TOOLS,
             tool_callables=FUNDAMENTALS_CALLABLES,
             model=llm.deep_model,
-            max_tokens=2048,
+            max_tokens=4096,
         )
         if not raw:
             return None
