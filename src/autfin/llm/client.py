@@ -381,8 +381,16 @@ class LLMClient:
                 logger.warning("LLM tool-calling error (iteration %d) on %s: %s", iteration, target_model, e)
                 error_str = str(e).lower()
                 is_rate_limited = "429" in error_str or "rate" in error_str or "too many" in error_str
-                if is_rate_limited:
-                    logger.warning("Rate limited on %s — will retry", target_model)
+                is_connection_error = "connection" in error_str or "internal" in error_str or "500" in error_str or "502" in error_str or "503" in error_str
+                if is_rate_limited or is_connection_error:
+                    if is_rate_limited:
+                        _rate_limiter.on_429()
+                    backoff_wait = random.uniform(5.0, 15.0) if is_connection_error else max(0, _rate_limiter._backoff_until - time.monotonic()) + random.uniform(1.0, 3.0)
+                    if iteration < self.max_retries:
+                        logger.warning("Rate/connection error on %s — waiting %.0fs (iteration %d)", target_model, backoff_wait, iteration)
+                        await asyncio.sleep(backoff_wait)
+                    else:
+                        logger.warning("Rate/connection error on final iteration %d — giving up", iteration)
                 if iteration < self.max_retries:
                     continue
                 return None
