@@ -11,6 +11,9 @@ Tools are organized by agent domain. Each agent picks the tools it needs.
 
 from typing import Any, Callable, Dict, List, Optional
 
+import warnings
+warnings.filterwarnings("ignore", message=".*possibly delisted.*")
+warnings.filterwarnings("ignore", message=".*no price data found.*")
 import pandas as pd
 
 

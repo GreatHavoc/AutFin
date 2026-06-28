@@ -12,6 +12,9 @@ from src.autfin.llm.client import get_llm_client
 from src.autfin.agents.tools import MACRO_TOOLS, MACRO_CALLABLES
 
 import logging
+import warnings
+warnings.filterwarnings("ignore", message=".*possibly delisted.*")
+warnings.filterwarnings("ignore", message=".*no price data found.*")
 logger = logging.getLogger(__name__)
 
 
