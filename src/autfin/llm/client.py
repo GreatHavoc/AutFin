@@ -155,6 +155,7 @@ class LLMClient:
         temperature: float = 0.0,
         max_retries: int = 1,
         timeout: float = 130.0,
+        api_base: Optional[str] = None,
     ):
         """
         Initialize LLM client. v3.0: litellm handles all provider routing.
@@ -165,12 +166,14 @@ class LLMClient:
             temperature: Sampling temperature (0.0 = deterministic)
             max_retries: Max retries on transient failures (1 = fail fast)
             timeout: Request timeout in seconds
+            api_base: Custom API base URL for OpenAI-compatible endpoints (e.g. Modal vLLM)
         """
         self.deep_model = deep_model
         self.fast_model = fast_model
         self.temperature = temperature
         self.max_retries = max_retries
         self.timeout = timeout
+        self.api_base = api_base
         self._available = _LITELLM_AVAILABLE
         self._call_count = 0
         self._error_count = 0
@@ -230,13 +233,17 @@ class LLMClient:
                 await _rate_limiter.acquire()
 
                 t_start = time.monotonic()
-                response = await _litellm.acompletion(
+                kwargs = dict(
                     model=target_model,
                     messages=messages,
                     temperature=temp,
                     max_tokens=max_tokens,
                     timeout=self.timeout,
                 )
+                if self.api_base and target_model.startswith("hosted_vllm/"):
+                    kwargs["api_base"] = self.api_base
+                    kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
+                response = await _litellm.acompletion(**kwargs)
                 elapsed_ms = (time.monotonic() - t_start) * 1000
                 self._call_count += 1
                 _rate_limiter.on_success()
@@ -335,7 +342,7 @@ class LLMClient:
         for iteration in range(max_iterations):
             try:
                 t_start = time.monotonic()
-                response = await _litellm.acompletion(
+                kwargs = dict(
                     model=target_model,
                     messages=messages,
                     tools=tools,
@@ -344,6 +351,10 @@ class LLMClient:
                     max_tokens=max_tokens,
                     timeout=self.timeout,
                 )
+                if self.api_base and target_model.startswith("hosted_vllm/"):
+                    kwargs["api_base"] = self.api_base
+                    kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
+                response = await _litellm.acompletion(**kwargs)
                 elapsed_ms = (time.monotonic() - t_start) * 1000
                 self._call_count += 1
 
@@ -650,6 +661,7 @@ def get_llm_client() -> LLMClient:
     Get or create the global LLM client instance.
 
     Reads model configuration from AutFinSettings.
+    If MODAL_VLLM_URL is set, routes through self-hosted vLLM endpoint.
 
     Returns:
         LLMClient instance
@@ -661,11 +673,22 @@ def get_llm_client() -> LLMClient:
             from src.autfin.config.settings import AutFinSettings
 
             settings = AutFinSettings()
-            _default_client = LLMClient(
-                deep_model=settings.deep_model,
-                fast_model=settings.fast_model,
-                temperature=settings.model_temperature,
-            )
+
+            # If Modal vLLM is configured, use it as primary
+            if settings.modal_vllm_url:
+                _default_client = LLMClient(
+                    deep_model=f"hosted_vllm/{settings.modal_vllm_model}",
+                    fast_model=settings.fast_model,
+                    temperature=settings.model_temperature,
+                    api_base=settings.modal_vllm_url,
+                )
+                logger.info("LLM client configured: Modal vLLM (%s)", settings.modal_vllm_model)
+            else:
+                _default_client = LLMClient(
+                    deep_model=settings.deep_model,
+                    fast_model=settings.fast_model,
+                    temperature=settings.model_temperature,
+                )
         except Exception as e:
             logger.debug("Settings load failed (%s), using default LLM config", e)
             _default_client = LLMClient()

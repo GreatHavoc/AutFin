@@ -34,6 +34,14 @@ class AutFinSettings(BaseSettings):
         default="nvidia_nim/deepseek-ai/deepseek-v4-flash",
         description="NVIDIA NIM deep — DeepSeek V4 Flash 284B MoE (free, 1M context)"
     )
+    modal_vllm_url: str = Field(
+        default="",
+        description="Modal vLLM endpoint URL for self-hosted models"
+    )
+    modal_vllm_model: str = Field(
+        default="qwen3.5-35b",
+        description="Model name hosted on Modal vLLM"
+    )
     model_temperature: float = Field(default=0.0)
     
     # ── Zerodha ──────────────────────────────────────
