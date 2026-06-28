@@ -1005,7 +1005,7 @@ class FundamentalsAgent:
         result = extract_json(raw)
         if result:
             return result
-        logger.warning(f"Fundamentals agentic output not JSON for {symbol}")
+        logger.warning(f"Fundamentals agentic output not JSON for {symbol} — raw[:500]: {raw[:500]}")
         return None
 
     async def fundamentals_agent(self, state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:

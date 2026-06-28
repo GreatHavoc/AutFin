@@ -671,9 +671,8 @@ async def build_stock_pitch(symbol: str, research_data: Dict[str, Any]) -> Dict[
         )
 
         response = await client.generate(
-            system=system_prompt,
-            messages=[{"role": "user", "content": f"Build a stock pitch for {symbol} based on:\n{research_summary}"}],
-            json_mode=True,
+            prompt=f"Build a stock pitch for {symbol} based on:\n{research_summary}",
+            system_prompt=system_prompt,
         )
 
         if response:
@@ -808,11 +807,14 @@ async def run_risk_checks(trade: Dict[str, Any]) -> Dict[str, Any]:
         }
 
         agent = RiskManagerAgent()
+        trade = {
+            "symbol": symbol,
+            "action": action,
+            "quantity": quantity,
+            "price": price,
+        }
         results = agent.check_all_risks(
-            symbol=symbol,
-            action=action,
-            quantity=quantity,
-            price=price,
+            trade=trade,
             portfolio=portfolio,
         )
 
