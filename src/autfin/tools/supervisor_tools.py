@@ -800,8 +800,17 @@ async def run_risk_checks(trade: Dict[str, Any]) -> Dict[str, Any]:
         quantity = int(trade.get("quantity", 0))
         price = float(trade.get("price", 0))
 
+        # Normalize holdings: ensure list of dicts (not list of strings)
+        raw_holdings = trade.get("holdings", [])
+        holdings = []
+        for h in raw_holdings:
+            if isinstance(h, str):
+                holdings.append({"tradingsymbol": h, "qty": 0, "ltp": 0, "avg_price": 0})
+            elif isinstance(h, dict):
+                holdings.append(h)
+
         portfolio = {
-            "holdings": trade.get("holdings", []),
+            "holdings": holdings,
             "available_cash": trade.get("available_cash", 1000000.0),
             "positions": trade.get("positions", []),
         }
@@ -919,7 +928,7 @@ async def execute_order(order: Dict[str, Any]) -> Dict[str, Any]:
             pass
 
         settings = AutFinSettings()
-        run_mode = settings.run_mode or "recommendation"
+        run_mode = settings.execution_mode or "recommendation"
 
         state = {
             "messages": [],
