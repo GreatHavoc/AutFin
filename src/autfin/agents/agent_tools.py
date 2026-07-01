@@ -17,6 +17,16 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# LangSmith @traceable — creates separate traced runs for each agent tool
+try:
+    from langsmith import traceable as _traceable
+except ImportError:
+    def _traceable(name: str = "", run_type: str = "chain", **kw):  # type: ignore[misc]
+        """Fallback no-op decorator when langsmith is not installed."""
+        def deco(fn):
+            return fn
+        return deco
+
 
 # ---------------------------------------------------------------------------
 # OpenAI-format tool definition helper (same as tools.py)
@@ -42,6 +52,7 @@ def _tool_def(name: str, description: str, parameters: Dict) -> Dict:
 # ---------------------------------------------------------------------------
 
 
+@_traceable(name="fundamentals_analysis", run_type="chain")
 async def fundamentals_tool(symbol: str, depth: str = "standard") -> str:
     """Run fundamental analysis on a stock (Piotroski, Magic Formula, DCF, moat).
 
@@ -126,6 +137,7 @@ async def fundamentals_tool(symbol: str, depth: str = "standard") -> str:
     return json.dumps({"status": "success", "symbol": symbol, "raw_analysis": raw[:2000]})
 
 
+@_traceable(name="technical_analysis", run_type="chain")
 async def technical_tool(symbol: str, depth: str = "standard") -> str:
     """Run technical analysis on a stock (RSI, MACD, support/resistance, patterns).
 
@@ -205,6 +217,7 @@ async def technical_tool(symbol: str, depth: str = "standard") -> str:
     return json.dumps({"status": "success", "symbol": symbol, "raw_analysis": raw[:2000]})
 
 
+@_traceable(name="sentiment_analysis", run_type="chain")
 async def sentiment_tool(symbol: str) -> str:
     """Run sentiment analysis on a stock (news, social media, analyst views).
 
@@ -256,6 +269,7 @@ async def sentiment_tool(symbol: str) -> str:
     return json.dumps({"status": "success", "symbol": symbol, "raw_analysis": raw[:2000]})
 
 
+@_traceable(name="macro_analysis", run_type="chain")
 async def macro_tool() -> str:
     """Run global macro analysis (Fed, oil, DXY, VIX, FII flows, RBI policy).
 
@@ -303,6 +317,7 @@ async def macro_tool() -> str:
     return json.dumps({"status": "success", "raw_analysis": raw[:2000]})
 
 
+@_traceable(name="research_synthesis", run_type="chain")
 async def research_tool(symbols: str, depth: str = "standard") -> str:
     """Run multi-agent research synthesis (Bull/Bear debate) on one or more stocks.
 
@@ -357,6 +372,7 @@ async def research_tool(symbols: str, depth: str = "standard") -> str:
     return json.dumps({"status": "success", "symbols": symbol_list, "raw_analysis": raw[:2000]})
 
 
+@_traceable(name="risk_assessment", run_type="chain")
 async def risk_tool(trade_json: str) -> str:
     """Run risk assessment on a proposed trade (14 risk checks with veto power).
 
@@ -418,6 +434,7 @@ async def risk_tool(trade_json: str) -> str:
     return json.dumps({"status": "success", "raw_analysis": raw[:2000]})
 
 
+@_traceable(name="portfolio_allocation", run_type="chain")
 async def portfolio_tool() -> str:
     """Get current portfolio state with live holdings, cash, and sector exposure.
 
