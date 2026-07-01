@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,48 @@ except ImportError:
         def deco(fn):
             return fn
         return deco
+
+
+# ---------------------------------------------------------------------------
+# process_inputs helpers — strip large LLM payloads from LangSmith traces.
+# LangSmith has a 25MB limit per trace; the supervisor system prompt (27 tool
+# definitions) can push traces to 49-199MB.  These filters keep only the small
+# metadata fields so traces stay under the limit.
+# ---------------------------------------------------------------------------
+
+def _filter_symbol_inputs(inputs: dict) -> dict:
+    """Keep only 'symbol' and 'depth' from agent tool inputs."""
+    return {k: v for k, v in inputs.items() if k in ("symbol", "depth")}
+
+def _filter_no_args_inputs(inputs: dict) -> dict:
+    """No-argument tools: macro_analysis, portfolio_allocation — return empty dict."""
+    return {}
+
+def _filter_symbols_inputs(inputs: dict) -> dict:
+    """Keep only 'symbols' and 'depth' from research_tool inputs."""
+    return {k: v for k, v in inputs.items() if k in ("symbols", "depth")}
+
+def _filter_trade_inputs(inputs: dict) -> dict:
+    """Keep only 'trade_json' from risk_tool inputs."""
+    return {k: v for k, v in inputs.items() if k == "trade_json"}
+
+
+def _filter_agent_outputs(outputs: dict) -> dict:
+    """Strip LLM raw responses from agent tool outputs.
+
+    Keep only the parsed result (status, symbol, summary) to stay under
+    LangSmith's 25MB limit.  The raw LLM output (with full system prompt)
+    is the biggest contributor to the 99-199MB payload.
+    """
+    result: dict = {}
+    for key in ("status", "symbol", "symbols", "raw_analysis"):
+        if key in outputs:
+            v = outputs[key]
+            # Truncate raw_analysis to 500 chars (it's the LLM's full output)
+            if key == "raw_analysis" and isinstance(v, str) and len(v) > 500:
+                v = v[:500] + "...[truncated]"
+            result[key] = v
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +94,7 @@ def _tool_def(name: str, description: str, parameters: Dict) -> Dict:
 # ---------------------------------------------------------------------------
 
 
-@_traceable(name="fundamentals_analysis", run_type="chain")
+@_traceable(name="fundamentals_analysis", run_type="chain", process_inputs=_filter_symbol_inputs, process_outputs=_filter_agent_outputs)
 async def fundamentals_tool(symbol: str, depth: str = "standard") -> str:
     """Run fundamental analysis on a stock (Piotroski, Magic Formula, DCF, moat).
 
@@ -137,7 +179,7 @@ async def fundamentals_tool(symbol: str, depth: str = "standard") -> str:
     return json.dumps({"status": "success", "symbol": symbol, "raw_analysis": raw[:2000]})
 
 
-@_traceable(name="technical_analysis", run_type="chain")
+@_traceable(name="technical_analysis", run_type="chain", process_inputs=_filter_symbol_inputs, process_outputs=_filter_agent_outputs)
 async def technical_tool(symbol: str, depth: str = "standard") -> str:
     """Run technical analysis on a stock (RSI, MACD, support/resistance, patterns).
 
@@ -217,7 +259,7 @@ async def technical_tool(symbol: str, depth: str = "standard") -> str:
     return json.dumps({"status": "success", "symbol": symbol, "raw_analysis": raw[:2000]})
 
 
-@_traceable(name="sentiment_analysis", run_type="chain")
+@_traceable(name="sentiment_analysis", run_type="chain", process_inputs=_filter_symbol_inputs, process_outputs=_filter_agent_outputs)
 async def sentiment_tool(symbol: str) -> str:
     """Run sentiment analysis on a stock (news, social media, analyst views).
 
@@ -269,7 +311,7 @@ async def sentiment_tool(symbol: str) -> str:
     return json.dumps({"status": "success", "symbol": symbol, "raw_analysis": raw[:2000]})
 
 
-@_traceable(name="macro_analysis", run_type="chain")
+@_traceable(name="macro_analysis", run_type="chain", process_inputs=_filter_no_args_inputs, process_outputs=_filter_agent_outputs)
 async def macro_tool() -> str:
     """Run global macro analysis (Fed, oil, DXY, VIX, FII flows, RBI policy).
 
@@ -317,7 +359,7 @@ async def macro_tool() -> str:
     return json.dumps({"status": "success", "raw_analysis": raw[:2000]})
 
 
-@_traceable(name="research_synthesis", run_type="chain")
+@_traceable(name="research_synthesis", run_type="chain", process_inputs=_filter_symbols_inputs, process_outputs=_filter_agent_outputs)
 async def research_tool(symbols: str, depth: str = "standard") -> str:
     """Run multi-agent research synthesis (Bull/Bear debate) on one or more stocks.
 
@@ -372,7 +414,7 @@ async def research_tool(symbols: str, depth: str = "standard") -> str:
     return json.dumps({"status": "success", "symbols": symbol_list, "raw_analysis": raw[:2000]})
 
 
-@_traceable(name="risk_assessment", run_type="chain")
+@_traceable(name="risk_assessment", run_type="chain", process_inputs=_filter_trade_inputs, process_outputs=_filter_agent_outputs)
 async def risk_tool(trade_json: str) -> str:
     """Run risk assessment on a proposed trade (14 risk checks with veto power).
 
@@ -434,7 +476,7 @@ async def risk_tool(trade_json: str) -> str:
     return json.dumps({"status": "success", "raw_analysis": raw[:2000]})
 
 
-@_traceable(name="portfolio_allocation", run_type="chain")
+@_traceable(name="portfolio_allocation", run_type="chain", process_inputs=_filter_no_args_inputs, process_outputs=_filter_agent_outputs)
 async def portfolio_tool() -> str:
     """Get current portfolio state with live holdings, cash, and sector exposure.
 
