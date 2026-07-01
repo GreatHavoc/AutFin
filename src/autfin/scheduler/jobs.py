@@ -12,6 +12,7 @@ compiled LangGraph daily_morning graph (or subset for guardian-only runs).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -129,6 +130,13 @@ async def daily_morning_routine(
         async for event in graph.astream(initial_state, config, stream_mode="values"):
             final_state = event
             logger.debug("[%s] State update keys: %s", thread_id, list(event.keys()))
+    except asyncio.CancelledError:
+        logger.warning("[%s] Morning routine cancelled", thread_id)
+        return {
+            "thread_id": thread_id,
+            "status": "cancelled",
+            "error": "Cancelled",
+        }
     except Exception as exc:
         logger.error("[%s] Morning routine failed: %s", thread_id, exc)
         await _send_alert_safe(settings, "error", "Morning routine failed", str(exc))
@@ -192,6 +200,13 @@ async def portfolio_guardian_check(
     try:
         async for event in graph.astream(initial_state, config, stream_mode="values"):
             final_state = event
+    except asyncio.CancelledError:
+        logger.warning("[%s] Guardian check cancelled", thread_id)
+        return {
+            "thread_id": thread_id,
+            "status": "cancelled",
+            "error": "Cancelled",
+        }
     except Exception as exc:
         logger.error("[%s] Guardian check failed: %s", thread_id, exc)
         return {
@@ -245,6 +260,13 @@ async def weekly_portfolio_review(
     try:
         async for event in graph.astream(initial_state, config, stream_mode="values"):
             final_state = event
+    except asyncio.CancelledError:
+        logger.warning("[%s] Weekly review cancelled", thread_id)
+        return {
+            "thread_id": thread_id,
+            "status": "cancelled",
+            "error": "Cancelled",
+        }
     except Exception as exc:
         logger.error("[%s] Weekly review failed: %s", thread_id, exc)
         return {
@@ -299,6 +321,13 @@ async def monthly_deep_dive(
     try:
         async for event in graph.astream(initial_state, config, stream_mode="values"):
             final_state = event
+    except asyncio.CancelledError:
+        logger.warning("[%s] Monthly deep dive cancelled", thread_id)
+        return {
+            "thread_id": thread_id,
+            "status": "cancelled",
+            "error": "Cancelled",
+        }
     except Exception as exc:
         logger.error("[%s] Monthly deep dive failed: %s", thread_id, exc)
         return {

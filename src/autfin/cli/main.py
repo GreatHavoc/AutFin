@@ -250,6 +250,8 @@ async def analyze_command(symbol: str):
 
         # Display results from final state
         _display_analysis_results(symbol, final_state)
+    except asyncio.CancelledError:
+        console.print("[yellow]Analysis cancelled.[/yellow]")
     except Exception as exc:
         console.print(f"[red]Analysis failed: {exc}[/red]")
         logger.exception("analyze command failed")
@@ -387,6 +389,8 @@ async def scan_command():
         if errors:
             console.print(f"  [yellow]Errors: {len(errors)}[/yellow]")
 
+    except asyncio.CancelledError:
+        console.print("[yellow]Scan cancelled.[/yellow]")
     except Exception as exc:
         console.print(f"[red]Scan failed: {exc}[/red]")
         logger.exception("scan command failed")
