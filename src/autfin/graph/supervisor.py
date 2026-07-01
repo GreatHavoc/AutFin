@@ -1,19 +1,23 @@
 """
-Supervisor Graph — v3.0 single-supervisor ReAct loop.
+Supervisor Graph — v5.3 Subagents Coordinator.
 
 Architecture:
   START → supervisor_node → {supervisor_node, human_review_node, END}
   human_review_node → supervisor_node (return after input)
 
-The supervisor runs a ReAct loop: it calls tools via generate_with_tools(),
-observes results, decides next step. Context drives behavior:
+The supervisor is the "Subagents Coordinator" — it calls agent tools
+(fundamentals, technical, sentiment, macro, research, risk, portfolio),
+observes results, and decides next steps. Each agent tool makes its own
+LLM call with clean context (context isolation).
 
   morning_routine  → full portfolio scan + screening + research + trade
   price_alert      → investigate one symbol (3-agent quick fan-out)
   quarterly_review → deep dive all holdings with DCF
   manual           → user-requested single stock analysis
 
-All agent capabilities are accessed as tools, not as subgraph nodes.
+Agent tools give context isolation, parallel execution, and full
+LangSmith visibility per agent call.
+
 Self-learning: learning context (calibration, patterns) is preloaded into
 state on first iteration and injected into the system prompt.
 """
@@ -53,11 +57,23 @@ def _build_context_prompt(context: str, depth: str, state: AgentState) -> str:
     for the given context (morning_routine, price_alert, quarterly_review,
     or manual).  Includes live portfolio snapshot where relevant.
     """
-    base = """You are the AutFin v3.0 Supervisor — a PM-level AI running a ReAct loop.
+    base = """You are the AutFin v5.3 Subagents Coordinator — a PM-level AI running a ReAct loop.
 
-You have 20 tools available. Think, plan, then call tools. Observe results. Re-plan.
+You have 27 tools available. Think, plan, then call tools. Observe results. Re-plan.
 
-AVAILABLE TOOLS:
+AVAILABLE AGENT TOOLS (each makes its own LLM call with clean context):
+Analysis:
+- fundamentals_analysis(symbol, depth) — Piotroski, Magic Formula, DCF, moat. Returns ratios, health score, recommendation.
+- technical_analysis(symbol, depth) — RSI, MACD, Bollinger, candlestick patterns. Returns signal and conviction.
+- sentiment_analysis(symbol) — News, social media, analyst views. Returns sentiment score and catalysts.
+- macro_analysis() — Global macro (Fed, oil, VIX, DXY, FII flows). Returns impact signal and sector matrix.
+
+Research & Execution:
+- research_synthesis(symbols, depth) — Multi-agent Bull/Bear debate. Most expensive tool. Use for final decisions.
+- risk_assessment(trade_json) — 14 risk checks with veto power. Returns verdict and approved size.
+- portfolio_allocation() — Current portfolio state, P&L, rebalancing suggestions.
+
+Data & Utilities (direct tools):
 Data: get_portfolio_state, get_market_quotes, get_market_status
 Screening: screen_candidates
 Research: research_stock(symbol, depth), research_batch(symbols, depth)
@@ -68,15 +84,14 @@ HITL: request_human_approval
 Guardian: check_guardian
 Session: finalize_session
 
+STRATEGY — Call agent tools in parallel when possible:
+- Morning routine: fundamentals_analysis + technical_analysis + sentiment_analysis (parallel)
+  → risk_assessment → execute_order
+- Price alert: technical_analysis(quick) + sentiment_analysis (parallel) → validate_thesis
+- Quarterly review: fundamentals_analysis(deep) on EVERY holding (parallel)
+- Manual: fundamentals_analysis + technical_analysis on requested symbol (parallel)
+
 RULES:
-- For morning_routine: first get_portfolio_state, then check_guardian, then screen_candidates,
-  research_batch on top candidates, rank, build pitches, risk_check, allocate, execute.
-- For price_alert: get_market_quotes for the alerted symbol, research_stock(quick), validate_thesis.
-  Decide: noise → ignore, weak → full research, broken → sell.
-- For quarterly_review: get_portfolio_state, then research_stock(deep) on EVERY holding.
-- For manual: research_stock on the requested symbol at requested depth.
-- Before ANY trade: retrieve_learnings for context from past trades.
-- After ANY trade: log_decision to record the outcome.
 - Depth tiers: quick=skip DCF/peers/moat. standard=all but DCF. deep=everything.
 - Respect risk/reward ≥ 2:1. Conviction ≥ 0.5 to trade.
 - Sector concentration max 30%. Cash reserve 10%.
@@ -153,6 +168,133 @@ def _learning_section(state: AgentState) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Memory nodes — cross-session long-term memory via LangGraph Store
+# ---------------------------------------------------------------------------
+
+
+async def load_memories(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+    """
+    Load relevant memories from the LangGraph Store before research.
+
+    Searches for:
+    - Agent instructions (procedural memory)
+    - Past trade outcomes for the current symbol(s) (episodic memory)
+    - User preferences (semantic memory)
+
+    Injects found memories into state["context_memory"] for the supervisor
+    to reference during its ReAct loop.
+    """
+    from src.autfin.memory.langgraph_store import (
+        NS_AGENT_INSTRUCTIONS, NS_TRADE_HISTORY, NS_USER_PREFERENCES,
+        store_search,
+    )
+
+    store = config.get("store") if config else None
+    if store is None:
+        return {"context_memory": {}}
+
+    context_memory: dict[str, Any] = {}
+
+    # Load agent instructions
+    try:
+        instructions = await store_search(store, NS_AGENT_INSTRUCTIONS, "trading rules", limit=5)
+        if instructions:
+            context_memory["agent_instructions"] = [i["value"] for i in instructions]
+    except Exception:
+        pass
+
+    # Load past trade outcomes for symbols in state
+    symbols = []
+    for h in state.get("holdings", []):
+        sym = h.get("tradingsymbol") or h.get("symbol")
+        if sym:
+            symbols.append(sym)
+    alert_sym = state.get("alert_symbol")
+    if alert_sym:
+        symbols.append(alert_sym)
+
+    trade_history = []
+    for sym in symbols[:5]:  # limit lookups
+        try:
+            trades = await store_search(store, NS_TRADE_HISTORY, sym, limit=3)
+            trade_history.extend(trades)
+        except Exception:
+            pass
+    if trade_history:
+        context_memory["past_trades"] = [t["value"] for t in trade_history]
+
+    # Load user preferences
+    try:
+        prefs = await store_search(store, NS_USER_PREFERENCES, "preferences", limit=5)
+        if prefs:
+            context_memory["user_preferences"] = [p["value"] for p in prefs]
+    except Exception:
+        pass
+
+    return {"context_memory": context_memory}
+
+
+async def save_memory(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+    """
+    Save research outcomes and lessons learned to the LangGraph Store.
+
+    Called after the supervisor completes a session. Persists:
+    - Trade decisions and outcomes (episodic memory)
+    - Key research findings (semantic memory)
+    """
+    from datetime import datetime, timezone
+    from src.autfin.memory.langgraph_store import (
+        NS_TRADE_HISTORY, NS_RESEARCH_CACHE,
+        store_put,
+    )
+
+    store = config.get("store") if config else None
+    if store is None:
+        return {}
+
+    saved = 0
+
+    # Save trade decisions from this session
+    for msg in state.get("messages", []):
+        content = getattr(msg, "content", "") or ""
+        if not content:
+            continue
+        # Look for trade execution signals in messages
+        if any(kw in content.upper() for kw in ("EXECUTED", "BUY", "SELL", "ORDER")):
+            key = f"session_{state.get('thread_id', 'unknown')}_{saved}"
+            try:
+                await store_put(store, NS_TRADE_HISTORY, key, {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "thread_id": state.get("thread_id"),
+                    "context": state.get("context"),
+                    "summary": content[:500],
+                })
+                saved += 1
+            except Exception:
+                pass
+
+    # Save research cache for analyzed symbols
+    fundamental_reports = state.get("fundamental_reports", {})
+    if isinstance(fundamental_reports, dict):
+        reports = fundamental_reports.get("reports", fundamental_reports)
+        for sym, report in list(reports.items())[:5]:
+            if isinstance(report, dict) and report.get("status") == "success":
+                key = f"research_{sym}"
+                try:
+                    await store_put(store, NS_RESEARCH_CACHE, key, {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "symbol": sym,
+                        "health_score": report.get("health_score"),
+                        "recommendation": report.get("recommendation"),
+                        "conviction": report.get("conviction"),
+                    })
+                except Exception:
+                    pass
+
+    return {}
+
+
+# ---------------------------------------------------------------------------
 # Supervisor node — ReAct loop via generate_with_tools()
 # ---------------------------------------------------------------------------
 
@@ -201,7 +343,17 @@ async def supervisor_node(
             state["learning_context"] = {}
             state["learning_context_loaded"] = True
 
-    # ── Load tools ──
+    # ── Load cross-session memories from Store on first iteration ──
+    if not state.get("memories_loaded"):
+        try:
+            memory_result = await load_memories(state, config)
+            state["context_memory"] = memory_result.get("context_memory", {})
+            state["memories_loaded"] = True
+        except Exception:
+            state["context_memory"] = {}
+            state["memories_loaded"] = True
+
+    # ── Load tools (old supervisor tools + new agent tools) ──
     try:
         from src.autfin.tools.supervisor_tools import SUPERVISOR_TOOLS, SUPERVISOR_CALLABLES
     except ImportError as exc:
@@ -216,6 +368,20 @@ async def supervisor_node(
             ],
             "errors": errors,
         }
+
+    # Merge agent tools (v5.3 Subagents)
+    try:
+        from src.autfin.agents.agent_tools import AGENT_TOOL_DEFINITIONS, AGENT_TOOL_CALLABLES
+        all_tools = SUPERVISOR_TOOLS + AGENT_TOOL_DEFINITIONS
+        all_callables = {**SUPERVISOR_CALLABLES, **AGENT_TOOL_CALLABLES}
+        logger.info(
+            "Supervisor: loaded %d tools (%d old + %d agent)",
+            len(all_tools), len(SUPERVISOR_TOOLS), len(AGENT_TOOL_DEFINITIONS),
+        )
+    except ImportError:
+        logger.info("Supervisor: agent tools not available — using old tools only")
+        all_tools = SUPERVISOR_TOOLS
+        all_callables = SUPERVISOR_CALLABLES
 
     # ── LLM client ──
     llm = get_llm_client()
@@ -245,8 +411,8 @@ async def supervisor_node(
     try:
         result = await llm.generate_with_tools(
             system_prompt=system_prompt,
-            tools=SUPERVISOR_TOOLS,
-            tool_callables=SUPERVISOR_CALLABLES,
+            tools=all_tools,
+            tool_callables=all_callables,
             model=llm.deep_model,
             max_tokens=4096,
             max_iterations=20,
@@ -375,6 +541,13 @@ def _route_from_supervisor(state: AgentState) -> str:
     routing = state.get("routing_history") or []
     if routing and routing[-1] == "__end__":
         logger.info("Supervisor route → END (finalize_session called)")
+        # Save memories before ending session
+        try:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            loop.create_task(save_memory(state, config))
+        except Exception:
+            pass
         return "__end__"
 
     logger.debug("Supervisor route → supervisor (continue ReAct loop)")
@@ -439,19 +612,27 @@ def build_supervisor_graph() -> StateGraph:
 # ---------------------------------------------------------------------------
 
 
-def compile_supervisor_graph(checkpointer=None):
+def compile_supervisor_graph(checkpointer=None, store=None):
     """
-    Compile the v3.0 supervisor graph for execution.
+    Compile the v5.3 supervisor graph for execution.
 
     Args:
         checkpointer: Optional LangGraph checkpointer for crash recovery.
+        store: Optional LangGraph Store for long-term memory.
 
     Returns:
         Compiled runnable graph with observability callback attached if
         the observability handler is available.
     """
     builder = build_supervisor_graph()
-    compiled = builder.compile(checkpointer=checkpointer) if checkpointer else builder.compile()
+
+    compile_kwargs: dict[str, Any] = {}
+    if checkpointer is not None:
+        compile_kwargs["checkpointer"] = checkpointer
+    if store is not None:
+        compile_kwargs["store"] = store
+
+    compiled = builder.compile(**compile_kwargs)
 
     try:
         from src.autfin.observability.handler import get_callback_handler

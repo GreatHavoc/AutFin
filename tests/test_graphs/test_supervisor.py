@@ -151,12 +151,21 @@ class TestBuildContextPrompt:
     def test_base_prompt_contains_tools(self):
         state = {}
         prompt = _build_context_prompt("manual", "standard", state)
-        assert "20 tools" in prompt
+        assert "27 tools" in prompt
+        # Old tools still present
         assert "get_portfolio_state" in prompt
         assert "screen_candidates" in prompt
         assert "research_stock" in prompt
         assert "build_stock_pitch" in prompt
         assert "request_human_approval" in prompt
+        # v5.3 agent tools present
+        assert "fundamentals_analysis" in prompt
+        assert "technical_analysis" in prompt
+        assert "sentiment_analysis" in prompt
+        assert "macro_analysis" in prompt
+        assert "research_synthesis" in prompt
+        assert "risk_assessment" in prompt
+        assert "portfolio_allocation" in prompt
 
     def test_learning_section_included(self):
         state = {

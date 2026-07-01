@@ -103,6 +103,8 @@ class AgentState(TypedDict):
 
     # ── Memory ──
     memory_context: NotRequired[dict | None]
+    context_memory: NotRequired[dict | None]      # v5.3: cross-session memories from LangGraph Store
+    memories_loaded: NotRequired[bool]             # v5.3: flag to load memories only once
 
     # ── Order management ──
     order_modifications: NotRequired[list[dict] | None]

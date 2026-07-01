@@ -241,9 +241,9 @@ async def analyze_command(symbol: str):
 
     # Compile and run a minimal analysis graph
     try:
-        from ..graph.supervisor import compile_supervisor_graph  # v3.0
+        from ..graph.supervisor import compile_supervisor_graph  # v5.3
 
-        graph = compile_supervisor_graph(checkpointer=checkpointer)
+        graph = compile_supervisor_graph(checkpointer=checkpointer, store=store)
         final_state = {}
         async for event in graph.astream(initial_state, config, stream_mode="values"):
             final_state = event
@@ -342,10 +342,10 @@ async def scan_command():
     checkpointer = await create_checkpointer()
 
     try:
-        from ..graph.supervisor import compile_supervisor_graph  # v3.0
+        from ..graph.supervisor import compile_supervisor_graph  # v5.3
         from langchain_core.messages import HumanMessage
 
-        graph = compile_supervisor_graph(checkpointer=checkpointer)
+        graph = compile_supervisor_graph(checkpointer=checkpointer, store=store)
         thread_id = f"scan-{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d-%H%M%S')}"
         config = {"configurable": {"thread_id": thread_id}}
 
@@ -415,7 +415,7 @@ async def start_command():
         console.print("[red]APScheduler not installed. Run: pip install apscheduler[/red]")
         return
 
-    from ..graph.supervisor import compile_supervisor_graph  # v3.0 single graph
+    from ..graph.supervisor import compile_supervisor_graph  # v5.3 Subagents
     from ..memory.store import get_store
     from ..memory.setup import create_checkpointer
     from ..scheduler.jobs import register_jobs
@@ -423,7 +423,7 @@ async def start_command():
     settings = _get_settings()
     store = get_store()
     checkpointer = await create_checkpointer()
-    graph = compile_supervisor_graph(checkpointer=checkpointer)  # v3.0
+    graph = compile_supervisor_graph(checkpointer=checkpointer, store=store)  # v5.3
 
     scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
     register_jobs(scheduler, graph, store, settings)
