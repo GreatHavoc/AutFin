@@ -55,18 +55,30 @@ def _filter_trade_inputs(inputs: dict) -> dict:
 def _filter_agent_outputs(outputs: dict) -> dict:
     """Strip LLM raw responses from agent tool outputs.
 
-    Keep only the parsed result (status, symbol, summary) to stay under
-    LangSmith's 25MB limit.  The raw LLM output (with full system prompt)
-    is the biggest contributor to the 99-199MB payload.
+    LangSmith passes {"output": <return_value>} to process_outputs.
+    Agent tools return json.dumps(result) — a JSON string.  Parse it,
+    keep small metadata, truncate anything large.
     """
+    raw = outputs.get("output", outputs)
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            parsed = {"raw": raw[:500] + "...[truncated]" if len(raw) > 500 else raw}
+    elif isinstance(raw, dict):
+        parsed = raw
+    else:
+        return {"output_type": type(raw).__name__}
+
     result: dict = {}
-    for key in ("status", "symbol", "symbols", "raw_analysis"):
-        if key in outputs:
-            v = outputs[key]
-            # Truncate raw_analysis to 500 chars (it's the LLM's full output)
-            if key == "raw_analysis" and isinstance(v, str) and len(v) > 500:
-                v = v[:500] + "...[truncated]"
-            result[key] = v
+    for key in ("status", "symbol", "symbols"):
+        if key in parsed:
+            result[key] = parsed[key]
+    if "raw_analysis" in parsed:
+        v = parsed["raw_analysis"]
+        result["raw_analysis"] = v[:500] + "...[truncated]" if isinstance(v, str) and len(v) > 500 else v
+    if "summary" in parsed:
+        result["summary"] = str(parsed["summary"])[:300]
     return result
 
 
