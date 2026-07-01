@@ -1,7 +1,7 @@
-"""Langfuse tracer for AutFin — LLM call and agent node tracing.
+"""LangSmith tracer for AutFin — LLM call and agent node tracing.
 
-Uses the official Langfuse Python SDK (v3/v4) with get_client() singleton.
-For LangGraph auto-tracing, see handler.py (uses langfuse.langchain.CallbackHandler).
+Uses @traceable decorator and langsmith.Client for explicit trace management.
+For LangGraph auto-tracing, see handler.py (LANGSMITH_TRACING=true handles it).
 This module handles manual tracing for direct LLM calls and custom spans.
 Persists traces to SQLite for durability beyond in-memory cap.
 """
@@ -19,18 +19,32 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-_LANGFUSE_AVAILABLE = False
-_get_client = None
-_propagate_attributes = None
+_LANGSMITH_AVAILABLE = False
+_langsmith_client = None
+_traceable = None
 
-try:
-    from langfuse import get_client as _get_client_fn
-    from langfuse import propagate_attributes as _propagate_attributes_fn
-    _get_client = _get_client_fn
-    _propagate_attributes = _propagate_attributes_fn
-    _LANGFUSE_AVAILABLE = True
-except ImportError:
-    pass
+
+def _init_langsmith():
+    """Initialize LangSmith client lazily (after dotenv loads)."""
+    global _LANGSMITH_AVAILABLE, _langsmith_client, _traceable
+    if _langsmith_client is not None:
+        return
+
+    try:
+        import os
+        if not os.environ.get("LANGSMITH_API_KEY"):
+            return
+
+        from langsmith import Client as _LangsmithClient
+        from langsmith import traceable as _traceable_fn
+
+        _langsmith_client = _LangsmithClient()
+        _traceable = _traceable_fn
+        _LANGSMITH_AVAILABLE = True
+    except ImportError:
+        pass
+    except Exception:
+        pass
 
 # SQLite persistence path
 _DB_PATH = Path(__file__).parent.parent.parent.parent / "data" / "autfin.db"
@@ -71,27 +85,20 @@ class TraceContext:
 
 
 class AutFinTracer:
-    """Tracer using official Langfuse SDK with in-memory + SQLite persistence."""
+    """Tracer using LangSmith SDK with in-memory + SQLite persistence."""
 
     def __init__(self, persist_to_db: bool = True):
-        self._use_langfuse = False
-        self._client = None
+        _init_langsmith()
+        self._use_langsmith = _LANGSMITH_AVAILABLE
+        self._client = _langsmith_client
         self._active_traces: dict[str, TraceContext] = {}
         self._trace_history: list[TraceContext] = []
-        self._active_spans: dict[str, Any] = {}
+        self._active_runs: dict[str, Any] = {}
         self._persist_to_db = persist_to_db
         self._max_in_memory = 500
 
-        if _LANGFUSE_AVAILABLE:
-            try:
-                self._client = _get_client()
-                if self._client.auth_check():
-                    self._use_langfuse = True
-                    logger.info("Langfuse tracer initialized via get_client()")
-                else:
-                    logger.debug("Langfuse auth failed — using in-memory fallback")
-            except Exception as e:
-                logger.debug("Langfuse init failed: %s — using in-memory fallback", e)
+        if self._use_langsmith:
+            logger.info("LangSmith tracer initialized")
 
         # Ensure trace_history table exists
         if self._persist_to_db:
@@ -192,16 +199,16 @@ class AutFinTracer:
         ctx.metadata.update(metadata or {})
         self._active_traces[tid] = ctx
 
-        if self._use_langfuse and self._client:
+        if self._use_langsmith and self._client:
             try:
-                span = self._client.start_observation(
+                run = self._client.create_run(
                     name=name,
-                    as_type="span",
-                    metadata=metadata or {},
+                    run_type="chain",
+                    extra={"metadata": metadata or {}},
                 )
-                self._active_spans[tid] = span
+                self._active_runs[tid] = run
             except Exception as e:
-                logger.debug("Langfuse start_trace failed: %s", e)
+                logger.debug("LangSmith start_trace failed: %s", e)
 
         return tid
 
@@ -219,17 +226,17 @@ class AutFinTracer:
         # Persist to SQLite for durability
         self._persist_trace(ctx)
 
-        span = self._active_spans.pop(tid, None)
-        if span:
+        run = self._active_runs.pop(tid, None)
+        if run and self._client:
             try:
-                span.update(output={"tokens": ctx.total_tokens, "cost": ctx.total_cost})
-                span.end()
-            except Exception:
-                pass
-
-        if self._use_langfuse and self._client:
-            try:
-                self._client.flush()
+                self._client.update_run(
+                    run_id=run.id,
+                    extra={
+                        "tokens": ctx.total_tokens,
+                        "cost": ctx.total_cost,
+                    },
+                    end_time=datetime.now(timezone.utc),
+                )
             except Exception:
                 pass
 
@@ -247,22 +254,23 @@ class AutFinTracer:
             if error:
                 ctx.errors.append(error)
 
-        if self._use_langfuse and self._client:
+        if self._use_langsmith and self._client:
             try:
-                gen = self._client.start_observation(
-                    trace_context={"trace_id": tid} if tid else None,
+                self._client.create_run(
                     name=f"llm-{model}",
-                    as_type="generation",
-                    model=model,
-                    usage_details={
-                        "input": prompt_tokens,
-                        "output": completion_tokens,
-                    } if prompt_tokens or completion_tokens else None,
-                    metadata={"latency_ms": latency_ms, "error": error} if error else None,
+                    run_type="llm",
+                    extra={
+                        "metadata": {
+                            "model": model,
+                            "prompt_tokens": prompt_tokens,
+                            "completion_tokens": completion_tokens,
+                            "latency_ms": latency_ms,
+                            "error": error,
+                        }
+                    },
                 )
-                gen.end()
             except Exception as e:
-                logger.debug("Langfuse log_llm_call failed: %s", e)
+                logger.debug("LangSmith log_llm_call failed: %s", e)
 
     def log_agent_step(
         self, tid: str, agent_name: str,
@@ -273,18 +281,21 @@ class AutFinTracer:
         if ctx and not success:
             ctx.errors.append(agent_name)
 
-        if self._use_langfuse and self._client:
+        if self._use_langsmith and self._client:
             try:
-                span = self._client.start_observation(
-                    trace_context={"trace_id": tid} if tid else None,
+                self._client.create_run(
                     name=f"agent-{agent_name}",
-                    as_type="span",
-                    metadata={"duration_ms": duration_ms, "success": success, **(metadata or {})},
+                    run_type="chain",
+                    extra={
+                        "metadata": {
+                            "duration_ms": duration_ms,
+                            "success": success,
+                            **(metadata or {}),
+                        }
+                    },
                 )
-                span.update(output={"success": success})
-                span.end()
             except Exception as e:
-                logger.debug("Langfuse log_agent_step failed: %s", e)
+                logger.debug("LangSmith log_agent_step failed: %s", e)
 
     def get_recent_traces(self, limit: int = 20) -> list[dict]:
         # Combine in-memory and DB traces
@@ -322,7 +333,7 @@ class AutFinTracer:
         }
 
     def flush(self):
-        if self._use_langfuse and self._client:
+        if self._use_langsmith and self._client:
             try:
                 self._client.flush()
             except Exception:

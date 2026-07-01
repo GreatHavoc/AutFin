@@ -93,10 +93,10 @@ CAPABILITIES: dict[str, dict[str, Any]] = {
         "detail": "Only symbol list works. Quotes/OHLCV blocked by NSE Cloudflare.",
     },
     # ── Observability ──
-    "langfuse": {
+    "langsmith": {
         "available": True,
-        "configured": True,         # Self-hosted keys present
-        "detail": "Self-hosted at localhost:3000.",
+        "configured": True,         # LangSmith API key present
+        "detail": "LangSmith cloud tracing with auto-tracing for LangGraph.",
     },
 }
 

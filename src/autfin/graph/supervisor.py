@@ -184,6 +184,7 @@ async def supervisor_node(
         return {
             "messages": [AIMessage(content="Supervisor: waiting for human approval.")],
             "errors": errors,
+            "iteration_count": state.get("iteration_count", 0) + 1,
         }
 
     # ── Build system prompt ──

@@ -1,22 +1,27 @@
-# AutFin
+# AutFin v5.3
 
 **Autonomous AI-Powered Financial Research & Portfolio Management System**
 
-A personal multi-agentic system that runs daily autonomous financial research, manages a Zerodha portfolio, and learns from every trade — using only free LLM models and free data APIs.
+A personal multi-agentic system that runs daily autonomous financial research, manages a Zerodha portfolio, and learns from every trade — using LangGraph Subagents pattern, Modal vLLM (Qwen 3.6 35B), and free data APIs.
 
 ## Features
 
+- **LangGraph Subagents Architecture** — Each agent (fundamentals, technical, sentiment, etc.) runs as a separate tool with context isolation, parallel execution, and full LangSmith visibility
 - **9 Specialized AI Agents** — Market Data, Technical Analysis, Fundamentals, Sentiment, Global Macro, Researcher (Bull/Bear debate), Risk Manager, Portfolio Manager, Execution
+- **Modal vLLM (Primary LLM)** — Self-hosted Qwen 3.6 35B via Modal, zero cost, no rate limits
+- **NVIDIA NIM (Fallback LLM)** — MiniMax M3 via NVIDIA NIM when Modal is unavailable
+- **LangSmith Tracing** — Full observability with auto-tracing, Studio visual debugging, per-agent traces
 - **Daily Autonomous Operation** — Runs at 9:00 AM IST via APScheduler, manages existing positions even with ₹0 cash
 - **Balance-is-Budget** — Your Zerodha account balance IS the deployable pool, no separate config needed
-- **Long-Term Memory** — SQLite + ChromaDB stores trade history, lessons learned, and research reports
+- **Long-Term Memory** — SQLite + ChromaDB + LangGraph Store for trade history, lessons learned, and cross-session learning
+- **HITL with Interrupts** — LangGraph `interrupt()` for proper human-in-the-loop trade approval
 - **Error Recovery** — Circuit breakers, retry policies, and graceful degradation for every agent
-- **Backtesting** — Test strategies on historical data with realistic Indian market transaction costs
+- **Backtesting** — Walk-forward backtesting with regime detection and online learning
 - **Streamlit Dashboard** — Visualize portfolio, P&L, signals, and agent performance
 - **Alert System** — Console, desktop, Pushover, and email notifications for key events
 - **Full CLI** — `autfin status`, `autfin analyze RELIANCE`, `autfin scan`, `autfin start`
 
-## Architecture
+## Quick Start
 
 ```
 autfin status                  # Check Kite connection & balance
@@ -31,39 +36,45 @@ autfin config set KEY VALUE    # Update configuration
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    CLI / Dashboard                   │
-├─────────────────────────────────────────────────────┤
-│              Scheduler (APScheduler)                 │
-│         Daily 9AM │ Midday │ Weekly │ Monthly        │
-├─────────────────────────────────────────────────────┤
-│              Daily Morning Pipeline                  │
-│  ┌─────────┐  ┌──────────────────────────────────┐  │
-│  │ Track B │  │           Track A                 │  │
-│  │Guardian │  │  Research → Debate → Risk → PM    │  │
-│  └─────────┘  └──────────────────────────────────┘  │
-├─────────────────────────────────────────────────────┤
-│                   9 AI Agents                        │
-│  Market│Tech│Fund│Sent│Macro│Research│Risk│PM│Exec   │
-├─────────────────────────────────────────────────────┤
-│              Memory Layer                            │
-│  SQLite (trades, signals, snapshots)                 │
-│  ChromaDB (vector search for past research)          │
-│  Performance Tracker (win rate, Sharpe, drawdown)    │
-├─────────────────────────────────────────────────────┤
-│           Free LLM Stack (via LiteLLM)              │
-│  OpenRouter (Llama 3.3 70B:free) │ Groq │ Gemini    │
-├─────────────────────────────────────────────────────┤
-│              Data Sources (₹0/month)                 │
-│  Kite SDK │ yfinance │ Marketaux │ FRED │ Screener  │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                    CLI / Dashboard                        │
+├──────────────────────────────────────────────────────────┤
+│              Scheduler (APScheduler)                      │
+│         Daily 9AM │ Midday │ Weekly │ Monthly             │
+├──────────────────────────────────────────────────────────┤
+│              LangGraph Supervisor (ReAct Loop)            │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  Calls agent tools as separate LLM invocations:    │  │
+│  │  ├── fundamentals_tool  → own LLM call + tools     │  │
+│  │  ├── technical_tool     → own LLM call + tools     │  │
+│  │  ├── sentiment_tool     → own LLM call + tools     │  │
+│  │  ├── macro_tool         → own LLM call + tools     │  │
+│  │  ├── risk_tool          → own LLM call + tools     │  │
+│  │  └── research_tool      → own LLM call + tools     │  │
+│  │  LangSmith traces each agent individually          │  │
+│  └────────────────────────────────────────────────────┘  │
+├──────────────────────────────────────────────────────────┤
+│              Memory Layer                                 │
+│  SQLite (trades, signals, snapshots)                      │
+│  ChromaDB (vector search for past research)               │
+│  LangGraph Store (cross-session learning)                 │
+├──────────────────────────────────────────────────────────┤
+│           LLM Stack (via LiteLLM)                         │
+│  Modal vLLM (Qwen 3.6 35B) │ NVIDIA NIM (MiniMax M3)    │
+├──────────────────────────────────────────────────────────┤
+│           Observability                                   │
+│  LangSmith (tracing, Studio, evaluation)                  │
+├──────────────────────────────────────────────────────────┤
+│              Data Sources (₹0/month)                      │
+│  Kite SDK │ yfinance │ Marketaux │ FRED │ Screener       │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ## Prerequisites
 
 - Python 3.11+
-- [TA-Lib](https://ta-lib.org/) C library installed on your system
 - A Zerodha account (for live portfolio data via Kite SDK)
+- Modal account (for self-hosted vLLM — free tier, cold starts after inactivity)
 
 ## Installation
 
@@ -92,12 +103,11 @@ pip install -e ".[dashboard]"
    ```
 
 2. Get free API keys (no credit card required for any):
-   - **OpenRouter**: [openrouter.ai](https://openrouter.ai) — Free LLM models (Llama 3.3 70B, etc.)
-   - **Groq**: [console.groq.com](https://console.groq.com) — Fast inference
-   - **Gemini**: [aistudio.google.com](https://aistudio.google.com) — Google's free tier
+   - **Modal**: [modal.com](https://modal.com) — Self-hosted vLLM (Qwen 3.6 35B), free tier
+   - **NVIDIA NIM**: [build.nvidia.com](https://build.nvidia.com) — MiniMax M3 fallback (free, 1M context)
+   - **LangSmith**: [smith.langchain.com](https://smith.langchain.com) — Tracing, evaluation (free Developer tier)
    - **Marketaux**: [marketaux.com](https://marketaux.com) — News sentiment
    - **FRED**: [fred.stlouisfed.org](https://fred.stlouisfed.org) — Macro economic data
-   - **Firecrawl**: [firecrawl.dev](https://firecrawl.dev) — Web scraping (500 free credits/mo)
 
 3. Fill in your `.env` file with the API keys.
 
@@ -163,7 +173,8 @@ autfin/
 │   │   ├── researcher.py
 │   │   ├── risk_manager.py
 │   │   ├── portfolio_manager.py
-│   │   └── executor.py
+│   │   ├── executor.py
+│   │   └── tools.py            # Agent tool wrappers (v5.3 Subagents pattern)
 │   ├── alerts/           # Notification system
 │   │   └── notifier.py
 │   ├── backtest/         # Backtesting engine
@@ -178,24 +189,32 @@ autfin/
 │   │   ├── app.py
 │   │   └── data.py
 │   ├── graph/            # LangGraph pipelines
-│   │   ├── error_handler.py
-│   │   └── state.py
+│   │   ├── supervisor.py       # Supervisor with agent tools (v5.3)
+│   │   ├── builder.py          # Graph builder with store support
+│   │   └── error_handler.py
 │   ├── memory/           # Long-term memory
+│   │   ├── setup.py            # Async checkpointer/store init
+│   │   ├── store.py            # LangGraph Store (cross-session learning)
+│   │   ├── vector_store.py     # ChromaDB collections
 │   │   ├── database.py
-│   │   ├── retrieval.py
-│   │   └── performance.py
+│   │   ├── connection_pool.py
+│   │   └── retrieval.py
+│   ├── llm/              # LLM client abstraction
+│   │   └── client.py           # Modal vLLM + NVIDIA NIM support
+│   ├── observability/    # LangSmith tracing + metrics
+│   │   ├── handler.py
+│   │   └── tracer.py
 │   ├── prompts/          # Agent system prompts
 │   ├── scheduler/        # APScheduler jobs
 │   │   └── jobs.py
 │   ├── state/            # State schemas
-│   │   └── schemas.py
+│   │   └── agent_state.py
 │   └── tools/            # External integrations
-│       ├── kite_tools.py
-│       ├── fundamental_tools.py
-│       ├── sentiment_tools.py
-│       ├── scraper_tools.py
-│       └── memory_tools.py
-├── tests/                # 613 tests, 100% passing
+│       ├── supervisor_tools.py
+│       └── ...
+├── agent.py              # LangGraph dev entry point
+├── langgraph.json        # LangGraph dev config
+├── tests/                # 972+ tests, all passing
 ├── .env.example          # Environment template
 ├── autfin_prd.md         # Product requirements
 ├── technical_spec.md     # Technical specification
@@ -225,7 +244,7 @@ Every day at 9:00 AM IST, AutFin runs its morning pipeline:
 
 1. **Position Monitor** — Checks all existing positions for stop-losses and profit targets
 2. **Guardian Executor** — Executes stop-losses and profit bookings immediately
-3. **Parallel Research** — Runs 5 research agents simultaneously (Market Data, Technical, Fundamentals, Sentiment, Macro)
+3. **Parallel Research** — Supervisor calls agent tools (fundamentals, technical, sentiment, macro) — each runs as separate LLM call with context isolation
 4. **Researcher** — Synthesizes all research into a Bull/Bear debate
 5. **Risk Manager** — Validates trade proposals against 9 risk checks
 6. **Portfolio Manager** — Makes final allocation decisions
@@ -241,9 +260,9 @@ Your Zerodha account balance IS the budget. No separate config:
 ### Free LLM Stack
 
 All AI runs on free models via LiteLLM router:
-- **Primary**: Llama 3.3 70B via OpenRouter (free, high quality)
-- **Speed**: Groq inference (fast responses for time-sensitive operations)
-- **Fallback**: Gemini 2.5 Flash (Google's free tier, high volume)
+- **Primary**: Qwen 3.6 35B via Modal vLLM (self-hosted, no rate limits, no cost)
+- **Fallback**: MiniMax M3 via NVIDIA NIM (1M context, free tier)
+- **Speed**: Llama 3.1 8B via NVIDIA NIM (fast responses for time-sensitive operations)
 
 ## Contributing
 

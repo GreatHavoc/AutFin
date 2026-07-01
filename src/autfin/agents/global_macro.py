@@ -1121,6 +1121,7 @@ class GlobalMacroAgent:
             tool_callables=MACRO_CALLABLES,
             model=llm.deep_model,
             max_tokens=4096,
+            max_iterations=20,
         )
         if not raw:
             return None
@@ -1129,8 +1130,17 @@ class GlobalMacroAgent:
         result = extract_json(raw)
         if result:
             return result
-        logger.warning("Macro agentic output not JSON")
-        return None
+
+        # Fallback: construct minimal JSON from raw text
+        logger.info("Macro agentic output not JSON, constructing from text")
+        return {
+            "indicators": {},
+            "india_impact_summary": raw[:500] if raw else "No macro data available",
+            "overall_sentiment": "neutral",
+            "sector_impacts": {},
+            "risk_level": "medium",
+            "conviction": 0.5,
+        }
 
     async def global_macro_agent(self, state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
         """

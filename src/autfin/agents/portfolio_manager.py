@@ -45,7 +45,7 @@ _SECTOR_MAP: dict[str, str] = {
     "ITC": "FMCG",
     "NESTLEIND": "FMCG",
     "BRITANNIA": "FMCG",
-    "LARSEN": "Infrastructure",
+    "LT": "Infrastructure",
     "SUNPHARMA": "Pharma",
     "DRREDDY": "Pharma",
     "TATAMOTORS": "Auto",

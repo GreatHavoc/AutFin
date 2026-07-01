@@ -44,13 +44,13 @@ class TestValidateToolArgs:
         assert error is not None
         assert "Invalid value for action" in error
 
-    def test_conviction_clamped(self):
+    def test_log_decision_valid(self):
         args, error = _validate_tool_args(
             "log_decision",
-            {"symbol": "RELIANCE", "action": "BUY", "conviction": 5.0}
+            {"decision_type": "trade", "details": {"symbol": "RELIANCE", "action": "BUY"}}
         )
         assert error is None
-        assert args["conviction"] == 1.0
+        assert args["decision_type"] == "trade"
 
     def test_invalid_type_returns_error(self):
         args, error = _validate_tool_args(

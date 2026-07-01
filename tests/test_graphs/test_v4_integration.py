@@ -70,7 +70,7 @@ class TestBuildStockPitchSentiment:
         assert result["status"] == "success"
         # Verify the prompt sent to LLM includes sentiment reference
         call_args = mock_client.generate.call_args
-        system_prompt = call_args.kwargs.get("system", "") if call_args.kwargs else ""
+        system_prompt = call_args.kwargs.get("system_prompt", "") if call_args.kwargs else ""
         assert "sentiment" in system_prompt.lower()
 
     @pytest.mark.asyncio

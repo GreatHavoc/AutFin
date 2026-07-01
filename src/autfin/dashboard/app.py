@@ -835,7 +835,7 @@ def render_system():
             ])
             st.dataframe(am_df, use_container_width=True)
     except Exception:
-        st.info("Observability not available (Langfuse not configured).")
+        st.info("Observability not available (LangSmith not configured).")
 
     # --- RORO ---
     st.divider()

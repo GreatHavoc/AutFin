@@ -1,47 +1,43 @@
-"""Langfuse callback handler for AutFin — wraps the official langfuse.langchain.CallbackHandler.
+"""LangSmith tracing handler for AutFin.
 
-The official CallbackHandler auto-traces all LangGraph node executions,
-LLM calls, tool calls, and retriever invocations. No custom reimplementation needed.
+LangSmith auto-traces LangGraph node executions when LANGSMITH_TRACING=true
+is set in the environment. This module provides configuration checks and
+explicit tracing utilities.
 """
 from __future__ import annotations
 
 import logging
+import os
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-_langfuse_handler_class = None
 
-try:
-    from langfuse.langchain import CallbackHandler as _LangfuseCallbackHandler
-    _langfuse_handler_class = _LangfuseCallbackHandler
-except ImportError:
-    logger.debug("langfuse.langchain.CallbackHandler not available — tracing disabled")
+def _check_langsmith() -> bool:
+    """Check if LangSmith tracing is properly configured via env vars."""
+    api_key = os.environ.get("LANGSMITH_API_KEY", "")
+    tracing = os.environ.get("LANGSMITH_TRACING", "").lower()
+    return bool(api_key and tracing in ("true", "1", "yes"))
+
+
+def is_langsmith_configured() -> bool:
+    """Check if LangSmith tracing is properly configured via env vars."""
+    return _check_langsmith()
 
 
 def get_callback_handler(trace_id: Optional[str] = None) -> Optional[object]:
-    """Get the official Langfuse CallbackHandler.
+    """Get LangSmith callback handler for LangGraph.
 
-    Args:
-        trace_id: Optional trace_id to link this handler to a specific trace.
-                  If provided, all observations will be grouped under this trace.
+    With LANGSMITH_TRACING=true, LangGraph auto-traces all node executions.
+    This function returns None to signal that auto-tracing is active.
 
     Returns:
-        Langfuse CallbackHandler instance, or None if langfuse is not configured.
+        None — LangSmith auto-tracing handles LangGraph via env vars.
     """
-    if _langfuse_handler_class is None:
+    if not _check_langsmith():
+        logger.debug("LangSmith not configured — tracing disabled")
         return None
 
-    try:
-        from langfuse import get_client
-        langfuse = get_client()
-
-        if not langfuse.auth_check():
-            logger.debug("Langfuse auth failed — tracing disabled")
-            return None
-
-        handler = _langfuse_handler_class()
-        return handler
-    except Exception as e:
-        logger.debug("Failed to create Langfuse CallbackHandler: %s", e)
-        return None
+    # LangGraph auto-traces when LANGSMITH_TRACING=true is set.
+    # No explicit callback handler needed.
+    return None

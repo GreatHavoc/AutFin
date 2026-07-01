@@ -224,7 +224,7 @@ async def analyze_command(symbol: str):
     from ..memory.setup import create_checkpointer
 
     store = get_store()
-    checkpointer = create_checkpointer()
+    checkpointer = await create_checkpointer()
 
     initial_state = {
         "thread_id": f"analyze-{symbol.lower()}",
@@ -339,7 +339,7 @@ async def scan_command():
     from ..memory.setup import create_checkpointer
 
     store = get_store()
-    checkpointer = create_checkpointer()
+    checkpointer = await create_checkpointer()
 
     try:
         from ..graph.supervisor import compile_supervisor_graph  # v3.0
@@ -422,7 +422,7 @@ async def start_command():
 
     settings = _get_settings()
     store = get_store()
-    checkpointer = create_checkpointer()
+    checkpointer = await create_checkpointer()
     graph = compile_supervisor_graph(checkpointer=checkpointer)  # v3.0
 
     scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")

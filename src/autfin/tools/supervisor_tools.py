@@ -482,56 +482,56 @@ async def research_stock(symbol: str, depth: str = "standard") -> Dict[str, Any]
 
         agent_tasks = {}
 
-        from src.autfin.agents.fundamentals import fundamentals_agent
-
-        agent_tasks["fundamentals"] = fundamentals_agent(state)
-
-        from src.autfin.agents.technical import technical_agent
-        agent_tasks["technical"] = technical_agent(state)
-
-        from src.autfin.agents.sentiment import sentiment_agent
-        agent_tasks["sentiment"] = sentiment_agent(state)
-
-        from src.autfin.agents.valuation import valuation_agent
-        agent_tasks["valuation"] = valuation_agent(state)
-
-        from src.autfin.agents.global_macro import global_macro_agent
-        agent_tasks["peer_macro"] = global_macro_agent(state)
-
         if depth == "quick":
-            fundamentals_result = await agent_tasks["fundamentals"]
-            technical_result = await agent_tasks["technical"]
-            sentiment_result = await agent_tasks["sentiment"]
-            results = {
-                "fundamentals": fundamentals_result,
-                "technical": technical_result,
-                "sentiment": sentiment_result,
-            }
-        elif depth == "deep":
-            tasks = {
-                k: asyncio.ensure_future(v) for k, v in agent_tasks.items()
-            }
+            from src.autfin.agents.fundamentals import fundamentals_agent
+            from src.autfin.agents.technical import technical_agent
+            from src.autfin.agents.sentiment import sentiment_agent
+
+            agent_tasks["fundamentals"] = fundamentals_agent(state)
+            agent_tasks["technical"] = technical_agent(state)
+            agent_tasks["sentiment"] = sentiment_agent(state)
+
             results = {}
-            for key, task in tasks.items():
-                results[key] = await task
+            for key in ["fundamentals", "technical", "sentiment"]:
+                results[key] = await agent_tasks[key]
         else:
-            # Standard depth — parallel await all agents
-            fundamentals_result, technical_result, sentiment_result, valuation_result, peer_macro_result = (
-                await asyncio.gather(
-                    agent_tasks["fundamentals"],
-                    agent_tasks["technical"],
-                    agent_tasks["sentiment"],
-                    agent_tasks["valuation"],
-                    agent_tasks["peer_macro"],
+            from src.autfin.agents.fundamentals import fundamentals_agent
+            from src.autfin.agents.technical import technical_agent
+            from src.autfin.agents.sentiment import sentiment_agent
+            from src.autfin.agents.valuation import valuation_agent
+            from src.autfin.agents.global_macro import global_macro_agent
+
+            agent_tasks["fundamentals"] = fundamentals_agent(state)
+            agent_tasks["technical"] = technical_agent(state)
+            agent_tasks["sentiment"] = sentiment_agent(state)
+            agent_tasks["valuation"] = valuation_agent(state)
+            agent_tasks["peer_macro"] = global_macro_agent(state)
+
+            if depth == "deep":
+                tasks = {
+                    k: asyncio.ensure_future(v) for k, v in agent_tasks.items()
+                }
+                results = {}
+                for key, task in tasks.items():
+                    results[key] = await task
+            else:
+                # Standard depth — parallel await all agents
+                fundamentals_result, technical_result, sentiment_result, valuation_result, peer_macro_result = (
+                    await asyncio.gather(
+                        agent_tasks["fundamentals"],
+                        agent_tasks["technical"],
+                        agent_tasks["sentiment"],
+                        agent_tasks["valuation"],
+                        agent_tasks["peer_macro"],
+                    )
                 )
-            )
-            results = {
-                "fundamentals": fundamentals_result,
-                "technical": technical_result,
-                "sentiment": sentiment_result,
-                "valuation": valuation_result,
-                "peer_macro": peer_macro_result,
-            }
+                results = {
+                    "fundamentals": fundamentals_result,
+                    "technical": technical_result,
+                    "sentiment": sentiment_result,
+                    "valuation": valuation_result,
+                    "peer_macro": peer_macro_result,
+                }
 
         moat_score = None
         try:
@@ -827,23 +827,47 @@ async def run_risk_checks(trade: Dict[str, Any]) -> Dict[str, Any]:
             portfolio=portfolio,
         )
 
-        risk_score = results.get("risk_score", 0.5)
-        approved = results.get("approved", True) and risk_score >= 0.4
+        # check_all_risks returns: {risk_score: 0-100, risk_level, checks, flagged_issues, ...}
+        risk_score_raw = results.get("risk_score", 50)
 
+        # Determine approval: use apply_veto if available, else fall back to "approved" field
+        approved = results.get("approved", True)
+        veto_reason = None
+        try:
+            veto_result = agent.apply_veto(risk_score_raw)
+            if isinstance(veto_result, tuple) and len(veto_result) == 2:
+                should_veto, veto_reason = veto_result
+                approved = not should_veto
+        except Exception:
+            pass
+
+        # Normalize risk_score to 0.0-1.0 for output
+        if isinstance(risk_score_raw, (int, float)) and risk_score_raw > 1:
+            risk_score_norm = risk_score_raw / 100.0
+        else:
+            risk_score_norm = float(risk_score_raw)
+
+        flagged = results.get("flagged_issues", results.get("issues", []))
+
+        # Find max position size from failed checks
         suggested_qty = quantity
-        if not approved and results.get("max_position_size"):
-            suggested_qty = min(quantity, int(results["max_position_size"]))
+        for check in results.get("checks", []):
+            if not check.get("passes", True) and check.get("name") == "position_size":
+                # Extract suggested qty from position_size check reason
+                suggested_qty = max(0, quantity - 1)
+                break
 
         return {
             "status": "success",
             "symbol": symbol.upper(),
             "action": action,
             "approved": approved,
-            "risk_score": round(risk_score, 3),
-            "checks": results.get("checks", {}),
-            "issues": results.get("issues", []),
+            "risk_score": round(risk_score_norm, 3),
+            "risk_level": results.get("risk_level", "UNKNOWN"),
+            "checks": results.get("checks", []),
+            "issues": flagged,
             "suggested_size": suggested_qty,
-            "veto_reason": results.get("veto_reason") if not approved else None,
+            "veto_reason": veto_reason if not approved else None,
         }
 
     except Exception as e:
@@ -937,7 +961,7 @@ async def execute_order(order: Dict[str, Any]) -> Dict[str, Any]:
             "utilized_margin": order.get("utilized_margin", 0.0),
             "holdings": order.get("holdings", []),
             "positions": [],
-            "pending_trade": order,
+            "trade_queue": [order],
             "thread_id": "exec_tool",
             "run_mode": run_mode,
             "errors": [],

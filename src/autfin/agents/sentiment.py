@@ -293,6 +293,7 @@ class SentimentAgent:
             tool_callables=SENTIMENT_CALLABLES,
             model=llm.deep_model,
             max_tokens=1024,
+            max_iterations=20,
         )
         if not raw:
             return None

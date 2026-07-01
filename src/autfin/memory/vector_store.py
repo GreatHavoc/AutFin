@@ -27,7 +27,7 @@ REQUIRED_COLLECTIONS = [
 
 def get_chroma_path() -> Path:
     """Get the ChromaDB persistence path from config or default."""
-    project_root = Path(__file__).parent.parent.parent
+    project_root = Path(__file__).parent.parent.parent.parent
     data_dir = project_root / "data"
     
     try:

@@ -980,16 +980,27 @@ class FundamentalsAgent:
 
         system_prompt = (
             f"You are an expert fundamental analyst. Analyze {symbol} on the Indian NSE exchange.\n"
-            "Use your tools to gather data, then produce a COMPLETE analysis as a single JSON object.\n"
-            "Include: pe_ratio, pb_ratio, ps_ratio, ev_ebitda, roe, roa, net_margin, operating_margin,\n"
-            "debt_equity, interest_coverage, revenue_growth, earnings_growth, current_ratio,\n"
-            "fcf_yield, roic, dividend_yield, sector, market_cap, revenue, net_income, cash,\n"
-            "moat_level (wide/narrow/none), moat_score (0-100), health_score (0-100),\n"
-            "recommendation (STRONG_BUY/BUY/HOLD/SELL/STRONG_SELL),\n"
-            "strength (-5 to +5), conviction (0.0-1.0), risks (list), catalysts (list),\n"
-            "dcf_target_price, dcf_upside_pct, dcf_downside_pct.\n"
-            "CRITICAL: Do NOT show your reasoning. Do NOT show calculations.\n"
-            "Output ONLY the JSON object — no markdown, no explanation, no preamble."
+            "Use your tools to gather financial data, then produce a COMPLETE analysis.\n\n"
+            "STEP 1: Call fetch_financial_info to get all ratios and metrics.\n"
+            "STEP 2: Call fetch_company_info to get sector, industry, market cap.\n"
+            "STEP 3: Call fetch_balance_sheet, fetch_income_statement, fetch_cashflow for detailed data.\n"
+            "STEP 4: Use the data to compute DCF valuation (compute_dcf_valuation tool).\n\n"
+            "STEP 5: After ALL tool calls complete, produce a SINGLE JSON object with ALL these fields:\n"
+            '{"pe_ratio": float, "pb_ratio": float, "ps_ratio": float, "ev_ebitda": float, '
+            '"roe": float, "roa": float, "net_margin": float, "operating_margin": float, '
+            '"debt_equity": float, "interest_coverage": float, "revenue_growth": float, '
+            '"earnings_growth": float, "current_ratio": float, "fcf_yield": float, "roic": float, '
+            '"dividend_yield": float, "sector": str, "market_cap": float, "revenue": float, '
+            '"net_income": float, "cash": float, "moat_level": str, "moat_score": int(0-100), '
+            '"health_score": int(0-100), "recommendation": str, "strength": int(-5 to +5), '
+            '"conviction": float(0.0-1.0), "risks": list, "catalysts": list, '
+            '"dcf_target_price": float, "dcf_upside_pct": float, "dcf_downside_pct": float}\n\n'
+            "CRITICAL RULES:\n"
+            "- After fetching data, STOP calling tools and output the JSON immediately.\n"
+            "- Do NOT explain your reasoning. Do NOT show calculations.\n"
+            "- Do NOT use markdown code fences. Output RAW JSON only.\n"
+            "- Start your response with { and end with }.\n"
+            "- If you cannot compute a value, use null.\n"
         )
 
         raw = await llm.generate_with_tools(
@@ -998,6 +1009,7 @@ class FundamentalsAgent:
             tool_callables=FUNDAMENTALS_CALLABLES,
             model=llm.deep_model,
             max_tokens=4096,
+            max_iterations=20,
         )
         if not raw:
             return None
@@ -1006,7 +1018,10 @@ class FundamentalsAgent:
         result = extract_json(raw)
         if result:
             return result
-        logger.warning(f"Fundamentals agentic output not JSON for {symbol} — raw[:500]: {raw[:500]}")
+
+        # Fallback: try to extract key-value pairs from text
+        logger.info("Fundamentals agentic output not JSON for %s (len=%d, first 200: %s)",
+                     symbol, len(raw), raw[:200] if raw else "empty")
         return None
 
     async def fundamentals_agent(self, state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:

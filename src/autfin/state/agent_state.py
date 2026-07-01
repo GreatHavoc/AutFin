@@ -6,6 +6,7 @@ v3.0: Single supervisor ReAct loop with tool calling. No multi-graph.
 from typing import TypedDict, Annotated, NotRequired
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage
+import operator
 
 
 class AgentState(TypedDict):
@@ -16,6 +17,9 @@ class AgentState(TypedDict):
     NEVER mutate state directly.
     """
     
+    # Schema version for checkpoint migration safety
+    schema_version: NotRequired[int]
+
     # Messages (accumulated across ReAct loop iterations)
     messages: Annotated[list[BaseMessage], add_messages]
 
@@ -68,7 +72,7 @@ class AgentState(TypedDict):
     # ── Metadata ──
     thread_id: str
     run_mode: str
-    errors: list[str]
+    errors: Annotated[list[str], operator.add]
 
     # ── Token budget ──
     total_tokens: int

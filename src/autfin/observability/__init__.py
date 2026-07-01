@@ -1,4 +1,4 @@
-"""Observability module for AutFin — Langfuse tracing, metrics aggregation."""
+"""Observability module for AutFin — LangSmith tracing, metrics aggregation."""
 
 from src.autfin.observability.tracer import (
     AutFinTracer,
@@ -10,6 +10,7 @@ from src.autfin.observability.tracer import (
 )
 from src.autfin.observability.handler import (
     get_callback_handler,
+    is_langsmith_configured,
 )
 from src.autfin.observability.metrics import (
     ObservabilityMetrics,
@@ -24,6 +25,7 @@ __all__ = [
     "trace_agent_node",
     "TraceContext",
     "get_callback_handler",
+    "is_langsmith_configured",
     "ObservabilityMetrics",
     "get_metrics_snapshot",
 ]

@@ -657,6 +657,7 @@ class TechnicalAgent:
             tool_callables=TECHNICAL_CALLABLES,
             model=llm.deep_model,
             max_tokens=4096,
+            max_iterations=20,
         )
         if not raw:
             return None
@@ -689,12 +690,12 @@ async def technical_agent(state: AgentState, config: RunnableConfig | None = Non
 
         if not quotes:
             errors.append("No market data available for technical analysis")
-            return {**state, "technical_reports": technical_reports, "errors": errors}
+            return {"technical_reports": technical_reports, "errors": errors}
 
         symbol = next(iter(quotes), None)
         if symbol is None:
             errors.append("No symbols available for technical analysis")
-            return {**state, "technical_reports": technical_reports, "errors": errors}
+            return {"technical_reports": technical_reports, "errors": errors}
 
         quote = quotes[symbol]
 
@@ -719,7 +720,7 @@ async def technical_agent(state: AgentState, config: RunnableConfig | None = Non
                 "symbol": symbol,
                 "status": "error",
             }
-            return {**state, "technical_reports": technical_reports, "errors": errors}
+            return {"technical_reports": technical_reports, "errors": errors}
 
         agent = TechnicalAgent()
         analysis = await agent._agentic_analyze(symbol)
@@ -732,7 +733,6 @@ async def technical_agent(state: AgentState, config: RunnableConfig | None = Non
             errors.append(analysis.get("error", "Unknown error"))
 
         return {
-            **state,
             "technical_reports": technical_reports,
             "next_agent": None,
             "errors": errors,
@@ -741,7 +741,6 @@ async def technical_agent(state: AgentState, config: RunnableConfig | None = Non
     except Exception as e:
         errors.append(f"Technical agent failed: {str(e)}")
         return {
-            **state,
             "technical_reports": technical_reports,
             "next_agent": None,
             "errors": errors,

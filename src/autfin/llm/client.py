@@ -135,7 +135,20 @@ try:
     import os
 
     os.environ.setdefault("LITELLM_LOG", "ERROR")
+
 except ImportError:
+    pass
+
+
+# Lazy langsmith traceable decorator for LLM I/O tracing
+_traceable = None
+
+try:
+    import os as _os
+    if _os.environ.get("LANGSMITH_API_KEY"):
+        from langsmith import traceable as _traceable_fn
+        _traceable = _traceable_fn
+except Exception:
     pass
 
 
@@ -153,8 +166,8 @@ class LLMClient:
         deep_model: str = "nvidia_nim/nvidia/nemotron-3-super-120b-a12b",
         fast_model: str = "nvidia_nim/meta/llama-3.1-8b-instruct",
         temperature: float = 0.0,
-        max_retries: int = 1,
-        timeout: float = 130.0,
+        max_retries: int = 2,
+        timeout: float = 180.0,
         api_base: Optional[str] = None,
     ):
         """
@@ -244,6 +257,7 @@ class LLMClient:
                     kwargs["api_base"] = self.api_base
                     kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
                 response = await _litellm.acompletion(**kwargs)
+
                 elapsed_ms = (time.monotonic() - t_start) * 1000
                 self._call_count += 1
                 _rate_limiter.on_success()
@@ -255,7 +269,14 @@ class LLMClient:
                 self._record_llm_metrics(target_model, prompt_tokens, completion_tokens, elapsed_ms, state)
 
                 content = response.choices[0].message.content
-                return content.strip() if content else None
+                if content:
+                    content = content.strip()
+                    # Strip Qwen thinking mode artifacts if present
+                    if "<think>" in content:
+                        import re
+                        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+
+                return content if content else None
             except Exception as e:
                 self._error_count += 1
                 last_error = e
@@ -356,6 +377,7 @@ class LLMClient:
                     kwargs["api_base"] = self.api_base
                     kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
                 response = await _litellm.acompletion(**kwargs)
+
                 elapsed_ms = (time.monotonic() - t_start) * 1000
                 self._call_count += 1
 
@@ -387,23 +409,29 @@ class LLMClient:
                         })
                     continue
 
-                return message.content.strip() if message.content else None
+                content = message.content.strip() if message.content else None
+                # Strip Qwen thinking mode artifacts if present
+                if content and "<think>" in content:
+                    import re
+                    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+                return content
 
             except Exception as e:
                 self._error_count += 1
                 logger.warning("LLM tool-calling error (iteration %d) on %s: %s", iteration, target_model, e)
                 error_str = str(e).lower()
                 is_rate_limited = "429" in error_str or "rate" in error_str or "too many" in error_str
-                is_connection_error = "connection" in error_str or "internal" in error_str or "500" in error_str or "502" in error_str or "503" in error_str
+                is_timeout = "timeout" in error_str or "timed out" in error_str
+                is_connection_error = "connection" in error_str or "internal" in error_str or "500" in error_str or "502" in error_str or "503" in error_str or is_timeout
                 if is_rate_limited or is_connection_error:
                     if is_rate_limited:
                         _rate_limiter.on_429()
-                    backoff_wait = random.uniform(5.0, 15.0) if is_connection_error else max(0, _rate_limiter._backoff_until - time.monotonic()) + random.uniform(1.0, 3.0)
+                    backoff_wait = random.uniform(10.0, 20.0) if is_timeout else (random.uniform(5.0, 15.0) if is_connection_error else max(0, _rate_limiter._backoff_until - time.monotonic()) + random.uniform(1.0, 3.0))
                     if iteration < self.max_retries:
-                        logger.warning("Rate/connection error on %s — waiting %.0fs (iteration %d)", target_model, backoff_wait, iteration)
+                        logger.warning("Rate/connection/timeout error on %s — waiting %.0fs (iteration %d)", target_model, backoff_wait, iteration)
                         await asyncio.sleep(backoff_wait)
                     else:
-                        logger.warning("Rate/connection error on final iteration %d — giving up", iteration)
+                        logger.warning("Rate/connection/timeout error on final iteration %d — giving up", iteration)
                 if iteration < self.max_retries:
                     continue
                 return None
@@ -503,39 +531,69 @@ TOOL_PARAM_RULES = {
         "price": {"type": float, "min": 0.01},
     },
     "log_decision": {
-        "symbol": {"type": str, "max_len": 20, "upper": True},
-        "action": {"type": str, "allowed": ["BUY", "SELL", "HOLD"]},
-        "conviction": {"type": float, "min": 0.0, "max": 1.0},
+        "decision_type": {"type": str, "max_len": 50},
+        "details": {"type": dict},
     },
     "research_stock": {
         "symbol": {"type": str, "max_len": 20, "upper": True},
+        "depth": {"type": str, "allowed": ["quick", "standard", "deep"]},
     },
-    "screen_candidates": {},
+    "research_batch": {
+        "symbols": {"type": list},
+        "depth": {"type": str, "allowed": ["quick", "standard", "deep"]},
+    },
+    "screen_candidates": {
+        "universe": {"type": str},
+        "max_candidates": {"type": int, "min": 1, "max": 100},
+    },
     "validate_thesis": {
         "symbol": {"type": str, "max_len": 20, "upper": True},
+        "holding_data": {"type": dict},
     },
     "run_risk_checks": {
-        "symbol": {"type": str, "max_len": 20, "upper": True},
+        "trade": {"type": dict},
     },
     "allocate_capital": {
-        "symbol": {"type": str, "max_len": 20, "upper": True},
+        "approved_trades": {"type": list},
+        "available_cash": {"type": float, "min": 0},
     },
     "build_stock_pitch": {
         "symbol": {"type": str, "max_len": 20, "upper": True},
+        "research_data": {"type": dict},
     },
-    "retrieve_learnings": {},
-    "record_learning": {},
-    "calibrate_conviction": {},
-    "detect_patterns": {},
-    "request_human_approval": {},
+    "retrieve_learnings": {
+        "query": {"type": str},
+        "filters": {"type": dict},
+    },
+    "record_learning": {
+        "symbol": {"type": str, "max_len": 20, "upper": True},
+        "learning_type": {"type": str},
+        "content": {"type": str},
+        "confidence": {"type": float, "min": 0.0, "max": 1.0},
+    },
+    "calibrate_conviction": {
+        "symbol": {"type": str, "max_len": 20, "upper": True},
+    },
+    "detect_patterns": {
+        "min_samples": {"type": int, "min": 1},
+    },
+    "request_human_approval": {
+        "question": {"type": str},
+        "trade_details": {"type": dict},
+    },
     "check_guardian": {},
     "analyze_macro_context": {},
     "get_market_status": {},
-    "get_portfolio_state": {},
     "get_market_quotes": {
-        "symbol": {"type": str, "max_len": 20, "upper": True},
+        "symbols": {"type": list},
+    },
+    "get_portfolio_state": {},
+    "validate_reasonability": {
+        "details": {"type": dict},
     },
     "finalize_session": {},
+    "get_macro_outlook": {},
+    "get_sector_exposure": {},
 }
 
 

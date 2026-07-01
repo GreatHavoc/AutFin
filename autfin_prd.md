@@ -2,10 +2,10 @@
 
 ## Product Requirements Document (PRD)
 
-**Version**: 5.1  
-**Date**: June 2026  
+**Version**: 5.3  
+**Date**: July 2026  
 **Author**: Prakhar  
-**Status**: Complete — 31 improvements across 5 waves: critical bug fixes, architecture improvements, new capabilities, production polish, and research infrastructure (walk-forward backtesting, regime detection, online learning, Kelly integration). 885+ tests passing.
+**Status**: Complete — Subagents architecture restructure (LangGraph best practices), Modal vLLM integration, LangSmith tracing, 972+ tests passing.
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### 1.1 What Is AutFin?
 
-AutFin is an **agentic-first AI portfolio management system**. A single LangGraph supervisor runs a ReAct loop — thinking, calling research tools, verifying risks, and executing trades — with per-stock depth decisions (Quick/Standard/Deep), 20 domain tools (market data through order execution + self-learning), and zero operating cost via free-tier LLMs and data APIs.
+AutFin is an **agentic-first AI portfolio management system** built on LangGraph's Subagents pattern. A supervisor coordinates specialist agents (fundamentals, technical, sentiment, macro, risk, portfolio) by calling them as tools — each running in isolated context with full LangSmith visibility. Per-stock depth decisions (Quick/Standard/Deep), 20 domain tools, long-term memory via LangGraph Store, and zero operating cost via Modal vLLM (Qwen 3.6 35B) and free data APIs.
 
 ### 1.2 How It Works (User's Perspective)
 
@@ -59,12 +59,12 @@ AutFin is an **agentic-first AI portfolio management system**. A single LangGrap
 - **Learning system**: Procedural memory builds a corpus of trade patterns — gets smarter with every trade
 - **PM-level research quality**: DCF valuation, catalyst tracking, variant views — not just ratio screens
 - **Autonomous daily operation**: Runs every morning at 9 AM, scans markets, deploys capital, manages positions
-- **Multi-agent architecture** inspired by real trading firms (TradingAgents paper pattern) and professional PM workflows
-- **Long-running persistence** — survives reboots, learns from past decisions across months
+- **Subagents architecture** — LangGraph best practice: each agent runs as separate tool with context isolation, parallel execution, and full LangSmith tracing
+- **Long-running persistence** — survives reboots, learns from past decisions across months via LangGraph Store
 - **Risk-first design**: Risk Manager with 14 checks including CVaR, news risk, sector exposure — veto power
 - **Full Zerodha integration** via official Kite SDK (OAuth, TOTP auto-login, credentials in .env)
-- **Built on LangGraph** for durable, cyclical, observable agent workflows with HITL gates
-- **$0/month operating cost**: Entire stack uses free tiers (NVIDIA NIM primary, OpenRouter, Groq, Gemini, Cerebras, Ollama fallback) and free data APIs (NSE, yfinance, Finnhub, Alpha Vantage, FRED)
+- **Built on LangGraph** for durable, cyclical, observable agent workflows with `interrupt()` HITL gates
+- **$0/month operating cost**: Entire stack uses Modal vLLM (self-hosted Qwen 3.6 35B), NVIDIA NIM fallback, and free data APIs (NSE, yfinance, Marketaux, FRED)
 
 ---
 
@@ -186,9 +186,9 @@ Every Morning (9:00 AM):
 
 ## 3. AGENT ARCHITECTURE & DIVISION
 
-### 3.1 Design Philosophy — Agentic-First, Single Supervisor
+### 3.1 Design Philosophy — Subagents Pattern (LangGraph Best Practice)
 
-AutFin v3.0 abandons the multi-graph workflow approach. There is **one LangGraph graph** with **one supervisor** that runs a **ReAct loop**: think → call tools → observe → re-assess → decide next action. The supervisor is a PM-in-code — it plans its own workflow rather than following a pre-defined pipeline.
+AutFin v5.3 follows LangGraph's recommended **Subagents pattern**: a central supervisor coordinates specialist agents by calling them as tools. Each agent runs in isolated context with its own LLM call, giving full LangSmith visibility, context isolation, and parallel execution capability.
 
 **70% agentic / 30% deterministic** — same split, but now the agentic portion IS the orchestration itself. The supervisor decides what to research, at what depth, for which stocks, in what order. The 30% that stays deterministic: risk checks, position sizing math, order execution, tax tracking.
 
@@ -196,40 +196,53 @@ AutFin v3.0 abandons the multi-graph workflow approach. There is **one LangGraph
 ┌──────────────────────────────────────────────────────────────┐
 │                    SUPERVISOR (ReAct Loop)                     │
 │                                                                │
-│  system_prompt = "You are a PM running AutFin v3.0..."        │
+│  system_prompt = "You are a PM running AutFin v5.3..."        │
 │  while not done:                                               │
-│    think → call_tools → observe → re-assess → decide           │
+│    think → call_agent_tools → observe → re-assess → decide    │
 │                                                                │
-│  Tools available (20):                                         │
+│  Agent Tools (each is a separate LLM call):                    │
 │  ┌──────────────────┐  ┌──────────────────┐                   │
 │  │ DATA LAYER       │  │ RESEARCH LAYER   │                   │
-│  │ get_portfolio_state│  │ analyze_fundamentals│              │
-│  │ get_market_quotes  │  │ analyze_technical   │              │
-│  │                    │  │ analyze_sentiment   │              │
-│  │                    │  │ analyze_macro       │              │
+│  │ get_portfolio    │  │ fundamentals_tool │                   │
+│  │ get_market       │  │ technical_tool    │                   │
+│  │                   │  │ sentiment_tool    │                   │
+│  │                   │  │ macro_tool        │                   │
 │  └──────────────────┘  └──────────────────┘                   │
 │  ┌──────────────────┐  ┌──────────────────┐                   │
 │  │ ANALYSIS LAYER   │  │ DECISION LAYER    │                   │
-│  │ research_synthesis│  │ run_risk_checks    │                  │
-│  │ validate_thesis   │  │ allocate_capital   │                  │
-│  │ retrieve_learnings│  │ execute_order      │                  │
-│  └──────────────────┘  │ log_decision       │                  │
+│  │ research_tool    │  │ risk_tool         │                   │
+│  │ validate_thesis  │  │ portfolio_tool    │                   │
+│  │ retrieve_learn   │  │ execute_tool      │                   │
+│  └──────────────────┘  │ log_decision      │                   │
 │                         └──────────────────┘                   │
 │  ┌──────────────────┐                                          │
 │  │ HITL             │                                          │
-│  │ request_human_approval│                                      │
+│  │ interrupt()      │                                          │
 │  └──────────────────┘                                          │
 └──────────────────────────────────────────────────────────────┘
 
-Context in state determines behavior (not different graphs):
-  context="morning_routine" → Full scan, check all holdings
-  context="price_alert"    → Investigate one symbol
-  context="quarterly_review"→ Deep dive with DCF on everything
+Each agent tool runs in clean context window:
+  LangSmith traces: supervisor → fundamentals_tool → llm_call → done
+                   supervisor → technical_tool → llm_call → done
+                   (parallel execution possible)
 ```
 
-### 3.2 Supervisor — PM-in-Code (not a router)
+**Why Subagents pattern (from LangGraph docs):**
+- **Context isolation** — each agent gets clean context, no bloat from other agents
+- **Parallel execution** — supervisor can call multiple agents simultaneously (3-5x faster)
+- **Full LangSmith visibility** — each agent traced individually (not one big blob)
+- **Centralized control** — supervisor makes final investment decisions, acts as circuit breaker
+- **Stateless subagents** — simpler memory management, no cross-contamination
 
-**Role**: The supervisor IS AutFin. It does NOT "route to the next node in a fixed pipeline." It thinks, plans, calls tools, observes results, and decides what to do next — exactly like a fund manager.
+**Financial-specific fit (from academic research arXiv:2603.13942v1):**
+- Multiple distinct domains (fundamentals, technical, sentiment, macro, risk, portfolio)
+- Context isolation prevents contamination between domains
+- Supervisor acts as "circuit breaker" for conflicting signals
+- Full audit trail for SEBI compliance and debugging
+
+### 3.2 Supervisor — PM-in-Code (Subagents Coordinator)
+
+**Role**: The supervisor IS AutFin. It coordinates specialist agents by calling them as tools. It thinks, plans, calls agent tools, observes results, and decides what to do next — exactly like a fund manager.
 
 **Entry points (all invoke the SAME graph):**
 
@@ -667,7 +680,7 @@ run_id:  2026-06-23-a     ← Which morning run
 app_id:  autfin           ← The AutFin system
 ```
 
-### 4.2 Memory Implementation (LangGraph Store + Vector DB)
+### 4.2 Memory Implementation (LangGraph Store + Vector DB + SQLite)
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -690,7 +703,7 @@ app_id:  autfin           ← The AutFin system
 │  │    budget_check → execution → outcome → reflection  │   │
 │  └────────────────────────────────────────────────────┘   │
 │                                                            │
-│  Vector Store (ChromaDB / LanceDB — local-first)           │
+│  Vector Store (ChromaDB — local-first)                     │
 │  ┌────────────────────────────────────────────────────┐   │
 │  │ Collection: market_data                         │   │
 │  │  - Embedded summaries of all research reports       │   │
@@ -714,6 +727,14 @@ app_id:  autfin           ← The AutFin system
 │  │         strength, rationale, was_acted_on)          │   │
 │  │ Table: balance_history (timestamp, available_cash,  │   │
 │  │         utilized_margin — daily snapshot from Kite) │   │
+│  └────────────────────────────────────────────────────┘   │
+│                                                            │
+│  LangSmith (observability + evaluation)                    │
+│  ┌────────────────────────────────────────────────────┐   │
+│  │ - Auto-tracing via LANGSMITH_TRACING=true           │   │
+│  │ - Per-agent traces in LangGraph Studio              │   │
+│  │ - RAGAS evaluation for retrieval quality             │   │
+│  │ - Feedback loop: trade outcomes → calibration       │   │
 │  └────────────────────────────────────────────────────┘   │
 │                                                            │
 └──────────────────────────────────────────────────────────┘
@@ -1435,8 +1456,8 @@ technical = ["TA-Lib>=0.6.0", "pandas-ta-classic>=0.6.0"]
 ```python
 class AutFinSettings:
     # LLM — Free Model Strategy (via litellm)
-    deep_model: str = "nvidia_nim/nvidia/nemotron-3-super-120b-a12b"  # NVIDIA NIM (free, 1M ctx)
-    fast_model: str = "nvidia_nim/meta/llama-3.1-8b-instruct"        # NVIDIA NIM (free, fast)
+    deep_model: str = "nvidia_nim/minimaxai/minimax-m3"               # NVIDIA NIM (free, 1M ctx, 61 tps)
+    fast_model: str = "nvidia_nim/meta/llama-3.1-8b-instruct"        # NVIDIA NIM (free, fast, 912ms)
     litellm_failover: bool = True              # litellm handles retries + rate-limit detection
     nvidia_nim_api_key: str = ""               # From build.nvidia.com
     kite_user_id: str = "your_zerodha_user_id"
