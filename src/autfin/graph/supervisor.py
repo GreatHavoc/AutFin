@@ -84,14 +84,29 @@ HITL: request_human_approval
 Guardian: check_guardian
 Session: finalize_session
 
-STRATEGY — Call agent tools in parallel when possible:
-- Morning routine: fundamentals_analysis + technical_analysis + sentiment_analysis (parallel)
-  → risk_assessment → execute_order
-- Price alert: technical_analysis(quick) + sentiment_analysis (parallel) → validate_thesis
-- Quarterly review: fundamentals_analysis(deep) on EVERY holding (parallel)
-- Manual: fundamentals_analysis + technical_analysis on requested symbol (parallel)
+STRATEGY — BATCH agent tool calls in a SINGLE response for maximum speed:
+CRITICAL: When you need multiple analysis agents, return ALL of them as tool_calls in ONE response.
+The system runs parallel tool calls via asyncio.gather — calling 3 agents together takes ~20s, not ~60s.
+
+CORRECT (fast, ~20s):
+  Response: tool_calls=[fundamentals_analysis("RELIANCE"), technical_analysis("RELIANCE"), sentiment_analysis("RELIANCE")]
+  → All 3 run in parallel. One response. Fast.
+
+WRONG (slow, ~60s):
+  Response 1: tool_calls=[fundamentals_analysis("RELIANCE")]
+  Response 2: tool_calls=[technical_analysis("RELIANCE")]
+  Response 3: tool_calls=[sentiment_analysis("RELIANCE")]
+  → 3 sequential LLM round-trips. Slow.
+
+Batching patterns:
+- Morning routine: fundamentals_analysis + technical_analysis + sentiment_analysis (all 3 in ONE response)
+  → then risk_assessment → execute_order
+- Price alert: technical_analysis(quick) + sentiment_analysis (2 in ONE response) → validate_thesis
+- Quarterly review: fundamentals_analysis(deep) on EVERY holding (all in ONE response)
+- Manual: fundamentals_analysis + technical_analysis on requested symbol (2 in ONE response)
 
 RULES:
+- ALWAYS batch independent agent tools in a single response. Never call them one at a time.
 - Depth tiers: quick=skip DCF/peers/moat. standard=all but DCF. deep=everything.
 - Respect risk/reward ≥ 2:1. Conviction ≥ 0.5 to trade.
 - Sector concentration max 30%. Cash reserve 10%.
