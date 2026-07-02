@@ -305,6 +305,75 @@ async def regulatory_tool(symbol: str, depth: str = "standard") -> str:
         return json.dumps({"status": "error", "symbol": symbol, "message": str(e)})
 
 
+@_traceable(name="valuation_analysis", run_type="chain", process_inputs=_filter_symbol_inputs, process_outputs=_filter_agent_outputs)
+async def valuation_tool(symbol: str, depth: str = "standard") -> str:
+    """Run DCF valuation on a stock. Deterministic — no LLM.
+
+    Fetches financials via yfinance, then runs DCF scenarios
+    (base/upside/downside) and reverse DCF.
+
+    Args:
+        symbol: Stock symbol (e.g. 'RELIANCE')
+        depth: quick (simple DCF), standard (3 scenarios), deep (full + reverse DCF)
+    """
+    from src.autfin.agents.valuation import fetch_financials, compute_dcf, reverse_dcf, build_scenarios
+
+    try:
+        fin_data = await fetch_financials(symbol)
+
+        if fin_data.get("status") == "error":
+            return json.dumps(fin_data, default=str)
+
+        fcf = fin_data.get("free_cash_flow", 0) or 1e6
+        growth = fin_data.get("revenue_growth", 0.15) or 0.15
+        shares = fin_data.get("shares_outstanding", 1e9) or 1e9
+        price = fin_data.get("current_price", 0) or 0
+
+        # Build scenarios
+        scenarios = build_scenarios(fin_data)
+
+        # Run DCF for each scenario
+        dcf_results = {}
+        for scenario_name, scenario_data in scenarios.items():
+            dcf_results[scenario_name] = compute_dcf(
+                free_cash_flow=fcf,
+                revenue_growth=scenario_data.get("growth", growth),
+                shares_outstanding=shares,
+                scenario=scenario_name,
+            )
+
+        result = {
+            "status": "success",
+            "symbol": symbol,
+            "dcf_scenarios": dcf_results,
+            "financials": {
+                "fcf": fcf,
+                "revenue_growth": growth,
+                "shares_outstanding": shares,
+                "current_price": price,
+            },
+            "depth": depth,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        # Add reverse DCF for deep analysis
+        if depth == "deep" and price > 0:
+            try:
+                rev_dcf = await reverse_dcf(
+                    current_price=price,
+                    current_fcf=fcf,
+                    shares_outstanding=shares,
+                )
+                result["reverse_dcf"] = rev_dcf
+            except Exception:
+                pass
+
+        return json.dumps(result, default=str)
+    except Exception as e:
+        logger.warning("valuation_analysis failed for %s: %s", symbol, e)
+        return json.dumps({"status": "error", "symbol": symbol, "message": str(e)})
+
+
 # ---------------------------------------------------------------------------
 # LLM-DRIVEN TOOLS — genuinely need reasoning
 # ---------------------------------------------------------------------------
@@ -438,6 +507,15 @@ TOOL_DEFINITIONS: List[Dict] = [
         },
     ),
     _tool_def(
+        "valuation_analysis",
+        "Run DCF valuation on a stock (base/upside/downside scenarios + reverse DCF). "
+        "Deterministic — returns intrinsic value and implied growth.",
+        {
+            "symbol": {"type": "string", "description": "Stock symbol (e.g. RELIANCE)"},
+            "depth": {"type": "string", "description": "quick/standard/deep (default: standard)"},
+        },
+    ),
+    _tool_def(
         "portfolio_allocation",
         "Get current portfolio state with live holdings, cash, and sector exposure. "
         "Deterministic — returns total value, P&L, and holdings.",
@@ -455,5 +533,6 @@ TOOL_CALLABLES: Dict[str, Any] = {
     "risk_assessment": risk_tool,
     "distortion_audit": distortion_tool,
     "regulatory_analysis": regulatory_tool,
+    "valuation_analysis": valuation_tool,
     "portfolio_allocation": portfolio_tool,
 }
