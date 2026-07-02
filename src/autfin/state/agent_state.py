@@ -2,11 +2,35 @@
 AgentState - Main state shared across the v3.0 supervisor graph.
 
 v3.0: Single supervisor ReAct loop with tool calling. No multi-graph.
+v5.4: Added dict-merge reducers for parallel fan-out writes.
 """
 from typing import TypedDict, Annotated, NotRequired
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage
 import operator
+
+
+def dict_merge_reducer(existing: dict | None, update: dict | None) -> dict | None:
+    """Merge two dicts for parallel fan-out writes.
+
+    When multiple analyst nodes write to the same state key concurrently
+    (via LangGraph Send fan-out), each writes {symbol: report}.  Without
+    this reducer, last-writer-wins and earlier symbols are silently lost.
+
+    With this reducer, updates are deep-merged:
+        {"RELIANCE": report1} + {"TCS": report2}
+        → {"RELIANCE": report1, "TCS": report2}
+
+    If both write the SAME symbol, the later update wins (acceptable —
+    the same symbol shouldn't be analyzed twice in parallel).
+    """
+    if existing is None:
+        return update
+    if update is None:
+        return existing
+    merged = dict(existing)
+    merged.update(update)
+    return merged
 
 
 class AgentState(TypedDict):
@@ -46,19 +70,19 @@ class AgentState(TypedDict):
     # ── Research cache (keyed by symbol, populated concurrently by fan-out) ──
     market_snapshot: NotRequired[dict | None]
     macro_signals: NotRequired[dict | None]
-    fundamental_reports: NotRequired[dict | None]    # {symbol: {ratios, health, f_score, ...}}
-    technical_reports: NotRequired[dict | None]      # {symbol: {indicators, patterns, signal}}
-    sentiment_reports: NotRequired[dict | None]      # {symbol: {score, topics, catalysts}}
-    valuation_reports: NotRequired[dict | None]       # {symbol: {dcf_scenarios, reverse_dcf}}
-    peer_comparisons: NotRequired[dict | None]        # {symbol: {rankings vs peers}}
-    moat_assessments: NotRequired[dict | None]        # {symbol: {score, rating, sources}}
+    fundamental_reports: Annotated[dict | None, dict_merge_reducer]    # {symbol: {ratios, health, f_score, ...}}
+    technical_reports: Annotated[dict | None, dict_merge_reducer]      # {symbol: {indicators, patterns, signal}}
+    sentiment_reports: Annotated[dict | None, dict_merge_reducer]      # {symbol: {score, topics, catalysts}}
+    valuation_reports: Annotated[dict | None, dict_merge_reducer]      # {symbol: {dcf_scenarios, reverse_dcf}}
+    peer_comparisons: Annotated[dict | None, dict_merge_reducer]       # {symbol: {rankings vs peers}}
+    moat_assessments: Annotated[dict | None, dict_merge_reducer]       # {symbol: {score, rating, sources}}
 
     # ── Synthesis ──
-    research_debates: NotRequired[dict | None]
-    stock_pitches: NotRequired[dict | None]           # {symbol: 6-element buy-side pitch}
+    research_debates: Annotated[dict | None, dict_merge_reducer]
+    stock_pitches: Annotated[dict | None, dict_merge_reducer]          # {symbol: 6-element buy-side pitch}
     
     # ── Risk & Execution ──
-    risk_assessments: NotRequired[dict | None]
+    risk_assessments: Annotated[dict | None, dict_merge_reducer]
     trade_queue: NotRequired[list[dict] | None]
     execution_reports: NotRequired[list[dict] | None]
 
@@ -86,7 +110,7 @@ class AgentState(TypedDict):
     guardian_sell_signals: NotRequired[list[dict] | None]
     freed_cash: NotRequired[float]
     guardian_sell_reports: NotRequired[list[dict] | None]
-    thesis_check_results: NotRequired[dict | None]
+    thesis_check_results: Annotated[dict | None, dict_merge_reducer]
 
     # ── HITL ──
     pending_human_approval: NotRequired[dict | None]
@@ -115,9 +139,17 @@ class AgentState(TypedDict):
     # ── Researcher output extras ──
     researcher_notes: NotRequired[list[str] | None]
     researcher_recommendation: NotRequired[str | None]
-    catalyst_track: NotRequired[dict | None]
-    catalyst_impact_report: NotRequired[dict | None]
+    catalyst_track: Annotated[dict | None, dict_merge_reducer]
+    catalyst_impact_report: Annotated[dict | None, dict_merge_reducer]
 
     # ── Quarterly ──
     rebalancing_recommendations: NotRequired[list[dict] | None]
-    research_reports: NotRequired[dict | None]
+    research_reports: Annotated[dict | None, dict_merge_reducer]
+
+    # ── v5.4 additions ──
+    watchlist: NotRequired[list[str]]                                  # populated by Watchlist Curator
+    distortion_reports: Annotated[dict | None, dict_merge_reducer]     # {symbol: distortion audit}
+    regulatory_reports: Annotated[dict | None, dict_merge_reducer]     # {symbol: regulatory analysis}
+    fii_dii_data: NotRequired[dict | None]                             # FII/DII daily data
+    cache_invalidation_tokens: NotRequired[list[str]]                  # supervisor's invalidation directives
+    news_velocity_reports: Annotated[dict | None, dict_merge_reducer]  # {symbol: news velocity analysis}
