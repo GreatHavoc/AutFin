@@ -263,6 +263,27 @@ async def risk_tool(trade_json: str) -> str:
         return json.dumps({"status": "error", "message": str(e)})
 
 
+@_traceable(name="distortion_audit", run_type="chain", process_inputs=_filter_symbol_inputs, process_outputs=_filter_agent_outputs)
+async def distortion_tool(symbol: str, depth: str = "standard") -> str:
+    """Run price-distortion detection. Deterministic — no LLM.
+
+    Detects fake breakouts, pump patterns, distribution signals,
+    circuit suspicion, and sector relative weakness.
+
+    Args:
+        symbol: Stock symbol (e.g. 'RELIANCE')
+        depth: quick (fewer checks), standard (all), deep (all + extended)
+    """
+    from src.autfin.agents.distortion import distortion_audit
+
+    try:
+        result = await distortion_audit(symbol, depth)
+        return json.dumps(result, default=str)
+    except Exception as e:
+        logger.warning("distortion_audit failed for %s: %s", symbol, e)
+        return json.dumps({"status": "error", "symbol": symbol, "message": str(e)})
+
+
 # ---------------------------------------------------------------------------
 # LLM-DRIVEN TOOLS — genuinely need reasoning
 # ---------------------------------------------------------------------------
@@ -378,6 +399,15 @@ TOOL_DEFINITIONS: List[Dict] = [
         },
     ),
     _tool_def(
+        "distortion_audit",
+        "Run price-distortion detection (fake breakouts, pump patterns, distribution). "
+        "Deterministic — returns flags and conviction adjustment.",
+        {
+            "symbol": {"type": "string", "description": "Stock symbol (e.g. RELIANCE)"},
+            "depth": {"type": "string", "description": "quick/standard/deep (default: standard)"},
+        },
+    ),
+    _tool_def(
         "portfolio_allocation",
         "Get current portfolio state with live holdings, cash, and sector exposure. "
         "Deterministic — returns total value, P&L, and holdings.",
@@ -393,5 +423,6 @@ TOOL_CALLABLES: Dict[str, Any] = {
     "macro_analysis": macro_tool,
     "research_synthesis": research_tool,
     "risk_assessment": risk_tool,
+    "distortion_audit": distortion_tool,
     "portfolio_allocation": portfolio_tool,
 }
