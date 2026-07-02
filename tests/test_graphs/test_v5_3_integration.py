@@ -151,8 +151,8 @@ class TestSupervisorAgentTools:
         from src.autfin.state.agent_state import AgentState
         state = AgentState()
         prompt = _build_context_prompt("manual", "standard", state)
-        assert "v5.3" in prompt
-        assert "Subagents Coordinator" in prompt
+        assert "v5.4" in prompt
+        assert "Coordinator" in prompt
 
 
 # ---------------------------------------------------------------------------
