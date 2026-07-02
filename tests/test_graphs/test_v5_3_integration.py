@@ -27,8 +27,8 @@ class TestAgentToolDefinitions:
 
     def test_agent_tool_count(self):
         from src.autfin.agents.agent_tools import TOOL_DEFINITIONS, TOOL_CALLABLES
-        assert len(TOOL_DEFINITIONS) == 8
-        assert len(TOOL_CALLABLES) == 8
+        assert len(TOOL_DEFINITIONS) == 9
+        assert len(TOOL_CALLABLES) == 9
 
     def test_all_tools_have_required_fields(self):
         from src.autfin.agents.agent_tools import TOOL_DEFINITIONS
@@ -65,6 +65,7 @@ class TestAgentToolDefinitions:
             "research_synthesis",
             "risk_assessment",
             "distortion_audit",
+            "regulatory_analysis",
             "portfolio_allocation",
         }
         assert names == expected

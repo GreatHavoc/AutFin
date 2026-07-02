@@ -284,6 +284,27 @@ async def distortion_tool(symbol: str, depth: str = "standard") -> str:
         return json.dumps({"status": "error", "symbol": symbol, "message": str(e)})
 
 
+@_traceable(name="regulatory_analysis", run_type="chain", process_inputs=_filter_symbol_inputs, process_outputs=_filter_agent_outputs)
+async def regulatory_tool(symbol: str, depth: str = "standard") -> str:
+    """Run regulatory analysis on a stock. Deterministic — no LLM.
+
+    Scans NSE corporate announcements, SEBI orders, RBI circulars,
+    and DPCO notifications. Classifies impact on sectors.
+
+    Args:
+        symbol: Stock symbol (e.g. 'RELIANCE')
+        depth: quick (3 days), standard (7 days), deep (30 days)
+    """
+    from src.autfin.agents.regulatory import regulatory_audit
+
+    try:
+        result = await regulatory_audit(symbol, depth)
+        return json.dumps(result, default=str)
+    except Exception as e:
+        logger.warning("regulatory_analysis failed for %s: %s", symbol, e)
+        return json.dumps({"status": "error", "symbol": symbol, "message": str(e)})
+
+
 # ---------------------------------------------------------------------------
 # LLM-DRIVEN TOOLS — genuinely need reasoning
 # ---------------------------------------------------------------------------
@@ -408,6 +429,15 @@ TOOL_DEFINITIONS: List[Dict] = [
         },
     ),
     _tool_def(
+        "regulatory_analysis",
+        "Scan NSE/SEBI/RBI regulatory announcements. "
+        "Deterministic — returns impact level, sector, and direction.",
+        {
+            "symbol": {"type": "string", "description": "Stock symbol (e.g. RELIANCE)"},
+            "depth": {"type": "string", "description": "quick (3d)/standard (7d)/deep (30d)"},
+        },
+    ),
+    _tool_def(
         "portfolio_allocation",
         "Get current portfolio state with live holdings, cash, and sector exposure. "
         "Deterministic — returns total value, P&L, and holdings.",
@@ -424,5 +454,6 @@ TOOL_CALLABLES: Dict[str, Any] = {
     "research_synthesis": research_tool,
     "risk_assessment": risk_tool,
     "distortion_audit": distortion_tool,
+    "regulatory_analysis": regulatory_tool,
     "portfolio_allocation": portfolio_tool,
 }
