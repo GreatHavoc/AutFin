@@ -403,6 +403,146 @@ watchlist: list[str]  # populated by Watchlist Curator, consumed by Supervisor
 
 ---
 
+### Step 7b: Add Stock Discovery Engine (`universe/discovery.py`)
+
+**Problem:** The `WatchlistCurator` only works with **known universe** stocks (Nifty 500, holdings, manual watchlist). It cannot find a stock it's never heard of before.
+
+**Example scenarios the system must handle:**
+- A new IPO lists on NSE — system should detect it and evaluate
+- A stock is trending on Reddit/News but isn't in any index
+- A small-cap stock reports a massive earnings surprise
+- A stock is being accumulated by FIIs (visible in bulk deals)
+- A sector is rallying and there are laggard stocks not in universe
+- An insider buying signal appears on a stock not tracked
+
+**Solution:** A **Stock Discovery Engine** that runs BEFORE the Watchlist Curator. It finds NEW symbols from external signals, validates them (is it real? is it liquid?), and feeds them into the watchlist.
+
+```python
+# universe/discovery.py
+
+class StockDiscoveryEngine:
+    """Discovers NEW stocks not in the existing universe.
+
+    Unlike WatchlistCurator (which works with known stocks),
+    this engine finds stocks the system has never seen before.
+    """
+
+    async def discover(self, state: AgentState) -> list[dict]:
+        """Run all discovery sources, return candidate stocks.
+
+        Returns:
+            [
+                {
+                    "symbol": "NEWSTOCK",
+                    "source": "news" | "social" | "ipo" | "earnings" |
+                              "sector_laggard" | "insider_buy" | "index_inclusion",
+                    "confidence": float,  # 0.0-1.0
+                    "reason": str,  # why this stock was discovered
+                    "priority": "high" | "medium" | "low",
+                },
+                ...
+            ]
+        """
+        candidates = []
+
+        # Source 1: News-driven discovery
+        news_discoveries = await self._discover_from_news()
+        candidates.extend(news_discoveries)
+
+        # Source 2: Social-driven discovery (Reddit, Twitter)
+        social_discoveries = await self._discover_from_social()
+        candidates.extend(social_discoveries)
+
+        # Source 3: IPO discovery (NSE/BSE new listings)
+        ipo_discoveries = await self._discover_ipos()
+        candidates.extend(ipo_discoveries)
+
+        # Source 4: Earnings surprise discovery
+        earnings_discoveries = await self._discover_earnings_surprises()
+        candidates.extend(earnings_discoveries)
+
+        # Source 5: Sector momentum laggards
+        sector_discoveries = await self._discover_sector_laggards()
+        candidates.extend(sector_discoveries)
+
+        # Source 6: Insider buying signals (bulk/block deals)
+        insider_discoveries = await self._discover_insider_signals()
+        candidates.extend(insider_discoveries)
+
+        # Source 7: Index inclusion announcements
+        index_discoveries = await self._discover_index_inclusions()
+        candidates.extend(index_discoveries)
+
+        # Deduplicate and rank
+        return self._rank_and_dedupe(candidates)
+```
+
+**Discovery Sources — How Each Works:**
+
+| Source | How it finds NEW stocks | Signal quality |
+|--------|------------------------|----------------|
+| **News discovery** | Marketaux returns `symbol` field for each news article. If symbol is NOT in Nifty 500 + NOT in holdings + NOT in manual watchlist → it's a NEW stock. Filter: news must be within 24h, must have positive/negative sentiment (not neutral). | High |
+| **Social discovery** | Reddit Indian finance subs (r/IndianStreetBets, r/IndianStockMarket, r/StockMarketIndia). Extract stock mentions via regex (NSE symbol patterns). If mentioned 3+ times in 24h by different users AND not in universe → NEW stock. | Medium |
+| **IPO discovery** | NSE corporate announcements API — filter for "listing" / "IPO" type. BSE new listings page. Scrape via Firecrawl. Filter: must be equity (not bonds/ETFs), must be listed within 30 days. | High |
+| **Earnings surprise** | Screener.in — scan for EPS > consensus by >5% OR EPS < consensus by >10%. If symbol not in universe → NEW stock with earnings catalyst. | High |
+| **Sector laggard** | When sector is up >3% in a day, find stocks in that sector that are up <1% (laggards). Filter: must have avg volume >₹1Cr, must not be suspended/delisted. | Medium |
+| **Insider buying** | NSE bulk/block deal filings — if a bulk deal is a BUY (not sell) on a stock not in universe → potential accumulation signal. Filter: deal value >₹1Cr. | High |
+| **Index inclusion** | NSE announces quarterly re-balancing of Nifty indices. Stocks being ADDED to Nifty 500/100/Next 50 → mechanical buying pressure. Scrape NSE announcements. | Very High |
+
+**Validation Layer (before adding to watchlist):**
+
+Every discovered stock must pass a lightweight validation:
+```python
+async def _validate_candidate(self, symbol: str) -> bool:
+    """Check if a discovered stock is worth analyzing.
+
+    Returns False if:
+    - Stock is suspended / delisted
+    - Avg daily volume < ₹50 Lakhs (illiquid)
+    - Stock is a shell company / penny stock (< ₹10)
+    - Stock is in a restricted sector (tobacco, gambling — user preference)
+    - Stock was already analyzed in last 7 days (avoid re-work)
+    """
+```
+
+**Integration with Watchlist Curator:**
+
+```python
+# In WatchlistCurator.curate():
+async def curate(self, state: AgentState) -> list[str]:
+    # Step 1: Known universe (existing logic)
+    known = self._get_known_stocks(state)
+
+    # Step 2: Discovery engine (NEW)
+    discovery = StockDiscoveryEngine()
+    discovered = await discovery.discover(state)
+
+    # Step 3: Merge — discovered stocks get "discovered" tag
+    watchlist = known
+    for d in discovered:
+        if d["symbol"] not in watchlist:
+            watchlist.append(d["symbol"])
+            # Tag for supervisor: "this is a NEW discovery, do quick analysis first"
+            state.setdefault("discovery_tags", {})[d["symbol"]] = {
+                "source": d["source"],
+                "confidence": d["confidence"],
+                "reason": d["reason"],
+            }
+
+    return watchlist
+```
+
+**How Supervisor handles discovered stocks:**
+
+The supervisor sees `state["discovery_tags"]` and adjusts behavior:
+- **High confidence** (IPO, index inclusion, earnings surprise) → run `quick` depth analysis (fundamentals + technical + sentiment, no DCF)
+- **Medium confidence** (social mention, sector laggard) → run `quick` depth on fundamentals + sentiment only
+- **Low confidence** (news mention without catalyst) → add to watchlist but don't analyze yet; wait for second signal
+
+This is the answer to "how does it find stocks it's never heard of?" — the Discovery Engine is the **scout** that explores outside the known universe.
+
+---
+
 ### Step 8: Refactor supervisor routing
 
 **File:** `src/autfin/graph/supervisor.py`
