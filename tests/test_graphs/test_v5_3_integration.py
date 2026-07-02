@@ -23,16 +23,16 @@ import pytest
 
 
 class TestAgentToolDefinitions:
-    """Test that agent tool definitions are correct."""
+    """Test that tool definitions are correct."""
 
     def test_agent_tool_count(self):
-        from src.autfin.agents.agent_tools import AGENT_TOOL_DEFINITIONS, AGENT_TOOL_CALLABLES
-        assert len(AGENT_TOOL_DEFINITIONS) == 7
-        assert len(AGENT_TOOL_CALLABLES) == 7
+        from src.autfin.agents.agent_tools import TOOL_DEFINITIONS, TOOL_CALLABLES
+        assert len(TOOL_DEFINITIONS) == 7
+        assert len(TOOL_CALLABLES) == 7
 
     def test_all_tools_have_required_fields(self):
-        from src.autfin.agents.agent_tools import AGENT_TOOL_DEFINITIONS
-        for tool_def in AGENT_TOOL_DEFINITIONS:
+        from src.autfin.agents.agent_tools import TOOL_DEFINITIONS
+        for tool_def in TOOL_DEFINITIONS:
             assert "type" in tool_def
             assert tool_def["type"] == "function"
             assert "function" in tool_def
@@ -44,19 +44,19 @@ class TestAgentToolDefinitions:
             assert "required" in fn["parameters"]
 
     def test_all_tools_are_async(self):
-        from src.autfin.agents.agent_tools import AGENT_TOOL_CALLABLES
-        for name, fn in AGENT_TOOL_CALLABLES.items():
+        from src.autfin.agents.agent_tools import TOOL_CALLABLES
+        for name, fn in TOOL_CALLABLES.items():
             assert inspect.iscoroutinefunction(fn), f"{name} is not async"
 
     def test_tool_names_match_definitions(self):
-        from src.autfin.agents.agent_tools import AGENT_TOOL_DEFINITIONS, AGENT_TOOL_CALLABLES
-        def_names = {td["function"]["name"] for td in AGENT_TOOL_DEFINITIONS}
-        callable_names = set(AGENT_TOOL_CALLABLES.keys())
+        from src.autfin.agents.agent_tools import TOOL_DEFINITIONS, TOOL_CALLABLES
+        def_names = {td["function"]["name"] for td in TOOL_DEFINITIONS}
+        callable_names = set(TOOL_CALLABLES.keys())
         assert def_names == callable_names, f"Mismatch: {def_names.symmetric_difference(callable_names)}"
 
     def test_known_tool_names(self):
-        from src.autfin.agents.agent_tools import AGENT_TOOL_DEFINITIONS
-        names = {td["function"]["name"] for td in AGENT_TOOL_DEFINITIONS}
+        from src.autfin.agents.agent_tools import TOOL_DEFINITIONS
+        names = {td["function"]["name"] for td in TOOL_DEFINITIONS}
         expected = {
             "fundamentals_analysis",
             "technical_analysis",

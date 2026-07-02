@@ -386,12 +386,12 @@ async def supervisor_node(
 
     # Merge agent tools (v5.3 Subagents)
     try:
-        from src.autfin.agents.agent_tools import AGENT_TOOL_DEFINITIONS, AGENT_TOOL_CALLABLES
-        all_tools = SUPERVISOR_TOOLS + AGENT_TOOL_DEFINITIONS
-        all_callables = {**SUPERVISOR_CALLABLES, **AGENT_TOOL_CALLABLES}
+        from src.autfin.agents.agent_tools import TOOL_DEFINITIONS, TOOL_CALLABLES
+        all_tools = SUPERVISOR_TOOLS + TOOL_DEFINITIONS
+        all_callables = {**SUPERVISOR_CALLABLES, **TOOL_CALLABLES}
         logger.info(
-            "Supervisor: loaded %d tools (%d old + %d agent)",
-            len(all_tools), len(SUPERVISOR_TOOLS), len(AGENT_TOOL_DEFINITIONS),
+            "Supervisor: loaded %d tools (%d old + %d new)",
+            len(all_tools), len(SUPERVISOR_TOOLS), len(TOOL_DEFINITIONS),
         )
     except ImportError:
         logger.info("Supervisor: agent tools not available — using old tools only")
