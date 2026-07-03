@@ -1,22 +1,24 @@
 """
-Supervisor Graph — v5.4 Subagents Coordinator.
+Supervisor Graph — v5.5 Subagents Coordinator.
 
 Architecture:
   START → supervisor_node → {supervisor_node, human_review_node, END}
   human_review_node → supervisor_node (return after input)
 
-The supervisor is the "Subagents Coordinator" — it calls agent tools
-(fundamentals, technical, sentiment, macro, research, risk, portfolio),
-observes results, and decides next steps. Each agent tool makes its own
-LLM call with clean context (context isolation).
+The supervisor is the "Subagents Coordinator" — it calls 5 sub-agents
+(MarketData, Analysis, Research, Risk, Memory), observes results, and
+decides next steps. Each sub-agent has its own tools and system prompt.
+
+Sub-agents provide:
+  - Context isolation (clean context window per invocation)
+  - Parallel execution (multiple sub-agents in one LLM response)
+  - Domain-specific prompts (better tool selection)
+  - 30 tools → 5 tools on supervisor (cleaner routing)
 
   morning_routine  → full portfolio scan + screening + research + trade
   price_alert      → investigate one symbol (3-agent quick fan-out)
   quarterly_review → deep dive all holdings with DCF
   manual           → user-requested single stock analysis
-
-Agent tools give context isolation, parallel execution, and full
-LangSmith visibility per agent call.
 
 Self-learning: learning context (calibration, patterns) is preloaded into
 state on first iteration and injected into the system prompt.
@@ -78,66 +80,70 @@ def _build_context_prompt(context: str, depth: str, state: AgentState) -> str:
     for the given context (morning_routine, price_alert, quarterly_review,
     or manual).  Includes live portfolio snapshot where relevant.
     """
-    base = """You are the AutFin v5.4 Coordinator — a PM-level AI running a ReAct loop.
+    base = """You are the AutFin v5.5 Coordinator — a PM-level AI running a ReAct loop.
 
-You have 30 tools available. 9 are deterministic (fast, no LLM). 1 is LLM-driven (research_synthesis).
-Think, plan, then call tools. Observe results. Re-plan.
+You have 5 SUB-AGENTS, each a specialized domain expert. Call them as tools.
+Each sub-agent has its own tools and returns structured results.
 
-DETERMINISTIC TOOLS (fast, no LLM — call these first):
-Analysis:
-- fundamentals_analysis(symbol, depth) — Piotroski, Magic Formula, ratios, health score. ~3s.
-- technical_analysis(symbol, depth) — RSI, MACD, Bollinger, patterns, signal. ~2s.
-- sentiment_analysis(symbol) — FinBERT + VADER on news + Reddit. ~5s.
-- macro_analysis() — Global macro (Fed, oil, VIX, DXY, FII flows). ~3s.
-- valuation_analysis(symbol, depth) — DCF scenarios + reverse DCF. ~2s.
-- distortion_audit(symbol, depth) — Fake breakouts, pump patterns, distribution. ~2s.
-- regulatory_analysis(symbol, depth) — NSE/SEBI/RBI announcements. ~3s.
-- risk_assessment(trade_json) — 14 risk checks with veto power. ~0.5s.
-- portfolio_allocation() — Current holdings, cash, P&L. ~1s.
+SUB-AGENTS (call these as tools):
 
-LLM-DRIVEN (expensive — use only for final decisions):
-- research_synthesis(symbols, depth) — Bull/Bear debate. Most expensive. Use for final decisions only.
+1. get_market_data(data_type, symbols) — MarketDataAgent
+   Portfolio state, current quotes, market status.
+   data_type: "portfolio" | "quotes" | "status" | "all"
+   Use for: checking holdings, cash, prices, market hours.
 
-Data & Utilities (direct tools):
-Data: get_portfolio_state, get_market_quotes, get_market_status
-Screening: screen_candidates
-Research: research_stock(symbol, depth), research_batch(symbols, depth)
-Analysis: build_stock_pitch, validate_thesis, analyze_macro_context
-Risk & Execution: run_risk_checks, allocate_capital, execute_order
-Memory: retrieve_learnings, log_decision, record_learning, calibrate_conviction, detect_patterns
-HITL: request_human_approval
-Guardian: check_guardian
-Session: finalize_session
+2. analyze_stock(symbol, analysis_type, depth) — AnalysisAgent
+   Deterministic analysis (no LLM, fast ~3-5s).
+   analysis_type: "fundamentals" | "technical" | "sentiment" | "macro" | "valuation" | "distortion" | "regulatory" | "full"
+   depth: "quick" | "standard" | "deep"
+   Use for: any stock analysis. Call multiple types in parallel.
 
-STRATEGY — BATCH deterministic tools in a SINGLE response for maximum speed:
-All deterministic tools run in parallel via asyncio.gather — calling 5 together takes ~5s, not ~25s.
+3. research_stock(action, symbol, symbols, depth, criteria) — ResearchAgent
+   Stock research and screening. research_synthesis is LLM-driven (expensive).
+   action: "screen" | "research" | "research_batch" | "pitch" | "synthesize"
+   Use for: finding candidates, deep-dive, investment pitches, bull/bear debate.
+
+4. execute_trade(action, trade_json, thesis, conviction) — RiskAgent
+   Risk checks, capital allocation, order execution, thesis validation.
+   action: "risk_check" | "allocate" | "execute" | "validate_thesis"
+   Use for: validating trades, sizing positions, placing orders.
+
+5. manage_memory(action, symbol, decision, outcome) — MemoryAgent
+   Trading memory, learning, patterns, guardian, HITL, session management.
+   action: "retrieve" | "log" | "record" | "calibrate" | "detect" | "guardian" | "approve" | "finalize"
+   Use for: accessing history, improving decisions, ending sessions.
+
+STRATEGY — BATCH sub-agent calls in a SINGLE response for maximum speed:
+All sub-agents run in parallel via asyncio.gather — calling 3 together takes ~5s, not ~15s.
 
 CORRECT (fast, ~5s):
-  Response: tool_calls=[fundamentals_analysis("RELIANCE"), technical_analysis("RELIANCE"), sentiment_analysis("RELIANCE"), distortion_audit("RELIANCE"), regulatory_analysis("RELIANCE")]
-  → All 5 run in parallel. One response. Fast.
+  Response: tool_calls=[analyze_stock("RELIANCE", "fundamentals"), analyze_stock("RELIANCE", "technical"), analyze_stock("RELIANCE", "sentiment")]
+  → All 3 run in parallel. One response. Fast.
 
-WRONG (slow, ~25s):
-  Response 1: tool_calls=[fundamentals_analysis("RELIANCE")]
-  Response 2: tool_calls=[technical_analysis("RELIANCE")]
+WRONG (slow, ~15s):
+  Response 1: tool_calls=[analyze_stock("RELIANCE", "fundamentals")]
+  Response 2: tool_calls=[analyze_stock("RELIANCE", "technical")]
   → 2 sequential LLM round-trips. Slow.
 
 Batching patterns:
-- Morning routine: fundamentals_analysis + technical_analysis + sentiment_analysis + distortion_audit + regulatory_analysis (all 5 in ONE response)
-  → then risk_assessment → execute_order
-- Price alert: technical_analysis(quick) + sentiment_analysis + distortion_audit (3 in ONE response) → validate_thesis
-- Quarterly review: fundamentals_analysis(deep) + valuation_analysis(deep) + regulatory_analysis(deep) on EVERY holding (all in ONE response)
-- Manual: fundamentals_analysis + technical_analysis + distortion_audit on requested symbol (3 in ONE response)
+- Morning routine: get_market_data("all") + analyze_stock(symbol, "full") + research_stock("research_batch", symbols) (all in ONE response)
+  → then execute_trade("risk_check") → execute_trade("execute")
+- Price alert: analyze_stock(symbol, "technical") + analyze_stock(symbol, "sentiment") + analyze_stock(symbol, "distortion") (3 in ONE response)
+  → then research_stock("synthesize") if needed
+- Quarterly review: analyze_stock(holding, "deep") on EVERY holding (all in ONE response)
+  → then manage_memory("calibrate") on each
+- Manual: analyze_stock(symbol, "full") + research_stock("pitch", symbol) (2 in ONE response)
 
 RULES:
-- ALWAYS batch deterministic tools in a single response. Never call them one at a time.
-- Use research_synthesis ONLY for final investment decisions (Bull/Bear debate). It's LLM-driven and expensive.
-- Use distortion_audit to check for price anomalies BEFORE recommending a trade.
-- Use regulatory_analysis to check for SEBI/RBI events BEFORE recommending a trade.
+- ALWAYS batch sub-agent calls in a single response. Never call them one at a time.
+- Use research_stock("synthesize") ONLY for final investment decisions (bull/bear debate). It's LLM-driven and expensive.
+- Use analyze_stock("distortion") to check for price anomalies BEFORE recommending a trade.
+- Use analyze_stock("regulatory") to check for SEBI/RBI events BEFORE recommending a trade.
 - Depth tiers: quick=skip DCF/peers/moat. standard=all but DCF. deep=everything.
 - Respect risk/reward ≥ 2:1. Conviction ≥ 0.5 to trade.
 - Sector concentration max 30%. Cash reserve 10%.
-- If human approval needed → call request_human_approval.
-- End session → call finalize_session."""
+- If human approval needed → call manage_memory("approve").
+- End session → call manage_memory("finalize")."""
 
     context_specific = ""
 
@@ -408,11 +414,11 @@ async def supervisor_node(
     state: AgentState, config: RunnableConfig | None = None, runtime: Runtime[Context] | None = None
 ) -> dict[str, Any]:
     """
-    Run one ReAct iteration with the full supervisor tool set.
+    Run one ReAct iteration with 5 sub-agent tools.
 
     Builds a context-aware system prompt, then calls the LLM with
-    SUPERVISOR_TOOLS and SUPERVISOR_CALLABLES via generate_with_tools().
-    The LLM may call multiple tools within this single invocation; the
+    SUBAGENT_TOOLS and SUBAGENT_CALLABLES via generate_with_tools().
+    The LLM may call multiple sub-agents within this single invocation; the
     function returns when the LLM produces a final text response.
 
     If ``pending_human_approval`` is set and no ``human_decision`` has
@@ -464,35 +470,27 @@ async def supervisor_node(
             state["context_memory"] = {}
             state["memories_loaded"] = True
 
-    # ── Load tools (old supervisor tools + new agent tools) ──
+    # ── Load sub-agent tools (v5.5 subagents pattern) ──
     try:
-        from src.autfin.tools.supervisor_tools import SUPERVISOR_TOOLS, SUPERVISOR_CALLABLES
+        from src.autfin.agents.subagents import SUBAGENT_TOOLS, SUBAGENT_CALLABLES
+        all_tools = SUBAGENT_TOOLS
+        all_callables = SUBAGENT_CALLABLES
+        logger.info(
+            "Supervisor: loaded %d sub-agent tools (%s)",
+            len(all_tools), [t["function"]["name"] for t in all_tools],
+        )
     except ImportError as exc:
-        logger.error("Supervisor: failed to import supervisor tools — %s", exc)
-        errors.append(f"Tool import error: {exc}")
+        logger.error("Supervisor: failed to import sub-agent tools — %s", exc)
+        errors.append(f"Sub-agent tool import error: {exc}")
         return {
             "messages": [
                 AIMessage(
-                    content="Supervisor: tool module unavailable. "
-                    "Check src/autfin/tools/supervisor_tools.py."
+                    content="Supervisor: sub-agent module unavailable. "
+                    "Check src/autfin/agents/subagents.py."
                 )
             ],
             "errors": errors,
         }
-
-    # Merge agent tools (v5.3 Subagents)
-    try:
-        from src.autfin.agents.agent_tools import TOOL_DEFINITIONS, TOOL_CALLABLES
-        all_tools = SUPERVISOR_TOOLS + TOOL_DEFINITIONS
-        all_callables = {**SUPERVISOR_CALLABLES, **TOOL_CALLABLES}
-        logger.info(
-            "Supervisor: loaded %d tools (%d old + %d new)",
-            len(all_tools), len(SUPERVISOR_TOOLS), len(TOOL_DEFINITIONS),
-        )
-    except ImportError:
-        logger.info("Supervisor: agent tools not available — using old tools only")
-        all_tools = SUPERVISOR_TOOLS
-        all_callables = SUPERVISOR_CALLABLES
 
     # ── LLM client ──
     llm = get_llm_client()
@@ -672,10 +670,10 @@ def _route_from_supervisor(state: AgentState) -> str:
 
 def build_supervisor_graph() -> StateGraph:
     """
-    Build the v5.4 single-supervisor ReAct loop graph.
+    Build the v5.5 subagents coordinator graph.
 
     Three nodes:
-      - ``supervisor``    — runs the ReAct tool-calling loop
+      - ``supervisor``    — runs the ReAct tool-calling loop with 5 sub-agents
       - ``human_review``  — pauses for HITL via interrupt()
       - ``END``           — terminal state
 
@@ -726,7 +724,7 @@ def build_supervisor_graph() -> StateGraph:
 
 def compile_supervisor_graph(checkpointer=None, store=None):
     """
-    Compile the v5.3 supervisor graph for execution.
+    Compile the v5.5 subagents coordinator graph for execution.
 
     Args:
         checkpointer: Optional LangGraph checkpointer for crash recovery.

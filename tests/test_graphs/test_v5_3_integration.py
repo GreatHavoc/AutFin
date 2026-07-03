@@ -131,27 +131,26 @@ class TestSchemas:
 
 
 class TestSupervisorAgentTools:
-    """Test that supervisor integrates agent tools."""
+    """Test that supervisor integrates sub-agent tools."""
 
     def test_supervisor_prompt_mentions_agent_tools(self):
         from src.autfin.graph.supervisor import _build_context_prompt
         from src.autfin.state.agent_state import AgentState
         state = AgentState()
         prompt = _build_context_prompt("manual", "standard", state)
-        assert "fundamentals_analysis" in prompt
-        assert "technical_analysis" in prompt
-        assert "sentiment_analysis" in prompt
-        assert "macro_analysis" in prompt
-        assert "research_synthesis" in prompt
-        assert "risk_assessment" in prompt
-        assert "portfolio_allocation" in prompt
+        # v5.5 subagent architecture: supervisor sees 5 high-level tools
+        assert "get_market_data" in prompt
+        assert "analyze_stock" in prompt
+        assert "research_stock" in prompt
+        assert "execute_trade" in prompt
+        assert "manage_memory" in prompt
 
-    def test_supervisor_prompt_v53_header(self):
+    def test_supervisor_prompt_v55_header(self):
         from src.autfin.graph.supervisor import _build_context_prompt
         from src.autfin.state.agent_state import AgentState
         state = AgentState()
         prompt = _build_context_prompt("manual", "standard", state)
-        assert "v5.4" in prompt
+        assert "v5.5" in prompt
         assert "Coordinator" in prompt
 
 
