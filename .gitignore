@@ -65,6 +65,10 @@ data/*.db
 data/*.sqlite
 data/*.sqlite3
 data/chroma/
+src/data/*.db
+src/data/*.db-shm
+src/data/*.db-wal
+src/data/chroma/
 
 # Environment
 .env
@@ -73,3 +77,6 @@ data/chroma/
 # Logs
 logs/
 *.log
+
+# LangGraph dev server
+.langgraph_api/
