@@ -2,10 +2,10 @@
 
 ## Product Requirements Document (PRD)
 
-**Version**: 5.3  
+**Version**: 5.4  
 **Date**: July 2026  
 **Author**: Prakhar  
-**Status**: Complete — Subagents architecture restructure (LangGraph best practices), Modal vLLM integration, LangSmith tracing, 972+ tests passing.
+**Status**: Complete — Tools architecture restructure (deterministic-first), Modal vLLM integration, LangSmith tracing, 113+ tests passing.
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### 1.1 What Is AutFin?
 
-AutFin is an **agentic-first AI portfolio management system** built on LangGraph's Subagents pattern. A supervisor coordinates specialist agents (fundamentals, technical, sentiment, macro, risk, portfolio) by calling them as tools — each running in isolated context with full LangSmith visibility. Per-stock depth decisions (Quick/Standard/Deep), 20 domain tools, long-term memory via LangGraph Store, and zero operating cost via Modal vLLM (Qwen 3.6 35B) and free data APIs.
+AutFin is an **agentic-first AI portfolio management system** built on LangGraph's tools pattern. A supervisor coordinates specialist tools (fundamentals, technical, sentiment, macro, risk, portfolio) by calling them directly — each running deterministically with full LangSmith visibility. Per-stock depth decisions (Quick/Standard/Deep), 10 domain tools, long-term memory via LangGraph Store, and zero operating cost via Modal vLLM (Qwen 3.6 35B) and free data APIs.
 
 ### 1.2 How It Works (User's Perspective)
 
@@ -53,13 +53,13 @@ AutFin is an **agentic-first AI portfolio management system** built on LangGraph
 
 ### 1.4 Key Differentiators
 
-- **Agentic, not scripted**: LLM-powered Supervisor dynamically routes agents — not a fixed pipeline
-- **Hybrid architecture**: 70% agentic (routing, depth, thesis), 30% deterministic (execution, risk limits, tax)
+- **Agentic, not scripted**: LLM-powered Supervisor dynamically routes tools — not a fixed pipeline
+- **Hybrid architecture**: 30% agentic (routing, depth, thesis), 70% deterministic (tools, risk limits, tax)
 - **Balance-is-budget**: Actual Zerodha balance IS the deployable pool — no separate config needed
 - **Learning system**: Procedural memory builds a corpus of trade patterns — gets smarter with every trade
 - **PM-level research quality**: DCF valuation, catalyst tracking, variant views — not just ratio screens
 - **Autonomous daily operation**: Runs every morning at 9 AM, scans markets, deploys capital, manages positions
-- **Subagents architecture** — LangGraph best practice: each agent runs as separate tool with context isolation, parallel execution, and full LangSmith tracing
+- **Tools architecture** — LangGraph best practice: each tool runs deterministically with context isolation, parallel execution, and full LangSmith tracing
 - **Long-running persistence** — survives reboots, learns from past decisions across months via LangGraph Store
 - **Risk-first design**: Risk Manager with 14 checks including CVaR, news risk, sector exposure — veto power
 - **Full Zerodha integration** via official Kite SDK (OAuth, TOTP auto-login, credentials in .env)
@@ -186,11 +186,11 @@ Every Morning (9:00 AM):
 
 ## 3. AGENT ARCHITECTURE & DIVISION
 
-### 3.1 Design Philosophy — Subagents Pattern (LangGraph Best Practice)
+### 3.1 Design Philosophy — Tools Pattern (LangGraph Best Practice)
 
-AutFin v5.3 follows LangGraph's recommended **Subagents pattern**: a central supervisor coordinates specialist agents by calling them as tools. Each agent runs in isolated context with its own LLM call, giving full LangSmith visibility, context isolation, and parallel execution capability.
+AutFin v5.4 follows LangGraph's recommended **tools pattern**: a central supervisor coordinates specialist tools by calling them directly. Each tool runs deterministically with its own context, giving full LangSmith visibility, context isolation, and parallel execution capability.
 
-**70% agentic / 30% deterministic** — same split, but now the agentic portion IS the orchestration itself. The supervisor decides what to research, at what depth, for which stocks, in what order. The 30% that stays deterministic: risk checks, position sizing math, order execution, tax tracking.
+**30% agentic / 70% deterministic** — the agentic portion IS the orchestration itself. The supervisor decides what to research, at what depth, for which stocks, in what order. The 70% that stays deterministic: all analysis tools (fundamentals, technical, sentiment, macro, valuation, distortion, regulatory), risk checks, position sizing math, order execution, tax tracking.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -227,7 +227,7 @@ Each agent tool runs in clean context window:
                    (parallel execution possible)
 ```
 
-**Why Subagents pattern (from LangGraph docs):**
+**Why tools pattern (from LangGraph docs):**
 - **Context isolation** — each agent gets clean context, no bloat from other agents
 - **Parallel execution** — supervisor can call multiple agents simultaneously (3-5x faster)
 - **Full LangSmith visibility** — each agent traced individually (not one big blob)
@@ -240,9 +240,9 @@ Each agent tool runs in clean context window:
 - Supervisor acts as "circuit breaker" for conflicting signals
 - Full audit trail for SEBI compliance and debugging
 
-### 3.2 Supervisor — PM-in-Code (Subagents Coordinator)
+### 3.2 Supervisor — PM-in-Code (Tools Coordinator)
 
-**Role**: The supervisor IS AutFin. It coordinates specialist agents by calling them as tools. It thinks, plans, calls agent tools, observes results, and decides what to do next — exactly like a fund manager.
+**Role**: The supervisor IS AutFin. It coordinates specialist tools by calling them directly. It thinks, plans, calls tools, observes results, and decides what to do next — exactly like a fund manager.
 
 **Entry points (all invoke the SAME graph):**
 
@@ -1212,7 +1212,7 @@ Risk Override:
 │                                                           │
 │  AI/LLM — FREE MODEL STRATEGY:                              │
 │  ─────────────────────────────────                           │
-│  • Router: LiteLLM (multi-provider failover)                 │
+│  • Router: openai SDK (direct connection to OpenAI-compatible endpoints)                 │
 │  • Primary: OpenRouter (20+ free models, single API key)     │
 │  • Secondary: Groq (speed — 320 tps on Llama 70B)            │
 │  • Fallback: Google Gemini (1M context, 1,500 req/day)       │
@@ -1427,7 +1427,7 @@ dependencies = [
     "apscheduler>=3.10.0",
 
     # LLM
-    "litellm>=1.0.0",
+    "openai>=1.0.0",
 
     # Sentiment (FinBERT + VADER)
     "transformers>=4.30.0",
@@ -1455,10 +1455,10 @@ technical = ["TA-Lib>=0.6.0", "pandas-ta-classic>=0.6.0"]
 
 ```python
 class AutFinSettings:
-    # LLM — Free Model Strategy (via litellm)
+    # LLM — Free Model Strategy (via openai SDK direct)
     deep_model: str = "nvidia_nim/minimaxai/minimax-m3"               # NVIDIA NIM (free, 1M ctx, 61 tps)
     fast_model: str = "nvidia_nim/meta/llama-3.1-8b-instruct"        # NVIDIA NIM (free, fast, 912ms)
-    litellm_failover: bool = True              # litellm handles retries + rate-limit detection
+    openai_failover: bool = True              # openai SDK handles retries + rate-limit detection
     nvidia_nim_api_key: str = ""               # From build.nvidia.com
     kite_user_id: str = "your_zerodha_user_id"
     kite_password: str = "your_zerodha_password"
@@ -1658,7 +1658,7 @@ POST-TRADE (Daily):
 
 | Phase | Status | Key Deliverables |
 |-------|--------|-----------------|
-| Phase A (Foundation) | ✅ Complete | LLM client (LiteLLM + NVIDIA NIM), memory (Store + ChromaDB + SQLite), yfinance data, checkpointing |
+| Phase A (Foundation) | ✅ Complete | LLM client (openai SDK + NVIDIA NIM), memory (Store + ChromaDB + SQLite), yfinance data, checkpointing |
 | Phase B (Core Agents) | ✅ Complete | All 10 agents, decision weights, risk checks (including CVaR + news risk), order management |
 | Phase C (Polish) | ✅ Complete | Moat assessment, sector impact matrix, FRED API, NSE fallback, dashboard, macro narrative |
 | Phase D (Agentic) | ✅ Complete | Supervisor LLM routing, multi-SMA 20/50/200, ROIC + FCF yield, HITL gate, auto-refresh |

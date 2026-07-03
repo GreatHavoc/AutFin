@@ -1,7 +1,7 @@
-# AutFin Research Engine — v3.0 Design
+# AutFin Research Engine — v5.4 Design
 
-> **Date:** June 24, 2026
-> **Status:** Design complete. Build pending.
+> **Date:** July 2026
+> **Status:** Complete. Tools architecture implemented.
 > **Sources:** Firecrawl research across Hebbia, Daloopa, Morningstar, New Constructs, Quant-Investing, Anand Rathi, Zerodha Varsity, Medium (Multi-Agent Fan-Out), arXiv (Autonomous Systematic Factor Investing)
 
 ---

@@ -1,6 +1,6 @@
 # AutFin — Technical Specification
 
-**Version**: 5.3 | **Date**: July 2026 | **Status**: Complete — Subagents architecture restructure (LangGraph best practices), Modal vLLM integration (Qwen 3.6 35B), NVIDIA NIM fallback (MiniMax M3), LangSmith tracing, LangGraph Store for cross-session memory, `interrupt()` HITL, 972+ tests passing.
+**Version**: 5.4 | **Date**: July 2026 | **Status**: Complete — Tools architecture restructure (deterministic-first), Modal vLLM integration (Qwen 3.6 35B), NVIDIA NIM fallback (MiniMax M3), openai SDK direct connection, LangSmith tracing, LangGraph Store for cross-session memory, `interrupt()` HITL, 113+ tests passing.
 
 ---
 
@@ -8,12 +8,11 @@
 
 | Layer | Technology | Version | Justification |
 |-------|-----------|---------|---------------|
-| **Orchestration** | LangGraph | `>=1.0.0` | MIT. Subagents pattern, StateGraph, Store API, `interrupt()` HITL, checkpointing |
+| **Orchestration** | LangGraph | `>=1.0.0` | MIT. Tools pattern, StateGraph, Store API, `interrupt()` HITL, checkpointing |
 | **Kite/Zerodha** | KiteConnect SDK | `>=5.0.0` | Direct pykiteconnect SDK: auth, portfolio, orders, GTT, WebSocket. TOTP auto-login. |
-| **LLM Router** | LiteLLM | `>=1.0.0` | Single entry point for all providers. Handles retries, rate-limit detection, model routing. |
-| **LLM — Primary** | Modal vLLM (self-hosted) | via LiteLLM | `hosted_vllm/qwen3.6-35b-a3b` — Qwen 3.6 35B, zero cost, no rate limits, cold starts |
-| **LLM — Fallback** | NVIDIA NIM | via LiteLLM | `nvidia_nim/minimaxai/minimax-m3` — MiniMax M3, 1M context, free tier |
-| **LLM — Fast** | NVIDIA NIM | via LiteLLM | `nvidia_nim/meta/llama-3.1-8b-instruct` — Llama 3.1 8B, 63 tps, free |
+| **LLM Client** | openai SDK | `>=1.0.0` | Direct connection to OpenAI-compatible endpoints (Modal vLLM, NVIDIA NIM, etc.) |
+| **LLM — Primary** | Modal vLLM (self-hosted) | via openai SDK | `qwen3.6-35b-a3b` — Qwen 3.6 35B, zero cost, no rate limits, cold starts |
+| **LLM — Fallback** | NVIDIA NIM | via openai SDK | `meta/llama-3.1-8b-instruct` — Llama 3.1 8B, free tier |
 | **Database** | SQLite | via `sqlite-utils` | 5+ tables: trades, portfolio_snapshots, signals, balance_history, learning_journal. WAL mode. |
 | **Checkpointer** | SqliteSaver | `langgraph-checkpoint-sqlite>=2.0.0` | Node-level checkpointing, crash recovery, thread-level state isolation |
 | **Vector Store** | ChromaDB | `>=0.5.0` | 3 collections: market_data, learning_journal, research_notes. Local-first. 384-dim embeddings. |
@@ -52,13 +51,13 @@ autfin/
 │   │
 │   ├── graph/                             # LangGraph workflow definitions
 │   │   ├── __init__.py
-│   │   ├── supervisor.py                  # LLM-based supervisor + agent tools (350+ lines)
+│   │   ├── supervisor.py                  # LLM-based supervisor + tools (v5.4)
 │   │   ├── builder.py                     # Graph builder with store support
 │   │   └── error_handler.py               # Retry policy + circuit breaker (548 lines)
 │   │
-│   ├── agents/                            # 13 specialized worker agents + tool wrappers
+│   ├── agents/                            # 10 specialized tools (9 deterministic + 1 LLM)
 │   │   ├── __init__.py
-│   │   ├── tools.py                       # Agent tool wrappers (v5.3 Subagents pattern)
+│   │   ├── agent_tools.py                 # Tool wrappers (v5.4 deterministic-first)
 │   │   ├── market_data.py                 # Balance, Price, Market Data (404 lines)
 │   │   ├── fundamentals.py                # Ratios, Health Score, Moat (1191 lines)
 │   │   ├── technical.py                   # SMA 20/50/200, Indicators, Signals (777 lines)
@@ -68,7 +67,9 @@ autfin/
 │   │   ├── risk_manager.py                # 14 checks: VaR, CVaR, news risk (1005 lines)
 │   │   ├── portfolio_manager.py           # Capital allocation, tax, top-up (613 lines)
 │   │   ├── executor.py                    # Kite SDK order execution, 3 modes (421 lines)
-│   │   ├── valuation.py                   # DCF valuation agent
+│   │   ├── valuation.py                   # DCF valuation (deterministic)
+│   │   ├── distortion.py                  # Price-distortion detection (deterministic)
+│   │   ├── regulatory.py                  # SEBI/RBI regulatory scanner (deterministic)
 │   │   ├── peer_compare.py                # Peer comparison agent
 │   │   ├── moat.py                        # Moat assessment agent
 │   │   └── auto_execute.py                # Automated execution orchestration
@@ -106,7 +107,7 @@ autfin/
 │   ├── llm/                               # LLM client abstraction
 │   │   ├── __init__.py
 │   │   └── client.py                      # LLMClient: generate(), generate_json(), generate_with_tools()
-│   │                                     # Modal vLLM (hosted_vllm/), NVIDIA NIM, parallel tool execution
+│   │                                     # openai SDK direct (Modal vLLM, NVIDIA NIM, parallel tool execution)
 │   │
 │   ├── prompts/                           # Agent system prompts (all 8 created)
 │   │   ├── __init__.py
@@ -523,11 +524,11 @@ async def risk_manager_agent(state: AgentState, config: RunnableConfig) -> dict:
 
 ## 5. GRAPH DESIGNS
 
-> **v5.3 NOTE:** AutFin follows LangGraph's recommended **Subagents pattern**. The supervisor coordinates specialist agents by calling them as tools — each running in isolated context with its own LLM call. This gives full LangSmith visibility, context isolation, and parallel execution. See `IMPROVEMENT_PLAN_V5_3.md` for the full rationale.
+> **v5.4 NOTE:** AutFin follows LangGraph's recommended **tools pattern**. The supervisor coordinates specialist tools by calling them directly — each running deterministically with its own context. This gives full LangSmith visibility, context isolation, and parallel execution. See `V5_4_IMPLEMENTATION_PLAN.md` for the full rationale.
 
-### 5.0 v5.3 Subagents Architecture
+### 5.0 v5.4 Tools Architecture
 
-The v5.3 research engine uses LangGraph's **Subagents pattern**: a central supervisor calls specialist agent tools, each running in clean context with its own LLM call.
+The v5.4 research engine uses LangGraph's **tools pattern**: a central supervisor calls specialist tools, each running deterministically in clean context.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -1069,7 +1070,7 @@ REDDIT_CLIENT_ID=...
 REDDIT_CLIENT_SECRET=...
 REDDIT_USER_AGENT=AutFin/1.0
 
-# ===== OPTIONAL: Alternative LLM providers (via litellm) =====
+# ===== LLM Provider (openai SDK direct) =====
 OPENROUTER_API_KEY=sk-or-v1-...
 GROQ_API_KEY=gsk_...
 GEMINI_API_KEY=...
@@ -1368,7 +1369,7 @@ autfin config set deployment_pacing aggressive
   ✅ LangGraph dev server (langgraph.json, agent.py entry point)
   ✅ 972+ tests passing
 
-✅ v5.3 Subagents Architecture (IN PROGRESS)
+✅ v5.4 Tools Architecture (COMPLETE)
   ✅ IMPROVEMENT_PLAN_V5_3.md — full restructure plan
   ✅ Documentation updated (README, PRD, technical_spec)
   ⬜ agents/tools.py — Agent tool wrappers (fundamentals, technical, etc.)
@@ -1387,4 +1388,4 @@ COST: $0/month (Modal vLLM self-hosted + NVIDIA NIM free tier)
 
 ---
 
-*This specification reflects the **v5.3 Subagents architecture** of AutFin. The supervisor coordinates specialist agents via tool calls, each running in isolated context with full LangSmith visibility. Modal vLLM (Qwen 3.6 35B) is the primary LLM, NVIDIA NIM (MiniMax M3) is the fallback. See `IMPROVEMENT_PLAN_V5_3.md` for the full restructure plan and `autfin_prd.md` for product requirements.*
+*This specification reflects the **v5.4 tools architecture** of AutFin. The supervisor coordinates specialist tools directly, each running deterministically with full LangSmith visibility. Modal vLLM (Qwen 3.6 35B) is the primary LLM, NVIDIA NIM (MiniMax M3) is the fallback. See `V5_4_IMPLEMENTATION_PLAN.md` for the full restructure plan and `autfin_prd.md` for product requirements.*

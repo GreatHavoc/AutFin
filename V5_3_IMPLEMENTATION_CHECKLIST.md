@@ -1,29 +1,33 @@
-# v5.3 Implementation Checklist
+# v5.3 → v5.4 Implementation Checklist
 
-> Step-by-step implementation of LangGraph Subagents pattern
+> Step-by-step implementation of LangGraph tools pattern (deterministic-first)
 
 ---
 
-## Step 1: Create `src/autfin/agents/tools.py`
+## Step 1: Create `src/autfin/agents/agent_tools.py`
 
-**Goal:** Agent tool wrappers — each wraps an agent as a `@tool` that makes its own LLM call
+**Goal:** Tool wrappers — each wraps a deterministic function that returns structured JSON
 
-**Why:** Context isolation — each agent gets clean context window, not one big blob
+**Why:** Context isolation — each tool gets clean context window, not one big blob
 
 **Create:**
-- `fundamentals_tool(symbol, depth)` — calls fundamentals agent with own LLM
-- `technical_tool(symbol, depth)` — calls technical agent with own LLM
-- `sentiment_tool(symbol)` — calls sentiment agent with own LLM
-- `macro_tool()` — calls global macro agent with own LLM
-- `research_tool(symbols, depth)` — calls researcher agent with own LLM
-- `risk_tool(trade)` — calls risk manager with own LLM
-- `portfolio_tool()` — calls portfolio manager with own LLM
+- `fundamentals_tool(symbol, depth)` — calls FundamentalsAgent.analyze() directly (deterministic)
+- `technical_tool(symbol, depth)` — calls TechnicalAgent.analyze() directly (deterministic)
+- `sentiment_tool(symbol)` — calls SentimentAgent directly (deterministic)
+- `macro_tool()` — calls GlobalMacroAgent directly (deterministic)
+- `valuation_tool(symbol, depth)` — calls ValuationAgent directly (deterministic)
+- `distortion_tool(symbol, depth)` — calls distortion_audit() directly (deterministic)
+- `regulatory_tool(symbol, depth)` — calls regulatory_audit() directly (deterministic)
+- `risk_tool(trade)` — calls run_risk_checks() directly (deterministic)
+- `portfolio_tool()` — calls get_portfolio_state() directly (deterministic)
+- `research_tool(symbols, depth)` — LLM-driven Bull/Bear debate (only LLM tool)
 
 **Each tool:**
 - Lazy imports inside function body
-- Makes its own `llm.generate()` call with agent-specific system prompt
-- Returns structured result (text or JSON)
-- `SUPERVISOR_TOOLS` list exported for supervisor to use
+- Calls deterministic function directly (no LLM call)
+- Returns structured JSON
+- `TOOL_DEFINITIONS` list exported for supervisor to use
+- `TOOL_CALLABLES` dict exported for tool execution
 
 ---
 

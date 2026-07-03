@@ -1,23 +1,23 @@
-# AutFin v5.3
+# AutFin v5.4
 
 **Autonomous AI-Powered Financial Research & Portfolio Management System**
 
-A personal multi-agentic system that runs daily autonomous financial research, manages a Zerodha portfolio, and learns from every trade — using LangGraph Subagents pattern, Modal vLLM (Qwen 3.6 35B), and free data APIs.
+A personal multi-agentic system that runs daily autonomous financial research, manages a Zerodha portfolio, and learns from every trade — using LangGraph tools pattern, Modal vLLM (Qwen 3.6 35B), and free data APIs.
 
 ## Features
 
-- **LangGraph Subagents Architecture** — Each agent (fundamentals, technical, sentiment, etc.) runs as a separate tool with context isolation, parallel execution, and full LangSmith visibility
-- **9 Specialized AI Agents** — Market Data, Technical Analysis, Fundamentals, Sentiment, Global Macro, Researcher (Bull/Bear debate), Risk Manager, Portfolio Manager, Execution
-- **Modal vLLM (Primary LLM)** — Self-hosted Qwen 3.6 35B via Modal, zero cost, no rate limits
+- **LangGraph Tools Architecture** — Each tool (fundamentals, technical, sentiment, etc.) runs deterministically with context isolation, parallel execution, and full LangSmith visibility
+- **10 Specialized Tools** — 9 deterministic (fundamentals, technical, sentiment, macro, valuation, distortion, regulatory, risk, portfolio) + 1 LLM-driven (research synthesis)
+- **Modal vLLM (Primary LLM)** — Self-hosted Qwen 3.6 35B via Modal, zero cost, no rate limits, connects directly via openai SDK
 - **NVIDIA NIM (Fallback LLM)** — MiniMax M3 via NVIDIA NIM when Modal is unavailable
-- **LangSmith Tracing** — Full observability with auto-tracing, Studio visual debugging, per-agent traces
+- **LangSmith Tracing** — Full observability with auto-tracing, Studio visual debugging, per-tool traces
 - **Daily Autonomous Operation** — Runs at 9:00 AM IST via APScheduler, manages existing positions even with ₹0 cash
 - **Balance-is-Budget** — Your Zerodha account balance IS the deployable pool, no separate config needed
 - **Long-Term Memory** — SQLite + ChromaDB + LangGraph Store for trade history, lessons learned, and cross-session learning
 - **HITL with Interrupts** — LangGraph `interrupt()` for proper human-in-the-loop trade approval
-- **Error Recovery** — Circuit breakers, retry policies, and graceful degradation for every agent
+- **Error Recovery** — Circuit breakers, retry policies, and graceful degradation for every tool
 - **Backtesting** — Walk-forward backtesting with regime detection and online learning
-- **Streamlit Dashboard** — Visualize portfolio, P&L, signals, and agent performance
+- **Streamlit Dashboard** — Visualize portfolio, P&L, signals, and tool performance
 - **Alert System** — Console, desktop, Pushover, and email notifications for key events
 - **Full CLI** — `autfin status`, `autfin analyze RELIANCE`, `autfin scan`, `autfin start`
 
@@ -44,14 +44,18 @@ autfin config set KEY VALUE    # Update configuration
 ├──────────────────────────────────────────────────────────┤
 │              LangGraph Supervisor (ReAct Loop)            │
 │  ┌────────────────────────────────────────────────────┐  │
-│  │  Calls agent tools as separate LLM invocations:    │  │
-│  │  ├── fundamentals_tool  → own LLM call + tools     │  │
-│  │  ├── technical_tool     → own LLM call + tools     │  │
-│  │  ├── sentiment_tool     → own LLM call + tools     │  │
-│  │  ├── macro_tool         → own LLM call + tools     │  │
-│  │  ├── risk_tool          → own LLM call + tools     │  │
-│  │  └── research_tool      → own LLM call + tools     │  │
-│  │  LangSmith traces each agent individually          │  │
+│  │  Calls tools directly (deterministic):             │  │
+│  │  ├── fundamentals_tool  → Piotroski, ratios, DCF   │  │
+│  │  ├── technical_tool     → RSI, MACD, patterns      │  │
+│  │  ├── sentiment_tool     → FinBERT + VADER scoring  │  │
+│  │  ├── macro_tool         → Global indices, FII/DII  │  │
+│  │  ├── valuation_tool     → DCF scenarios            │  │
+│  │  ├── distortion_tool    → Fake breakouts, pumps    │  │
+│  │  ├── regulatory_tool    → SEBI/RBI announcements   │  │
+│  │  ├── risk_tool          → 14 risk checks           │  │
+│  │  ├── portfolio_tool     → Kite SDK holdings        │  │
+│  │  └── research_tool      → LLM Bull/Bear debate     │  │
+│  │  LangSmith traces each tool individually           │  │
 │  └────────────────────────────────────────────────────┘  │
 ├──────────────────────────────────────────────────────────┤
 │              Memory Layer                                 │
@@ -59,7 +63,7 @@ autfin config set KEY VALUE    # Update configuration
 │  ChromaDB (vector search for past research)               │
 │  LangGraph Store (cross-session learning)                 │
 ├──────────────────────────────────────────────────────────┤
-│           LLM Stack (via LiteLLM)                         │
+│           LLM Stack (openai SDK)                          │
 │  Modal vLLM (Qwen 3.6 35B) │ NVIDIA NIM (MiniMax M3)    │
 ├──────────────────────────────────────────────────────────┤
 │           Observability                                   │
@@ -164,7 +168,7 @@ Dashboard pages:
 ```
 autfin/
 ├── src/autfin/
-│   ├── agents/           # 9 specialized AI agents
+│   ├── agents/           # 10 specialized tools (9 deterministic + 1 LLM)
 │   │   ├── market_data.py
 │   │   ├── technical.py
 │   │   ├── fundamentals.py
@@ -174,7 +178,10 @@ autfin/
 │   │   ├── risk_manager.py
 │   │   ├── portfolio_manager.py
 │   │   ├── executor.py
-│   │   └── tools.py            # Agent tool wrappers (v5.3 Subagents pattern)
+│   │   ├── valuation.py          # DCF valuation (deterministic)
+│   │   ├── distortion.py         # Price-distortion detection (deterministic)
+│   │   ├── regulatory.py         # SEBI/RBI regulatory scanner (deterministic)
+│   │   └── agent_tools.py        # Tool wrappers (v5.4 deterministic-first)
 │   ├── alerts/           # Notification system
 │   │   └── notifier.py
 │   ├── backtest/         # Backtesting engine
@@ -189,7 +196,7 @@ autfin/
 │   │   ├── app.py
 │   │   └── data.py
 │   ├── graph/            # LangGraph pipelines
-│   │   ├── supervisor.py       # Supervisor with agent tools (v5.3)
+│   │   ├── supervisor.py       # Supervisor with tools (v5.4)
 │   │   ├── builder.py          # Graph builder with store support
 │   │   └── error_handler.py
 │   ├── memory/           # Long-term memory
@@ -200,7 +207,7 @@ autfin/
 │   │   ├── connection_pool.py
 │   │   └── retrieval.py
 │   ├── llm/              # LLM client abstraction
-│   │   └── client.py           # Modal vLLM + NVIDIA NIM support
+│   │   └── client.py           # openai SDK (Modal vLLM + NVIDIA NIM)
 │   ├── observability/    # LangSmith tracing + metrics
 │   │   ├── handler.py
 │   │   └── tracer.py
@@ -209,12 +216,16 @@ autfin/
 │   │   └── jobs.py
 │   ├── state/            # State schemas
 │   │   └── agent_state.py
-│   └── tools/            # External integrations
-│       ├── supervisor_tools.py
-│       └── ...
+│   ├── tools/            # External integrations
+│   │   ├── supervisor_tools.py
+│   │   ├── fii_dii.py          # FII/DII data fetcher
+│   │   ├── news_velocity.py    # News velocity analyzer
+│   │   └── ...
+│   └── universe/         # Stock universe management
+│       └── curator.py          # Watchlist Curator
 ├── agent.py              # LangGraph dev entry point
 ├── langgraph.json        # LangGraph dev config
-├── tests/                # 972+ tests, all passing
+├── tests/                # 113+ tests, all passing
 ├── .env.example          # Environment template
 ├── autfin_prd.md         # Product requirements
 ├── technical_spec.md     # Technical specification
@@ -244,9 +255,9 @@ Every day at 9:00 AM IST, AutFin runs its morning pipeline:
 
 1. **Position Monitor** — Checks all existing positions for stop-losses and profit targets
 2. **Guardian Executor** — Executes stop-losses and profit bookings immediately
-3. **Parallel Research** — Supervisor calls agent tools (fundamentals, technical, sentiment, macro) — each runs as separate LLM call with context isolation
-4. **Researcher** — Synthesizes all research into a Bull/Bear debate
-5. **Risk Manager** — Validates trade proposals against 9 risk checks
+3. **Parallel Research** — Supervisor calls tools (fundamentals, technical, sentiment, macro, distortion, regulatory) — each runs deterministically in parallel via asyncio.gather
+4. **Researcher** — Synthesizes all research into a Bull/Bear debate (LLM-driven)
+5. **Risk Manager** — Validates trade proposals against 14 risk checks
 6. **Portfolio Manager** — Makes final allocation decisions
 7. **Executor** — Recommends or executes trades
 
@@ -259,7 +270,7 @@ Your Zerodha account balance IS the budget. No separate config:
 
 ### Free LLM Stack
 
-All AI runs on free models via LiteLLM router:
+All AI runs on free models via openai SDK (direct connection to OpenAI-compatible endpoints):
 - **Primary**: Qwen 3.6 35B via Modal vLLM (self-hosted, no rate limits, no cost)
 - **Fallback**: MiniMax M3 via NVIDIA NIM (1M context, free tier)
 - **Speed**: Llama 3.1 8B via NVIDIA NIM (fast responses for time-sensitive operations)
