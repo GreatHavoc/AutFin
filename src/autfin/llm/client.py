@@ -170,7 +170,7 @@ class LLMClient:
 
     def __init__(
         self,
-        deep_model: str = "qwen3.6-35b-a3b",
+        deep_model: str = "minimaxai/minimax-m3",
         fast_model: str = "meta/llama-3.1-8b-instruct",
         temperature: float = 0.0,
         max_retries: int = 2,
@@ -771,17 +771,17 @@ def get_llm_client() -> LLMClient:
                 )
                 logger.info("LLM client configured: Modal vLLM (%s) at %s", settings.modal_vllm_model, settings.modal_vllm_url)
             else:
-                # Fallback to NVIDIA NIM
+                # Use NVIDIA NIM with MiniMax M3 (OpenAI-compatible endpoint)
                 nvidia_key = os.environ.get("NVIDIA_NIM_API_KEY", "")
                 if nvidia_key:
                     _default_client = LLMClient(
-                        deep_model="meta/llama-3.1-8b-instruct",
+                        deep_model="minimaxai/minimax-m3",
                         fast_model="meta/llama-3.1-8b-instruct",
                         temperature=settings.model_temperature,
                         base_url="https://integrate.api.nvidia.com/v1",
                         api_key=nvidia_key,
                     )
-                    logger.info("LLM client configured: NVIDIA NIM (meta/llama-3.1-8b-instruct)")
+                    logger.info("LLM client configured: NVIDIA NIM (minimaxai/minimax-m3)")
                 else:
                     # No provider configured — disabled
                     _default_client = LLMClient()

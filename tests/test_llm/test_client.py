@@ -65,7 +65,7 @@ class TestLLMClientInit:
         from src.autfin.llm.client import LLMClient
 
         c = LLMClient()
-        assert c.deep_model == "qwen3.6-35b-a3b"
+        assert c.deep_model == "minimaxai/minimax-m3"
         assert c.fast_model == "meta/llama-3.1-8b-instruct"
 
     def test_custom_models(self):
