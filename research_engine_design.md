@@ -1,4 +1,4 @@
-# AutFin Research Engine — v5.4 Design
+# AutFin Research Engine — v5.5 Design
 
 > **Date:** July 2026
 > **Status:** Complete. Tools architecture implemented.

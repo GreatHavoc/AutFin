@@ -2,10 +2,10 @@
 
 ## Product Requirements Document (PRD)
 
-**Version**: 5.4  
+**Version**: 5.5  
 **Date**: July 2026  
 **Author**: Prakhar  
-**Status**: Complete — Tools architecture restructure (deterministic-first), Modal vLLM integration, LangSmith tracing, 113+ tests passing.
+**Status**: Complete — Subagents architecture (5 domain sub-agents), LangGraph best practices, 75+ tests passing.
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### 1.1 What Is AutFin?
 
-AutFin is an **agentic-first AI portfolio management system** built on LangGraph's tools pattern. A supervisor coordinates specialist tools (fundamentals, technical, sentiment, macro, risk, portfolio) by calling them directly — each running deterministically with full LangSmith visibility. Per-stock depth decisions (Quick/Standard/Deep), 10 domain tools, long-term memory via LangGraph Store, and zero operating cost via Modal vLLM (Qwen 3.6 35B) and free data APIs.
+AutFin is an **agentic-first AI portfolio management system** built on LangGraph's subagents pattern. A supervisor coordinates 5 specialized sub-agents (fundamentals, technical, sentiment, macro, risk) by calling them directly — each running deterministically with full LangSmith visibility. Per-stock depth decisions (Quick/Standard/Deep), 5 specialized sub-agents, long-term memory via LangGraph Store, and zero operating cost via NVIDIA NIM (MiniMax M3) and free data APIs.
 
 ### 1.2 How It Works (User's Perspective)
 
@@ -59,12 +59,12 @@ AutFin is an **agentic-first AI portfolio management system** built on LangGraph
 - **Learning system**: Procedural memory builds a corpus of trade patterns — gets smarter with every trade
 - **PM-level research quality**: DCF valuation, catalyst tracking, variant views — not just ratio screens
 - **Autonomous daily operation**: Runs every morning at 9 AM, scans markets, deploys capital, manages positions
-- **Tools architecture** — LangGraph best practice: each tool runs deterministically with context isolation, parallel execution, and full LangSmith tracing
+- **Subagents architecture** — LangGraph best practice: each sub-agent runs deterministically with context isolation, parallel execution, and full LangSmith tracing
 - **Long-running persistence** — survives reboots, learns from past decisions across months via LangGraph Store
 - **Risk-first design**: Risk Manager with 14 checks including CVaR, news risk, sector exposure — veto power
 - **Full Zerodha integration** via official Kite SDK (OAuth, TOTP auto-login, credentials in .env)
 - **Built on LangGraph** for durable, cyclical, observable agent workflows with `interrupt()` HITL gates
-- **$0/month operating cost**: Entire stack uses Modal vLLM (self-hosted Qwen 3.6 35B), NVIDIA NIM fallback, and free data APIs (NSE, yfinance, Marketaux, FRED)
+- **$0/month operating cost**: Entire stack uses NVIDIA NIM (MiniMax M3, primary), Modal vLLM (fallback), and free data APIs (NSE, yfinance, Marketaux, FRED)
 
 ---
 
@@ -188,7 +188,7 @@ Every Morning (9:00 AM):
 
 ### 3.1 Design Philosophy — Tools Pattern (LangGraph Best Practice)
 
-AutFin v5.4 follows LangGraph's recommended **tools pattern**: a central supervisor coordinates specialist tools by calling them directly. Each tool runs deterministically with its own context, giving full LangSmith visibility, context isolation, and parallel execution capability.
+AutFin v5.5 follows LangGraph's **subagents pattern**: a central supervisor coordinates 5 specialized sub-agents by calling them directly. Each sub-agent runs deterministically with its own context, giving full LangSmith visibility, context isolation, and parallel execution capability.
 
 **30% agentic / 70% deterministic** — the agentic portion IS the orchestration itself. The supervisor decides what to research, at what depth, for which stocks, in what order. The 70% that stays deterministic: all analysis tools (fundamentals, technical, sentiment, macro, valuation, distortion, regulatory), risk checks, position sizing math, order execution, tax tracking.
 

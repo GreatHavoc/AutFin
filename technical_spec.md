@@ -51,13 +51,13 @@ autfin/
 │   │
 │   ├── graph/                             # LangGraph workflow definitions
 │   │   ├── __init__.py
-│   │   ├── supervisor.py                  # LLM-based supervisor + tools (v5.4)
+│   │   ├── supervisor.py                  # Supervisor with 5 sub-agent tools (v5.5)
 │   │   ├── builder.py                     # Graph builder with store support
 │   │   └── error_handler.py               # Retry policy + circuit breaker (548 lines)
 │   │
 │   ├── agents/                            # 10 specialized tools (9 deterministic + 1 LLM)
 │   │   ├── __init__.py
-│   │   ├── agent_tools.py                 # Tool wrappers (v5.4 deterministic-first)
+│   │   ├── agent_tools.py                 # 10 deterministic tool wrappers (v5.4)
 │   │   ├── market_data.py                 # Balance, Price, Market Data (404 lines)
 │   │   ├── fundamentals.py                # Ratios, Health Score, Moat (1191 lines)
 │   │   ├── technical.py                   # SMA 20/50/200, Indicators, Signals (777 lines)
@@ -524,11 +524,11 @@ async def risk_manager_agent(state: AgentState, config: RunnableConfig) -> dict:
 
 ## 5. GRAPH DESIGNS
 
-> **v5.4 NOTE:** AutFin follows LangGraph's recommended **tools pattern**. The supervisor coordinates specialist tools by calling them directly — each running deterministically with its own context. This gives full LangSmith visibility, context isolation, and parallel execution. See `V5_4_IMPLEMENTATION_PLAN.md` for the full rationale.
+> **v5.5 NOTE:** AutFin follows LangGraph's **subagents pattern**. The supervisor coordinates specialist tools by calling them directly — each running deterministically with its own context. This gives full LangSmith visibility, context isolation, and parallel execution. See `V5_4_IMPLEMENTATION_PLAN.md` for the full rationale.
 
-### 5.0 v5.4 Tools Architecture
+### 5.0 v5.5 Subagents Architecture
 
-The v5.4 research engine uses LangGraph's **tools pattern**: a central supervisor calls specialist tools, each running deterministically in clean context.
+The v5.5 research engine uses LangGraph's **subagents pattern**: a central supervisor calls specialist tools, each running deterministically in clean context.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -1040,7 +1040,7 @@ async def build_research_context(
 
 ```bash
 # ===== REQUIRED =====
-# Modal vLLM (primary LLM — self-hosted Qwen 3.6 35B)
+# NVIDIA NIM (primary LLM — MiniMax M3)
 MODAL_VLLM_URL=https://prakhar201ps--qwen36-35b-vllm-deployment-serve.modal.run/v1
 MODAL_VLLM_MODEL=qwen3.6-35b-a3b
 
@@ -1369,7 +1369,7 @@ autfin config set deployment_pacing aggressive
   ✅ LangGraph dev server (langgraph.json, agent.py entry point)
   ✅ 972+ tests passing
 
-✅ v5.4 Tools Architecture (COMPLETE)
+✅ v5.5 Subagents Architecture (COMPLETE)
   ✅ IMPROVEMENT_PLAN_V5_3.md — full restructure plan
   ✅ Documentation updated (README, PRD, technical_spec)
   ⬜ agents/tools.py — Agent tool wrappers (fundamentals, technical, etc.)
@@ -1388,4 +1388,4 @@ COST: $0/month (Modal vLLM self-hosted + NVIDIA NIM free tier)
 
 ---
 
-*This specification reflects the **v5.4 tools architecture** of AutFin. The supervisor coordinates specialist tools directly, each running deterministically with full LangSmith visibility. Modal vLLM (Qwen 3.6 35B) is the primary LLM, NVIDIA NIM (MiniMax M3) is the fallback. See `V5_4_IMPLEMENTATION_PLAN.md` for the full restructure plan and `autfin_prd.md` for product requirements.*
+*This specification reflects the **v5.5 subagents architecture** of AutFin. The supervisor coordinates specialist tools directly, each running deterministically with full LangSmith visibility. NVIDIA NIM (MiniMax M3) is the primary LLM, Modal vLLM (Qwen 3.6 35B) is the fallback. See `V5_4_IMPLEMENTATION_PLAN.md` for the full restructure plan and `autfin_prd.md` for product requirements.*
