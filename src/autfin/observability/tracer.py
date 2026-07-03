@@ -4,6 +4,11 @@ Uses @traceable decorator and langsmith.Client for explicit trace management.
 For LangGraph auto-tracing, see handler.py (LANGSMITH_TRACING=true handles it).
 This module handles manual tracing for direct LLM calls and custom spans.
 Persists traces to SQLite for durability beyond in-memory cap.
+
+Key tracing setup:
+- wrap_openai() in llm/client.py wraps the OpenAI client for automatic LLM tracing
+- @traceable decorator on tool functions creates nested spans
+- LANGSMITH_TRACING=true enables LangGraph auto-tracing for node executions
 """
 from __future__ import annotations
 
@@ -22,11 +27,12 @@ logger = logging.getLogger(__name__)
 _LANGSMITH_AVAILABLE = False
 _langsmith_client = None
 _traceable = None
+_wrap_openai = None
 
 
 def _init_langsmith():
     """Initialize LangSmith client lazily (after dotenv loads)."""
-    global _LANGSMITH_AVAILABLE, _langsmith_client, _traceable
+    global _LANGSMITH_AVAILABLE, _langsmith_client, _traceable, _wrap_openai
     if _langsmith_client is not None:
         return
 
@@ -41,6 +47,14 @@ def _init_langsmith():
         _langsmith_client = _LangsmithClient()
         _traceable = _traceable_fn
         _LANGSMITH_AVAILABLE = True
+
+        # Import wrap_openai for LLM call tracing
+        try:
+            from langsmith.wrappers import wrap_openai as _wrap_openai_fn
+            _wrap_openai = _wrap_openai_fn
+        except ImportError:
+            pass
+
     except ImportError:
         pass
     except Exception:
@@ -254,19 +268,22 @@ class AutFinTracer:
             if error:
                 ctx.errors.append(error)
 
+        # Note: LLM calls are automatically traced by wrap_openai() in llm/client.py
+        # This method only records metrics for local persistence
         if self._use_langsmith and self._client:
             try:
+                # Create a child run under the active trace
+                parent_run = self._active_runs.get(tid)
                 self._client.create_run(
                     name=f"llm-{model}",
                     run_type="llm",
-                    extra={
-                        "metadata": {
-                            "model": model,
-                            "prompt_tokens": prompt_tokens,
-                            "completion_tokens": completion_tokens,
-                            "latency_ms": latency_ms,
-                            "error": error,
-                        }
+                    parent_run_id=parent_run.id if parent_run else None,
+                    inputs={"model": model},
+                    outputs={
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "latency_ms": latency_ms,
+                        "error": error,
                     },
                 )
             except Exception as e:
@@ -281,17 +298,21 @@ class AutFinTracer:
         if ctx and not success:
             ctx.errors.append(agent_name)
 
+        # Note: Agent tool calls are automatically traced by @traceable decorator
+        # This method only records metrics for local persistence
         if self._use_langsmith and self._client:
             try:
+                # Create a child run under the active trace
+                parent_run = self._active_runs.get(tid)
                 self._client.create_run(
                     name=f"agent-{agent_name}",
                     run_type="chain",
-                    extra={
-                        "metadata": {
-                            "duration_ms": duration_ms,
-                            "success": success,
-                            **(metadata or {}),
-                        }
+                    parent_run_id=parent_run.id if parent_run else None,
+                    inputs={"agent": agent_name},
+                    outputs={
+                        "duration_ms": duration_ms,
+                        "success": success,
+                        **(metadata or {}),
                     },
                 )
             except Exception as e:

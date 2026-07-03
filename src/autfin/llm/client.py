@@ -142,15 +142,22 @@ except ImportError:
     pass
 
 
-# Lazy langsmith traceable decorator for LLM I/O tracing
+# LangSmith wrapping for automatic LLM call tracing
+_wrap_openai = None
 _traceable = None
 
 try:
-    if os.environ.get("LANGSMITH_API_KEY"):
-        from langsmith import traceable as _traceable_fn
+    from langsmith.wrappers import wrap_openai as _wrap_openai_fn
 
-        _traceable = _traceable_fn
-except Exception:
+    _wrap_openai = _wrap_openai_fn
+except ImportError:
+    pass
+
+try:
+    from langsmith import traceable as _traceable_fn
+
+    _traceable = _traceable_fn
+except ImportError:
     pass
 
 
@@ -211,13 +218,18 @@ class LLMClient:
             )
 
     def _get_client(self) -> _AsyncOpenAI:
-        """Get or create the AsyncOpenAI client."""
+        """Get or create the AsyncOpenAI client, wrapped with LangSmith tracing."""
         if self._client is None:
             kwargs: Dict[str, Any] = {"api_key": self.api_key}
             if self.base_url:
                 kwargs["base_url"] = self.base_url
             kwargs["timeout"] = self.timeout
-            self._client = _AsyncOpenAI(**kwargs)
+            raw_client = _AsyncOpenAI(**kwargs)
+            # Wrap with LangSmith for automatic LLM call tracing
+            if _wrap_openai:
+                self._client = _wrap_openai(raw_client)
+            else:
+                self._client = raw_client
         return self._client
 
     @property
@@ -281,6 +293,7 @@ class LLMClient:
                 if self.extra_body:
                     kwargs["extra_body"] = self.extra_body
 
+                # wrap_openai automatically traces this LLM call
                 response = await client.chat.completions.create(**kwargs)
 
                 elapsed_ms = (time.monotonic() - t_start) * 1000
@@ -402,6 +415,7 @@ class LLMClient:
                 if self.extra_body:
                     kwargs["extra_body"] = self.extra_body
 
+                # wrap_openai automatically traces this LLM call
                 response = await client.chat.completions.create(**kwargs)
 
                 elapsed_ms = (time.monotonic() - t_start) * 1000
