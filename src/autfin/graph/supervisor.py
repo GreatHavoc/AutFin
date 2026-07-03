@@ -1,5 +1,5 @@
 """
-Supervisor Graph — v5.3 Subagents Coordinator.
+Supervisor Graph — v5.4 Subagents Coordinator.
 
 Architecture:
   START → supervisor_node → {supervisor_node, human_review_node, END}
@@ -24,16 +24,37 @@ state on first iteration and injected into the system prompt.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
+from langgraph.runtime import Runtime
 from langgraph.types import interrupt
 
 from src.autfin.state.agent_state import AgentState
 from src.autfin.graph.error_handler import safe_node, RetryPolicy
+
+
+# ---------------------------------------------------------------------------
+# Runtime context schema — passed to all nodes via Runtime[Context]
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Context:
+    """Runtime context injected into all nodes via Runtime[Context].
+
+    Provides access to:
+    - user_id: Current user identifier
+    - store: LangGraph BaseStore for cross-thread memory
+    - mode: Execution mode (paper/live)
+    """
+    user_id: str = "default"
+    mode: str = "paper"
+    store: Optional[Any] = field(default=None, repr=False)
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +213,7 @@ def _learning_section(state: AgentState) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def load_memories(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+async def load_memories(state: AgentState, runtime: Runtime[Context]) -> dict[str, Any]:
     """
     Load relevant memories from the LangGraph Store before research.
 
@@ -203,13 +224,15 @@ async def load_memories(state: AgentState, config: RunnableConfig | None = None)
 
     Injects found memories into state["context_memory"] for the supervisor
     to reference during its ReAct loop.
+
+    Uses Runtime[Context] pattern for store access (LangGraph best practice).
     """
     from src.autfin.memory.langgraph_store import (
         NS_AGENT_INSTRUCTIONS, NS_TRADE_HISTORY, NS_USER_PREFERENCES,
         store_search,
     )
 
-    store = config.get("store") if config else None
+    store = runtime.store
     if store is None:
         return {"context_memory": {}}
 
@@ -254,13 +277,69 @@ async def load_memories(state: AgentState, config: RunnableConfig | None = None)
     return {"context_memory": context_memory}
 
 
-async def save_memory(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+async def load_memories_legacy(state: AgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+    """
+    Legacy version of load_memories for backward compatibility.
+
+    Uses config-based store access instead of Runtime[Context].
+    """
+    from src.autfin.memory.langgraph_store import (
+        NS_AGENT_INSTRUCTIONS, NS_TRADE_HISTORY, NS_USER_PREFERENCES,
+        store_search,
+    )
+
+    store = config.get("store") if config else None
+    if store is None:
+        return {"context_memory": {}}
+
+    context_memory: dict[str, Any] = {}
+
+    try:
+        instructions = await store_search(store, NS_AGENT_INSTRUCTIONS, "trading rules", limit=5)
+        if instructions:
+            context_memory["agent_instructions"] = [i["value"] for i in instructions]
+    except Exception:
+        pass
+
+    symbols = []
+    for h in state.get("holdings", []):
+        sym = h.get("tradingsymbol") or h.get("symbol")
+        if sym:
+            symbols.append(sym)
+    alert_sym = state.get("alert_symbol")
+    if alert_sym:
+        symbols.append(alert_sym)
+
+    trade_history = []
+    for sym in symbols[:5]:
+        try:
+            trades = await store_search(store, NS_TRADE_HISTORY, sym, limit=3)
+            trade_history.extend(trades)
+        except Exception:
+            pass
+    if trade_history:
+        context_memory["past_trades"] = [t["value"] for t in trade_history]
+
+    try:
+        prefs = await store_search(store, NS_USER_PREFERENCES, "preferences", limit=5)
+        if prefs:
+            context_memory["user_preferences"] = [p["value"] for p in prefs]
+    except Exception:
+        pass
+
+    return {"context_memory": context_memory}
+
+
+async def save_memory(state: AgentState, runtime: Runtime[Context] | None = None, config: RunnableConfig | None = None) -> dict[str, Any]:
     """
     Save research outcomes and lessons learned to the LangGraph Store.
 
     Called after the supervisor completes a session. Persists:
     - Trade decisions and outcomes (episodic memory)
     - Key research findings (semantic memory)
+
+    Uses Runtime[Context] pattern for store access (LangGraph best practice).
+    Falls back to config-based access for legacy callers.
     """
     from datetime import datetime, timezone
     from src.autfin.memory.langgraph_store import (
@@ -268,7 +347,13 @@ async def save_memory(state: AgentState, config: RunnableConfig | None = None) -
         store_put,
     )
 
-    store = config.get("store") if config else None
+    # Get store from runtime or config
+    store = None
+    if runtime is not None:
+        store = runtime.store
+    elif config is not None:
+        store = config.get("store")
+
     if store is None:
         return {}
 
@@ -320,7 +405,7 @@ async def save_memory(state: AgentState, config: RunnableConfig | None = None) -
 
 
 async def supervisor_node(
-    state: AgentState, config: RunnableConfig | None = None
+    state: AgentState, config: RunnableConfig | None = None, runtime: Runtime[Context] | None = None
 ) -> dict[str, Any]:
     """
     Run one ReAct iteration with the full supervisor tool set.
@@ -333,6 +418,8 @@ async def supervisor_node(
     If ``pending_human_approval`` is set and no ``human_decision`` has
     been recorded yet, the node returns immediately so the graph can
     route to the human_review node.
+
+    Uses Runtime[Context] pattern for store access (LangGraph best practice).
     """
     from src.autfin.llm.client import get_llm_client
 
@@ -366,7 +453,11 @@ async def supervisor_node(
     # ── Load cross-session memories from Store on first iteration ──
     if not state.get("memories_loaded"):
         try:
-            memory_result = await load_memories(state, config)
+            if runtime is not None:
+                memory_result = await load_memories(state, runtime)
+            else:
+                # Fallback for legacy callers
+                memory_result = await load_memories_legacy(state, config)
             state["context_memory"] = memory_result.get("context_memory", {})
             state["memories_loaded"] = True
         except Exception:
@@ -581,7 +672,7 @@ def _route_from_supervisor(state: AgentState) -> str:
 
 def build_supervisor_graph() -> StateGraph:
     """
-    Build the v3.0 single-supervisor ReAct loop graph.
+    Build the v5.4 single-supervisor ReAct loop graph.
 
     Three nodes:
       - ``supervisor``    — runs the ReAct tool-calling loop
@@ -595,9 +686,10 @@ def build_supervisor_graph() -> StateGraph:
       supervisor → END (when session is finalized)
       human_review → supervisor (return after input)
 
-    Returns an uncompiled ``StateGraph``.
+    Returns an uncompiled ``StateGraph`` with ``context_schema=Context``
+    for Runtime[Context] access in nodes.
     """
-    builder = StateGraph(AgentState)
+    builder = StateGraph(AgentState, context_schema=Context)
 
     builder.add_node(
         "supervisor",

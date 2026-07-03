@@ -242,3 +242,40 @@ class TestBackwardCompatibility:
         from src.autfin.graph.supervisor import compile_supervisor_graph
         graph = compile_supervisor_graph(checkpointer=None, store=None)
         assert graph is not None
+
+
+# ---------------------------------------------------------------------------
+# Runtime[Context] pattern (LangGraph best practice)
+# ---------------------------------------------------------------------------
+
+
+class TestRuntimeContext:
+    """Test Runtime[Context] pattern for store access."""
+
+    def test_context_dataclass_exists(self):
+        """Context dataclass should be importable from supervisor module."""
+        from src.autfin.graph.supervisor import Context
+        assert Context is not None
+
+    def test_context_default_values(self):
+        """Context should have default values."""
+        from src.autfin.graph.supervisor import Context
+        ctx = Context()
+        assert ctx.user_id == "default"
+        assert ctx.mode == "paper"
+        assert ctx.store is None
+
+    def test_context_with_values(self):
+        """Context should accept custom values."""
+        from src.autfin.graph.supervisor import Context
+        ctx = Context(user_id="user123", mode="live")
+        assert ctx.user_id == "user123"
+        assert ctx.mode == "live"
+
+    def test_graph_has_context_schema(self):
+        """Graph builder should use context_schema=Context."""
+        from src.autfin.graph.supervisor import build_supervisor_graph, Context
+        builder = build_supervisor_graph()
+        # The builder should have context_schema set
+        assert hasattr(builder, 'context_schema')
+        assert builder.context_schema is Context

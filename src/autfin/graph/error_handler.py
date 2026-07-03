@@ -474,6 +474,8 @@ def safe_node(
     If the wrapped node fails after retries, the error handler provides
     a degraded state so the graph can continue.
 
+    Supports both legacy (state, config) and modern (state, runtime) node signatures.
+
     Usage:
         builder.add_node(
             "technical",
@@ -490,8 +492,24 @@ def safe_node(
     @functools.wraps(node_fn)
     async def wrapper(
         state: AgentState,
-        config: RunnableConfig | None = None,
+        config_or_runtime=None,
+        runtime=None,
     ) -> dict[str, Any]:
+        # Handle both (state, config) and (state, runtime) signatures
+        # If runtime is None and config_or_runtime looks like a Runtime, treat it as runtime
+        if runtime is not None:
+            # Modern signature: (state, runtime)
+            effective_config = getattr(config_or_runtime, 'config', None)
+            effective_runtime = runtime
+        elif hasattr(config_or_runtime, 'store'):
+            # config_or_runtime is actually a Runtime object
+            effective_config = getattr(config_or_runtime, 'config', None)
+            effective_runtime = config_or_runtime
+        else:
+            # Legacy signature: (state, config)
+            effective_config = config_or_runtime
+            effective_runtime = None
+
         # Check circuit breaker
         if breaker and not breaker.allow_request():
             logger.warning(
@@ -501,7 +519,7 @@ def safe_node(
             )
             if degrade_on_failure:
                 return await error_handler_node(
-                    state, config,
+                    state, effective_config,
                     failed_node=node_name,
                     error=Exception(
                         f"Circuit breaker '{circuit_breaker_name}' is OPEN"
@@ -514,7 +532,23 @@ def safe_node(
         last_exc: Exception | None = None
         for attempt in range(policy.max_attempts):
             try:
-                result = await node_fn(state, config)
+                # Call with appropriate arguments based on what the node expects
+                import inspect
+                sig = inspect.signature(node_fn)
+                params = list(sig.parameters.keys())
+
+                if len(params) >= 3 and 'runtime' in params:
+                    # Node expects (state, config, runtime) or (state, runtime)
+                    if runtime is not None:
+                        result = await node_fn(state, config_or_runtime, runtime)
+                    elif effective_runtime is not None:
+                        result = await node_fn(state, effective_config, effective_runtime)
+                    else:
+                        result = await node_fn(state, effective_config)
+                else:
+                    # Legacy node: (state, config)
+                    result = await node_fn(state, effective_config)
+
                 if breaker:
                     breaker.record_success()
                 return result
@@ -547,7 +581,7 @@ def safe_node(
         # All retries exhausted or non-retryable error
         if degrade_on_failure:
             return await error_handler_node(
-                state, config,
+                state, effective_config,
                 failed_node=node_name,
                 error=last_exc,
             )
