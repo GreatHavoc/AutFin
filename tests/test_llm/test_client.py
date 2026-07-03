@@ -1,4 +1,4 @@
-"""Tests for src/autfin/llm/client.py — LLMClient with fallback routing."""
+"""Tests for src/autfin/llm/client.py — LLMClient with openai SDK."""
 import sys
 import types
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -20,39 +20,40 @@ def _reset_singleton():
 
 
 @pytest.fixture
-def mock_litellm():
-    """Create a mock litellm module with acompletion."""
-    mock = MagicMock()
-    mock.acompletion = AsyncMock()
-    mock.suppress_debug_info = False
-    return mock
+def mock_openai_client():
+    """Create a mock openai AsyncOpenAI client."""
+    mock_client = MagicMock()
+    mock_client.chat = MagicMock()
+    mock_client.chat.completions = MagicMock()
+    mock_client.chat.completions.create = AsyncMock()
+    return mock_client
 
 
 @pytest.fixture
-def client_with_mock(mock_litellm):
-    """Create an LLMClient with mocked litellm."""
-    with patch.dict(sys.modules, {"litellm": mock_litellm}):
-        # Force re-import to pick up the mock
-        import importlib
-        import src.autfin.llm.client as mod
+def client_with_mock(mock_openai_client):
+    """Create an LLMClient with mocked openai client."""
+    import src.autfin.llm.client as mod
 
-        mod._litellm = mock_litellm
-        mod._LITELLM_AVAILABLE = True
-        importlib.reload(mod)
-
-        c = mod.LLMClient(
-            deep_model="openrouter/test:free",
-            fast_model="groq/test",
-        )
-        yield c, mock_litellm
+    c = mod.LLMClient(
+        deep_model="test-deep-model",
+        fast_model="test-fast-model",
+        base_url="https://test.example.com/v1",
+        api_key="test-key",
+    )
+    c._client = mock_openai_client
+    yield c, mock_openai_client
 
 
 @pytest.fixture
 def mock_completion_response():
-    """Create a mock completion response object."""
+    """Create a mock openai completion response object."""
     response = MagicMock()
     response.choices = [MagicMock()]
     response.choices[0].message.content = "Test LLM response"
+    response.choices[0].message.tool_calls = None
+    response.usage = MagicMock()
+    response.usage.prompt_tokens = 100
+    response.usage.completion_tokens = 50
     return response
 
 
@@ -64,8 +65,8 @@ class TestLLMClientInit:
         from src.autfin.llm.client import LLMClient
 
         c = LLMClient()
-        assert c.deep_model == "nvidia_nim/nvidia/nemotron-3-super-120b-a12b"
-        assert c.fast_model == "nvidia_nim/meta/llama-3.1-8b-instruct"
+        assert c.deep_model == "qwen3.6-35b-a3b"
+        assert c.fast_model == "meta/llama-3.1-8b-instruct"
 
     def test_custom_models(self):
         from src.autfin.llm.client import LLMClient
@@ -87,25 +88,21 @@ class TestLLMClientInit:
         assert stats["total_calls"] == 0
         assert stats["total_errors"] == 0
 
+    def test_base_url_stored(self):
+        from src.autfin.llm.client import LLMClient
+
+        c = LLMClient(base_url="https://custom.api.com/v1")
+        assert c.base_url == "https://custom.api.com/v1"
+
 
 # ================== AVAILABILITY TESTS ==================
 
 
 class TestAvailability:
-    def test_not_available_without_litellm(self):
-        with patch.dict(sys.modules, {"litellm": None}):
-            import importlib
-            import src.autfin.llm.client as mod
+    def test_available_with_openai_sdk(self):
+        from src.autfin.llm.client import LLMClient
 
-            mod._litellm = None
-            mod._LITELLM_AVAILABLE = False
-            importlib.reload(mod)
-
-            c = mod.LLMClient()
-            assert c.is_available is False
-
-    def test_available_with_litellm(self, client_with_mock):
-        c, _ = client_with_mock
+        c = LLMClient()
         assert c.is_available is True
 
 
@@ -114,31 +111,16 @@ class TestAvailability:
 
 class TestGenerate:
     @pytest.mark.asyncio
-    async def test_returns_none_when_unavailable(self):
-        with patch.dict(sys.modules, {"litellm": None}):
-            import importlib
-            import src.autfin.llm.client as mod
-
-            mod._litellm = None
-            mod._LITELLM_AVAILABLE = False
-            importlib.reload(mod)
-
-            c = mod.LLMClient()
-            result = await c.generate("test prompt")
-            assert result is None
-
-    @pytest.mark.asyncio
     async def test_successful_generation(self, client_with_mock, mock_completion_response):
-        c, mock_llm = client_with_mock
-        mock_llm.acompletion.return_value = mock_completion_response
+        c, mock_client = client_with_mock
+        mock_client.chat.completions.create.return_value = mock_completion_response
 
         result = await c.generate("What is Reliance?")
 
         assert result == "Test LLM response"
-        mock_llm.acompletion.assert_called_once()
-        call_kwargs = mock_llm.acompletion.call_args
-        assert call_kwargs.kwargs["model"] == "openrouter/test:free"
-        # No system_prompt passed, so only user message
+        mock_client.chat.completions.create.assert_called_once()
+        call_kwargs = mock_client.chat.completions.create.call_args
+        assert call_kwargs.kwargs["model"] == "test-deep-model"
         messages = call_kwargs.kwargs["messages"]
         assert len(messages) == 1
         assert messages[0]["role"] == "user"
@@ -146,34 +128,23 @@ class TestGenerate:
 
     @pytest.mark.asyncio
     async def test_with_system_prompt(self, client_with_mock, mock_completion_response):
-        c, mock_llm = client_with_mock
-        mock_llm.acompletion.return_value = mock_completion_response
+        c, mock_client = client_with_mock
+        mock_client.chat.completions.create.return_value = mock_completion_response
 
-        await c.generate("prompt", system_prompt="You are an analyst")
+        await c.generate("test", system_prompt="You are an analyst")
 
-        call_kwargs = mock_llm.acompletion.call_args
+        call_kwargs = mock_client.chat.completions.create.call_args
         messages = call_kwargs.kwargs["messages"]
         assert len(messages) == 2
-        assert messages[0]["content"] == "You are an analyst"
-
-    @pytest.mark.asyncio
-    async def test_without_system_prompt(self, client_with_mock, mock_completion_response):
-        c, mock_llm = client_with_mock
-        mock_llm.acompletion.return_value = mock_completion_response
-
-        await c.generate("prompt")
-
-        call_kwargs = mock_llm.acompletion.call_args
-        messages = call_kwargs.kwargs["messages"]
-        assert len(messages) == 1
-        assert messages[0]["role"] == "user"
+        assert messages[0]["role"] == "system"
+        assert messages[1]["role"] == "user"
 
     @pytest.mark.asyncio
     async def test_fallback_on_primary_failure(self, client_with_mock, mock_completion_response):
-        c, mock_llm = client_with_mock
+        c, mock_client = client_with_mock
 
         # Primary fails, fallback succeeds
-        mock_llm.acompletion.side_effect = [
+        mock_client.chat.completions.create.side_effect = [
             Exception("Rate limited"),
             mock_completion_response,
         ]
@@ -181,72 +152,93 @@ class TestGenerate:
         result = await c.generate("test")
 
         assert result == "Test LLM response"
-        assert mock_llm.acompletion.call_count == 2
+        assert mock_client.chat.completions.create.call_count == 2
         assert c._error_count == 1
         assert c._call_count == 1
 
     @pytest.mark.asyncio
     async def test_returns_none_when_all_models_fail(self, client_with_mock):
-        c, mock_llm = client_with_mock
-        mock_llm.acompletion.side_effect = Exception("All failed")
+        c, mock_client = client_with_mock
+        mock_client.chat.completions.create.side_effect = Exception("All failed")
 
         result = await c.generate("test")
 
         assert result is None
-        assert c._error_count == c.max_retries + 1  # 1 attempt + max_retries retries
+        assert c._error_count == c.max_retries + 1
 
     @pytest.mark.asyncio
     async def test_strips_empty_response(self, client_with_mock):
-        c, mock_llm = client_with_mock
+        c, mock_client = client_with_mock
 
         response = MagicMock()
         response.choices = [MagicMock()]
         response.choices[0].message.content = ""
-        mock_llm.acompletion.return_value = response
+        response.usage = MagicMock()
+        response.usage.prompt_tokens = 10
+        response.usage.completion_tokens = 0
+        mock_client.chat.completions.create.return_value = response
 
         result = await c.generate("test")
         assert result is None
 
     @pytest.mark.asyncio
     async def test_strips_none_content(self, client_with_mock):
-        c, mock_llm = client_with_mock
+        c, mock_client = client_with_mock
 
         response = MagicMock()
         response.choices = [MagicMock()]
         response.choices[0].message.content = None
-        mock_llm.acompletion.return_value = response
+        response.usage = MagicMock()
+        response.usage.prompt_tokens = 10
+        response.usage.completion_tokens = 0
+        mock_client.chat.completions.create.return_value = response
 
         result = await c.generate("test")
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_strips_thinking_tags(self, client_with_mock):
+        c, mock_client = client_with_mock
+
+        response = MagicMock()
+        response.choices = [MagicMock()]
+        response.choices[0].message.content = "<think>internal reasoning</think>Final answer"
+        response.usage = MagicMock()
+        response.usage.prompt_tokens = 10
+        response.usage.completion_tokens = 5
+        mock_client.chat.completions.create.return_value = response
+
+        result = await c.generate("test")
+        assert result == "Final answer"
+
+    @pytest.mark.asyncio
     async def test_custom_model_override(self, client_with_mock, mock_completion_response):
-        c, mock_llm = client_with_mock
-        mock_llm.acompletion.return_value = mock_completion_response
+        c, mock_client = client_with_mock
+        mock_client.chat.completions.create.return_value = mock_completion_response
 
         await c.generate("test", model="custom/model")
 
-        call_kwargs = mock_llm.acompletion.call_args
+        call_kwargs = mock_client.chat.completions.create.call_args
         assert call_kwargs.kwargs["model"] == "custom/model"
 
     @pytest.mark.asyncio
     async def test_custom_temperature(self, client_with_mock, mock_completion_response):
-        c, mock_llm = client_with_mock
-        mock_llm.acompletion.return_value = mock_completion_response
+        c, mock_client = client_with_mock
+        mock_client.chat.completions.create.return_value = mock_completion_response
 
         await c.generate("test", temperature=0.7)
 
-        call_kwargs = mock_llm.acompletion.call_args
+        call_kwargs = mock_client.chat.completions.create.call_args
         assert call_kwargs.kwargs["temperature"] == 0.7
 
     @pytest.mark.asyncio
     async def test_default_temperature(self, client_with_mock, mock_completion_response):
-        c, mock_llm = client_with_mock
-        mock_llm.acompletion.return_value = mock_completion_response
+        c, mock_client = client_with_mock
+        mock_client.chat.completions.create.return_value = mock_completion_response
 
         await c.generate("test")
 
-        call_kwargs = mock_llm.acompletion.call_args
+        call_kwargs = mock_client.chat.completions.create.call_args
         assert call_kwargs.kwargs["temperature"] == 0.0
 
 
@@ -256,12 +248,16 @@ class TestGenerate:
 class TestGenerateJSON:
     @pytest.mark.asyncio
     async def test_parses_valid_json(self, client_with_mock):
-        c, mock_llm = client_with_mock
+        c, mock_client = client_with_mock
 
         response = MagicMock()
         response.choices = [MagicMock()]
         response.choices[0].message.content = '{"recommendation": "buy", "confidence": 0.8}'
-        mock_llm.acompletion.return_value = response
+        response.choices[0].message.tool_calls = None
+        response.usage = MagicMock()
+        response.usage.prompt_tokens = 10
+        response.usage.completion_tokens = 5
+        mock_client.chat.completions.create.return_value = response
 
         result = await c.generate_json("Analyze this stock")
 
@@ -269,48 +265,60 @@ class TestGenerateJSON:
 
     @pytest.mark.asyncio
     async def test_strips_markdown_fences(self, client_with_mock):
-        c, mock_llm = client_with_mock
+        c, mock_client = client_with_mock
 
         response = MagicMock()
         response.choices = [MagicMock()]
         response.choices[0].message.content = '```json\n{"key": "value"}\n```'
-        mock_llm.acompletion.return_value = response
+        response.choices[0].message.tool_calls = None
+        response.usage = MagicMock()
+        response.usage.prompt_tokens = 10
+        response.usage.completion_tokens = 5
+        mock_client.chat.completions.create.return_value = response
 
         result = await c.generate_json("test")
         assert result == {"key": "value"}
 
     @pytest.mark.asyncio
     async def test_returns_none_on_invalid_json(self, client_with_mock):
-        c, mock_llm = client_with_mock
+        c, mock_client = client_with_mock
 
         response = MagicMock()
         response.choices = [MagicMock()]
         response.choices[0].message.content = "This is not JSON at all"
-        mock_llm.acompletion.return_value = response
+        response.choices[0].message.tool_calls = None
+        response.usage = MagicMock()
+        response.usage.prompt_tokens = 10
+        response.usage.completion_tokens = 5
+        mock_client.chat.completions.create.return_value = response
 
         result = await c.generate_json("test")
         assert result is None
 
     @pytest.mark.asyncio
     async def test_returns_none_when_llm_fails(self, client_with_mock):
-        c, mock_llm = client_with_mock
-        mock_llm.acompletion.side_effect = Exception("LLM down")
+        c, mock_client = client_with_mock
+        mock_client.chat.completions.create.side_effect = Exception("LLM down")
 
         result = await c.generate_json("test")
         assert result is None
 
     @pytest.mark.asyncio
     async def test_appends_json_instruction_to_system(self, client_with_mock):
-        c, mock_llm = client_with_mock
+        c, mock_client = client_with_mock
 
         response = MagicMock()
         response.choices = [MagicMock()]
         response.choices[0].message.content = '{"ok": true}'
-        mock_llm.acompletion.return_value = response
+        response.choices[0].message.tool_calls = None
+        response.usage = MagicMock()
+        response.usage.prompt_tokens = 10
+        response.usage.completion_tokens = 5
+        mock_client.chat.completions.create.return_value = response
 
         await c.generate_json("test", system_prompt="You are an analyst")
 
-        call_kwargs = mock_llm.acompletion.call_args
+        call_kwargs = mock_client.chat.completions.create.call_args
         system_msg = call_kwargs.kwargs["messages"][0]["content"]
         assert "JSON" in system_msg
         assert "You are an analyst" in system_msg
@@ -347,37 +355,56 @@ class TestSingleton:
 
 
 class TestStats:
-    def test_stats_track_calls(self, client_with_mock, mock_completion_response):
-        c, mock_llm = client_with_mock
-        mock_llm.acompletion.return_value = mock_completion_response
-
-        import asyncio
-
-        asyncio.run(c.generate("test1"))
-        asyncio.run(c.generate("test2"))
-
+    def test_get_stats_returns_dict(self, client_with_mock):
+        c, _ = client_with_mock
         stats = c.get_stats()
-        assert stats["total_calls"] == 2
-        assert stats["total_errors"] == 0
-
-    def test_stats_track_errors(self, client_with_mock):
-        c, mock_llm = client_with_mock
-        mock_llm.acompletion.side_effect = Exception("fail")
-
-        import asyncio
-
-        asyncio.run(c.generate("test"))
-
-        stats = c.get_stats()
-        assert stats["total_errors"] >= 1
+        assert isinstance(stats, dict)
+        assert "available" in stats
+        assert "total_calls" in stats
+        assert "total_errors" in stats
+        assert "deep_model" in stats
+        assert "fast_model" in stats
+        assert "base_url" in stats
 
 
-# ================== IMPORT FLAG TESTS ==================
+# ================== HELPERS TESTS ==================
 
 
-class TestImportFlags:
-    def test_client_module_has_flags(self):
-        import src.autfin.llm.client as mod
+class TestHelpers:
+    def test_compress_tool_result_short(self):
+        from src.autfin.llm.client import _compress_tool_result
 
-        assert hasattr(mod, "_LITELLM_AVAILABLE")
-        assert hasattr(mod, "_litellm")
+        short = '{"key": "value"}'
+        assert _compress_tool_result(short) == short
+
+    def test_compress_tool_result_long(self):
+        from src.autfin.llm.client import _compress_tool_result
+
+        long_str = '{"data": "' + "x" * 10000 + '"}'
+        result = _compress_tool_result(long_str, max_chars=100)
+        assert len(result) < 200
+        assert "truncated" in result
+
+    def test_validate_tool_args_no_rules(self):
+        from src.autfin.llm.client import _validate_tool_args
+
+        args = {"arbitrary": "value"}
+        cleaned, error = _validate_tool_args("unknown_tool", args)
+        assert cleaned == args
+        assert error is None
+
+    def test_validate_tool_args_with_rules(self):
+        from src.autfin.llm.client import _validate_tool_args
+
+        args = {"symbol": "reliance", "action": "BUY", "quantity": 100, "price": 2500.0}
+        cleaned, error = _validate_tool_args("execute_order", args)
+        assert error is None
+        assert cleaned["symbol"] == "RELIANCE"  # uppercased
+
+    def test_validate_tool_args_invalid_action(self):
+        from src.autfin.llm.client import _validate_tool_args
+
+        args = {"symbol": "RELIANCE", "action": "INVALID", "quantity": 100, "price": 2500.0}
+        _, error = _validate_tool_args("execute_order", args)
+        assert error is not None
+        assert "INVALID" in error

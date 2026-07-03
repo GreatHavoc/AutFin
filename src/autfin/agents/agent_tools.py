@@ -317,6 +317,7 @@ async def valuation_tool(symbol: str, depth: str = "standard") -> str:
         depth: quick (simple DCF), standard (3 scenarios), deep (full + reverse DCF)
     """
     from src.autfin.agents.valuation import fetch_financials, compute_dcf, reverse_dcf, build_scenarios
+    from datetime import datetime
 
     try:
         fin_data = await fetch_financials(symbol)

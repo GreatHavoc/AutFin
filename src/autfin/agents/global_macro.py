@@ -1,5 +1,6 @@
 """Global Macro Agent — agentic with tool-calling loop for economic indicators."""
 
+import asyncio
 import json
 import os
 from datetime import datetime, timedelta

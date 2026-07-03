@@ -1,14 +1,17 @@
 """
 Centralized LLM client for AutFin.
 
-Uses litellm for all provider routing. The caller chooses the right model for the task.
-Returns None on failure — agents handle degradation autonomously.
+Connects directly to OpenAI-compatible endpoints via the openai SDK.
+Supports Modal vLLM (primary), NVIDIA NIM (fallback), and any
+OpenAI-compatible provider. No litellm dependency.
 """
 
 import asyncio
 import json
 import logging
+import os
 import random
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -16,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 # Module-level token accumulator (read by budget guard node)
 _token_accumulator = {"tokens": 0, "cost": 0.0}
+
+
+# ================== RATE LIMITER ==================
 
 
 class _RateLimiter:
@@ -121,21 +127,17 @@ def reset_token_usage():
     _token_accumulator["cost"] = 0.0
 
 
-# Lazy import flags
-_LITELLM_AVAILABLE = False
-_litellm = None
+# ================== OPENAI SDK ==================
+
+# The openai SDK connects directly to OpenAI-compatible endpoints.
+# Modal vLLM, NVIDIA NIM, OpenRouter, etc. all expose OpenAI-compatible APIs.
+
+_OPENAI_SDK_AVAILABLE = False
 
 try:
-    import litellm as _litellm_mod
+    from openai import AsyncOpenAI as _AsyncOpenAI
 
-    _litellm = _litellm_mod
-    _LITELLM_AVAILABLE = True
-    # Suppress litellm's own verbose logging
-    _litellm_mod.suppress_debug_info = True
-    import os
-
-    os.environ.setdefault("LITELLM_LOG", "ERROR")
-
+    _OPENAI_SDK_AVAILABLE = True
 except ImportError:
     pass
 
@@ -144,63 +146,84 @@ except ImportError:
 _traceable = None
 
 try:
-    import os as _os
-    if _os.environ.get("LANGSMITH_API_KEY"):
+    if os.environ.get("LANGSMITH_API_KEY"):
         from langsmith import traceable as _traceable_fn
+
         _traceable = _traceable_fn
 except Exception:
     pass
 
 
+# ================== LLM CLIENT ==================
+
+
 class LLMClient:
     """
-    Agentic LLM client — no workflow fallback chains.
+    Agentic LLM client — connects directly to OpenAI-compatible endpoints.
 
-    Uses litellm to route requests across providers (OpenRouter, Groq, Gemini, Cerebras, Ollama).
+    Uses the openai SDK to connect to any OpenAI-compatible endpoint
+    (Modal vLLM, NVIDIA NIM, OpenRouter, etc.). No litellm dependency.
+
     The caller chooses the right model for the task. On failure, returns None —
     agents handle degradation autonomously (retry same model, switch strategy, skip).
     """
 
     def __init__(
         self,
-        deep_model: str = "nvidia_nim/nvidia/nemotron-3-super-120b-a12b",
-        fast_model: str = "nvidia_nim/meta/llama-3.1-8b-instruct",
+        deep_model: str = "qwen3.6-35b-a3b",
+        fast_model: str = "meta/llama-3.1-8b-instruct",
         temperature: float = 0.0,
         max_retries: int = 2,
         timeout: float = 180.0,
-        api_base: Optional[str] = None,
+        base_url: Optional[str] = None,
+        api_key: str = "dummy",
+        extra_body: Optional[Dict[str, Any]] = None,
     ):
         """
-        Initialize LLM client. v3.0: litellm handles all provider routing.
+        Initialize LLM client.
 
         Args:
-            deep_model: Primary model (litellm format: provider/model-name)
-            fast_model: Fast model for lightweight tasks
+            deep_model: Primary model name (plain name, no provider prefix)
+            fast_model: Fast model name for lightweight tasks
             temperature: Sampling temperature (0.0 = deterministic)
-            max_retries: Max retries on transient failures (1 = fail fast)
+            max_retries: Max retries on transient failures
             timeout: Request timeout in seconds
-            api_base: Custom API base URL for OpenAI-compatible endpoints (e.g. Modal vLLM)
+            base_url: OpenAI-compatible endpoint URL (e.g. Modal vLLM URL)
+            api_key: API key (use "dummy" for self-hosted endpoints)
+            extra_body: Extra body params passed to the API (e.g. vLLM-specific)
         """
         self.deep_model = deep_model
         self.fast_model = fast_model
         self.temperature = temperature
         self.max_retries = max_retries
         self.timeout = timeout
-        self.api_base = api_base
-        self._available = _LITELLM_AVAILABLE
+        self.base_url = base_url
+        self.api_key = api_key
+        self.extra_body = extra_body or {}
         self._call_count = 0
         self._error_count = 0
+        self._client: Optional[_AsyncOpenAI] = None
 
-        if not self._available:
+        if not _OPENAI_SDK_AVAILABLE:
             logger.warning(
-                "litellm not installed — LLM features disabled. "
-                "Install with: pip install litellm"
+                "openai SDK not installed — LLM features disabled. "
+                "Install with: pip install openai"
             )
+
+    def _get_client(self) -> _AsyncOpenAI:
+        """Get or create the AsyncOpenAI client."""
+        if self._client is None:
+            kwargs: Dict[str, Any] = {"api_key": self.api_key}
+            if self.base_url:
+                kwargs["base_url"] = self.base_url
+            kwargs["timeout"] = self.timeout
+            self._client = _AsyncOpenAI(**kwargs)
+        return self._client
 
     @property
     def is_available(self) -> bool:
-        """Whether litellm is installed and usable."""
-        return self._available
+        """Whether the openai SDK is installed and client is usable."""
+        return _OPENAI_SDK_AVAILABLE
 
     async def generate(
         self,
@@ -228,7 +251,7 @@ class LLMClient:
         Returns:
             Generated text, or None on failure
         """
-        if not self._available:
+        if not _OPENAI_SDK_AVAILABLE:
             return None
 
         target_model = model or self.deep_model
@@ -239,6 +262,8 @@ class LLMClient:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
+        client = self._get_client()
+
         last_error = None
         for attempt in range(self.max_retries + 1):
             try:
@@ -246,25 +271,25 @@ class LLMClient:
                 await _rate_limiter.acquire()
 
                 t_start = time.monotonic()
-                kwargs = dict(
-                    model=target_model,
-                    messages=messages,
-                    temperature=temp,
-                    max_tokens=max_tokens,
-                    timeout=self.timeout,
-                )
-                if self.api_base and target_model.startswith("hosted_vllm/"):
-                    kwargs["api_base"] = self.api_base
-                    kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
-                response = await _litellm.acompletion(**kwargs)
+                kwargs: Dict[str, Any] = {
+                    "model": target_model,
+                    "messages": messages,
+                    "temperature": temp,
+                    "max_tokens": max_tokens,
+                    "timeout": self.timeout,
+                }
+                if self.extra_body:
+                    kwargs["extra_body"] = self.extra_body
+
+                response = await client.chat.completions.create(**kwargs)
 
                 elapsed_ms = (time.monotonic() - t_start) * 1000
                 self._call_count += 1
                 _rate_limiter.on_success()
 
-                usage = getattr(response, "usage", None)
-                prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
-                completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+                usage = response.usage
+                prompt_tokens = usage.prompt_tokens if usage else 0
+                completion_tokens = usage.completion_tokens if usage else 0
 
                 self._record_llm_metrics(target_model, prompt_tokens, completion_tokens, elapsed_ms, state)
 
@@ -273,7 +298,6 @@ class LLMClient:
                     content = content.strip()
                     # Strip Qwen thinking mode artifacts if present
                     if "<think>" in content:
-                        import re
                         content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
 
                 return content if content else None
@@ -347,7 +371,7 @@ class LLMClient:
         Returns:
             Final text response, or None on failure
         """
-        if not self._available:
+        if not _OPENAI_SDK_AVAILABLE:
             return None
 
         target_model = model or self.deep_model
@@ -360,36 +384,49 @@ class LLMClient:
             # Some LLMs (NVIDIA NIM) require a user message before tools
             messages.append({"role": "user", "content": "Begin."})
 
+        client = self._get_client()
+
         tool_iterations = 0
         for iteration in range(max_iterations):
             try:
                 t_start = time.monotonic()
-                kwargs = dict(
-                    model=target_model,
-                    messages=messages,
-                    tools=tools,
-                    tool_choice="auto",
-                    temperature=temp,
-                    max_tokens=max_tokens,
-                    timeout=self.timeout,
-                )
-                if self.api_base and target_model.startswith("hosted_vllm/"):
-                    kwargs["api_base"] = self.api_base
-                    kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
-                response = await _litellm.acompletion(**kwargs)
+                kwargs: Dict[str, Any] = {
+                    "model": target_model,
+                    "messages": messages,
+                    "tools": tools,
+                    "tool_choice": "auto",
+                    "temperature": temp,
+                    "max_tokens": max_tokens,
+                    "timeout": self.timeout,
+                }
+                if self.extra_body:
+                    kwargs["extra_body"] = self.extra_body
+
+                response = await client.chat.completions.create(**kwargs)
 
                 elapsed_ms = (time.monotonic() - t_start) * 1000
                 self._call_count += 1
 
-                usage = getattr(response, "usage", None)
-                prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
-                completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+                usage = response.usage
+                prompt_tokens = usage.prompt_tokens if usage else 0
+                completion_tokens = usage.completion_tokens if usage else 0
                 self._record_llm_metrics(target_model, prompt_tokens, completion_tokens, elapsed_ms, state)
 
                 message = response.choices[0].message
 
                 if message.tool_calls:
-                    messages.append(message)
+                    # Convert openai tool_calls to dict format for message history
+                    tool_calls_dict = []
+                    for tc in message.tool_calls:
+                        tool_calls_dict.append({
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        })
+                    messages.append({"role": "assistant", "content": None, "tool_calls": tool_calls_dict})
                     tool_iterations += 1
 
                     tool_results = await asyncio.gather(
@@ -412,7 +449,6 @@ class LLMClient:
                 content = message.content.strip() if message.content else None
                 # Strip Qwen thinking mode artifacts if present
                 if content and "<think>" in content:
-                    import re
                     content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
                 return content
 
@@ -482,17 +518,18 @@ class LLMClient:
         result = extract_json(raw)
         if result:
             return result
-        logger.warning(f"Failed to parse LLM JSON response")
+        logger.warning("Failed to parse LLM JSON response")
         return None
 
     def get_stats(self) -> Dict[str, Any]:
         """Return usage statistics."""
         return {
-            "available": self._available,
+            "available": _OPENAI_SDK_AVAILABLE,
             "total_calls": self._call_count,
             "total_errors": self._error_count,
             "deep_model": self.deep_model,
             "fast_model": self.fast_model,
+            "base_url": self.base_url,
         }
 
     def _record_llm_metrics(
@@ -709,7 +746,7 @@ def get_llm_client() -> LLMClient:
     Get or create the global LLM client instance.
 
     Reads model configuration from AutFinSettings.
-    If MODAL_VLLM_URL is set, routes through self-hosted vLLM endpoint.
+    Connects directly to OpenAI-compatible endpoints (Modal vLLM, NVIDIA NIM, etc.).
 
     Returns:
         LLMClient instance
@@ -725,18 +762,30 @@ def get_llm_client() -> LLMClient:
             # If Modal vLLM is configured, use it as primary
             if settings.modal_vllm_url:
                 _default_client = LLMClient(
-                    deep_model=f"hosted_vllm/{settings.modal_vllm_model}",
+                    deep_model=settings.modal_vllm_model,
                     fast_model=settings.fast_model,
                     temperature=settings.model_temperature,
-                    api_base=settings.modal_vllm_url,
+                    base_url=settings.modal_vllm_url,
+                    api_key="dummy",  # Self-hosted vLLM doesn't need a real key
+                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 )
-                logger.info("LLM client configured: Modal vLLM (%s)", settings.modal_vllm_model)
+                logger.info("LLM client configured: Modal vLLM (%s) at %s", settings.modal_vllm_model, settings.modal_vllm_url)
             else:
-                _default_client = LLMClient(
-                    deep_model=settings.deep_model,
-                    fast_model=settings.fast_model,
-                    temperature=settings.model_temperature,
-                )
+                # Fallback to NVIDIA NIM
+                nvidia_key = os.environ.get("NVIDIA_NIM_API_KEY", "")
+                if nvidia_key:
+                    _default_client = LLMClient(
+                        deep_model="meta/llama-3.1-8b-instruct",
+                        fast_model="meta/llama-3.1-8b-instruct",
+                        temperature=settings.model_temperature,
+                        base_url="https://integrate.api.nvidia.com/v1",
+                        api_key=nvidia_key,
+                    )
+                    logger.info("LLM client configured: NVIDIA NIM (meta/llama-3.1-8b-instruct)")
+                else:
+                    # No provider configured — disabled
+                    _default_client = LLMClient()
+                    logger.warning("No LLM provider configured. Set MODAL_VLLM_URL or NVIDIA_NIM_API_KEY in .env")
         except Exception as e:
             logger.debug("Settings load failed (%s), using default LLM config", e)
             _default_client = LLMClient()

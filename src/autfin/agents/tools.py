@@ -4,7 +4,7 @@ LangChain-compatible tool definitions for AutFin agents.
 Each tool is defined as a standalone async function with:
 - A docstring that serves as the tool description
 - Type hints for parameter validation
-- OpenAI-format tool definition (for litellm)
+- OpenAI-format tool definition
 
 Tools are organized by agent domain. Each agent picks the tools it needs.
 """

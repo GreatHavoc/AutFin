@@ -33,8 +33,8 @@ dependencies = [
     # Scheduling
     "apscheduler>=3.10.0",
     
-    # LLM
-    "litellm>=1.0.0",
+    # LLM — openai SDK connects directly to OpenAI-compatible endpoints
+    "openai>=1.0.0",
 
     # Sentiment (FinBERT + VADER)
     "transformers>=4.30.0",
