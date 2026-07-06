@@ -27,11 +27,14 @@ class TestIndia10YFRED:
     @patch("src.autfin.agents.global_macro._fetch_fred_indicator")
     def test_fetch_fred_includes_india_10y(self, mock_fetch):
         from src.autfin.agents.global_macro import fetch_fred_indicators
+        # v5.5: fetch_fred_indicators now translates friendly key → real FRED
+        # series ID (e.g. 'india_10y_yield' → 'INDIRLTLT01STM') before calling
+        # _fetch_fred_indicator, so the mock must accept the real IDs.
         mock_fetch.side_effect = lambda sid: {
-            "us_gdp": 2.1,
-            "us_cpi": 300.0,
-            "fed_funds_rate": 5.25,
-            "india_10y_yield": 6.78,
+            "GDP": 2.1,
+            "CPIAUCSL": 300.0,
+            "FEDFUNDS": 5.25,
+            "INDIRLTLT01STM": 6.78,
         }.get(sid)
         result = fetch_fred_indicators()
         assert "india_10y_yield" in result
@@ -42,10 +45,10 @@ class TestIndia10YFRED:
     def test_fetch_fred_india_10y_unavailable(self, mock_fetch):
         from src.autfin.agents.global_macro import fetch_fred_indicators
         mock_fetch.side_effect = lambda sid: {
-            "us_gdp": 2.1,
-            "us_cpi": 300.0,
-            "fed_funds_rate": 5.25,
-        }.get(sid)  # india_10y_yield not in dict → returns None
+            "GDP": 2.1,
+            "CPIAUCSL": 300.0,
+            "FEDFUNDS": 5.25,
+        }.get(sid)  # INDIRLTLT01STM not in dict → returns None
         result = fetch_fred_indicators()
         assert result["india_10y_yield"]["value"] is None
 

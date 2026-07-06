@@ -132,31 +132,50 @@ def _fetch_fred_indicator(series_id: str) -> Optional[float]:
     return None
 
 
+def _format_fred_indicator(friendly_id: str, value: Optional[float]) -> Dict[str, Any]:
+    """
+    Convert a friendly macro indicator key + value into the standard
+    metadata envelope. Uses the canonical FRED_SERIES map to verify
+    the key maps to a real FRED series ID.
+    """
+    units = {
+        "us_gdp": "percent (real growth)",
+        "us_cpi": "index",
+        "fed_funds_rate": "percent",
+        "india_10y_yield": "percent",
+    }
+    sources = {
+        "us_gdp": "BEA (via FRED, quarterly)",
+        "us_cpi": "BLS (via FRED, monthly)",
+        "fed_funds_rate": "Federal Reserve (via FRED, monthly)",
+        "india_10y_yield": "OECD/RBI (via FRED, monthly)",
+    }
+    return {
+        "value": value,
+        "unit": units.get(friendly_id, "unknown"),
+        "source": f"FRED API — {sources[friendly_id]}" if value else f"{sources.get(friendly_id, friendly_id)} — FRED unavailable",
+        "last_updated": datetime.now().isoformat() if value else "unavailable",
+    }
+
+
 def fetch_fred_indicators() -> Dict[str, Dict[str, Any]]:
     """
-    Fetch all FRED economic indicators (GDP, CPI, Fed Funds Rate).
-    
+    Fetch all FRED economic indicators (US GDP, CPI, Fed Funds Rate, India 10Y yield).
+
+    Maps friendly macro keys (e.g. 'us_gdp') → real FRED series IDs (e.g. 'GDP')
+    via FRED_SERIES. Returns the same friendly keys for downstream consumers
+    (impact matrices, narrative generator, dashboard, tests).
+
     Returns:
-        Dictionary of indicator data with value, unit, source, last_updated
+        Dictionary of indicator data keyed by friendly name, each with
+        value, unit, source, last_updated.
     """
     results = {}
-    
-    labels = {
-        "us_gdp": ("percent", "BEA (quarterly)"),
-        "us_cpi": ("index", "BLS (monthly)"),
-        "fed_funds_rate": ("percent", "Federal Reserve (monthly)"),
-        "india_10y_yield": ("percent", "RBI/FRED (monthly)"),
-    }
-    
-    for series_id, (unit, source) in labels.items():
-        value = _fetch_fred_indicator(series_id)
-        results[series_id] = {
-            "value": value,
-            "unit": unit,
-            "source": f"FRED API — {source}" if value else f"{source} — FRED unavailable",
-            "last_updated": datetime.now().isoformat() if value else "unavailable",
-        }
-    
+
+    for friendly_id, fred_series_id in FRED_SERIES.items():
+        value = _fetch_fred_indicator(fred_series_id)
+        results[friendly_id] = _format_fred_indicator(friendly_id, value)
+
     return results
 
 

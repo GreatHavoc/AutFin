@@ -224,33 +224,33 @@ async def _call_analysis(
     """AnalysisAgent: run stock analysis (deterministic, no LLM)."""
     try:
         from src.autfin.agents.agent_tools import (
-            fundamentals_analysis,
-            technical_analysis,
-            sentiment_analysis,
-            macro_analysis,
-            valuation_analysis,
-            distortion_audit,
-            regulatory_analysis,
+            fundamentals_tool,
+            technical_tool,
+            sentiment_tool,
+            macro_tool,
+            valuation_tool,
+            distortion_tool,
+            regulatory_tool,
         )
 
         results: Dict[str, Any] = {"symbol": symbol, "analyses": {}}
 
         analysis_map = {
-            "fundamentals": [fundamentals_analysis],
-            "technical": [technical_analysis],
-            "sentiment": [sentiment_analysis],
-            "macro": [macro_analysis],
-            "valuation": [valuation_analysis],
-            "distortion": [distortion_audit],
-            "regulatory": [regulatory_analysis],
+            "fundamentals": [fundamentals_tool],
+            "technical": [technical_tool],
+            "sentiment": [sentiment_tool],
+            "macro": [macro_tool],
+            "valuation": [valuation_tool],
+            "distortion": [distortion_tool],
+            "regulatory": [regulatory_tool],
             "full": [
-                fundamentals_analysis,
-                technical_analysis,
-                sentiment_analysis,
-                distortion_audit,
-                regulatory_analysis,
-                valuation_analysis,
-                macro_analysis,
+                fundamentals_tool,
+                technical_tool,
+                sentiment_tool,
+                distortion_tool,
+                regulatory_tool,
+                valuation_tool,
+                macro_tool,
             ],
         }
 
@@ -260,12 +260,11 @@ async def _call_analysis(
         tasks = []
         for tool_fn in tools_to_run:
             fn_name = tool_fn.__name__
-            if fn_name == "macro_analysis":
-                tasks.append(("macro", tool_fn()))
-            elif fn_name in ("distortion_audit", "regulatory_analysis"):
-                tasks.append((fn_name.replace("_analysis", ""), tool_fn(symbol, depth)))
+            label = fn_name.replace("_tool", "")
+            if fn_name == "macro_tool":
+                tasks.append((label, tool_fn()))
             else:
-                tasks.append((fn_name.replace("_analysis", ""), tool_fn(symbol, depth)))
+                tasks.append((label, tool_fn(symbol, depth)))
 
         gathered = await asyncio.gather(
             *[t[1] for t in tasks],
@@ -298,7 +297,7 @@ async def _call_research(
             research_batch,
             build_stock_pitch,
         )
-        from src.autfin.agents.agent_tools import research_synthesis
+        from src.autfin.agents.agent_tools import research_tool as research_synthesis
 
         if action == "screen":
             result = await screen_candidates(criteria or "ROE > 15%")
@@ -318,6 +317,7 @@ async def _call_research(
             return json.dumps({"action": "pitch", "symbol": symbol, "result": result}, default=str)
 
         elif action == "synthesize" and symbol:
+            # research_tool takes a comma-separated symbols string
             result = await research_synthesis(symbol, depth)
             return json.dumps({"action": "synthesize", "symbol": symbol, "result": result}, default=str)
 
@@ -377,11 +377,11 @@ async def _call_memory(
         from src.autfin.tools.supervisor_tools import (
             retrieve_learnings,
             log_decision,
-            record_learning,
-            calibrate_conviction,
-            detect_patterns,
+            record_learning_tool,
+            calibrate_conviction_tool,
+            detect_patterns_tool,
             check_guardian,
-            request_human_approval,
+            request_human_approval_tool,
             finalize_session,
         )
 
@@ -393,16 +393,29 @@ async def _call_memory(
             result = await log_decision(symbol, decision)
             return json.dumps({"action": "log", "symbol": symbol, "result": result}, default=str)
 
-        elif action == "record" and outcome:
-            result = await record_learning(symbol, outcome)
+        elif action == "record" and symbol and outcome:
+            # record_learning_tool(symbol, action, conviction, pnl_pct, thesis_summary, outcome)
+            # Default conviction=0.5, action from outcome prefix or "BUY"
+            action_side = "BUY" if outcome.lower().startswith("buy") else (
+                "SELL" if outcome.lower().startswith("sell") else "BUY"
+            )
+            conv = float(decision) if decision else 0.5
+            result = await record_learning_tool(
+                symbol=symbol,
+                action=action_side,
+                conviction=conv,
+                pnl_pct=0.0,
+                thesis_summary=decision or f"Recorded outcome {outcome} for {symbol}",
+                outcome=outcome,
+            )
             return json.dumps({"action": "record", "symbol": symbol, "result": result}, default=str)
 
         elif action == "calibrate" and symbol:
-            result = await calibrate_conviction(symbol)
+            result = await calibrate_conviction_tool(symbol)
             return json.dumps({"action": "calibrate", "symbol": symbol, "result": result}, default=str)
 
         elif action == "detect":
-            result = await detect_patterns()
+            result = await detect_patterns_tool()
             return json.dumps({"action": "detect", "result": result}, default=str)
 
         elif action == "guardian":
@@ -410,8 +423,11 @@ async def _call_memory(
             return json.dumps({"action": "guardian", "result": result}, default=str)
 
         elif action == "approve":
-            result = await request_human_approval()
-            return json.dumps({"action": "approve", "result": result}, default=str)
+            result = await request_human_approval_tool(
+                question="Trade requires human approval",
+                trade_details={"symbol": symbol, "notes": decision},
+            )
+            return json.dumps({"action": "approve", "result": result, "symbol": symbol}, default=str)
 
         elif action == "finalize":
             result = await finalize_session()

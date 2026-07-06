@@ -34,7 +34,13 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 def _filter_symbol_inputs(inputs: dict) -> dict:
-    """Keep only 'symbol' and 'depth' from agent tool inputs."""
+    """Keep only 'symbol' and 'depth' from agent tool inputs.
+
+    LangSmith passes inputs as a flat kwargs dict; tolerate missing/extra
+    keys and non-dict shapes (defensive).
+    """
+    if not isinstance(inputs, dict):
+        return {}
     return {k: v for k, v in inputs.items() if k in ("symbol", "depth")}
 
 def _filter_no_args_inputs(inputs: dict) -> dict:
@@ -43,35 +49,70 @@ def _filter_no_args_inputs(inputs: dict) -> dict:
 
 def _filter_symbols_inputs(inputs: dict) -> dict:
     """Keep only 'symbols' and 'depth' from research_tool inputs."""
+    if not isinstance(inputs, dict):
+        return {}
     return {k: v for k, v in inputs.items() if k in ("symbols", "depth")}
 
 def _filter_trade_inputs(inputs: dict) -> dict:
     """Keep only 'trade_json' from risk_tool inputs."""
+    if not isinstance(inputs, dict):
+        return {}
     return {k: v for k, v in inputs.items() if k == "trade_json"}
 
 
-def _filter_agent_outputs(outputs: dict) -> dict:
-    """Strip large payloads from agent tool outputs for LangSmith."""
-    raw = outputs.get("output", outputs)
+def _filter_agent_outputs(outputs: Any) -> dict:
+    """Strip large payloads from agent tool outputs for LangSmith.
+
+    LangSmith calls process_outputs(return_value). Depending on the tool,
+    the return value can be:
+      - a dict like {'output': ..., 'symbol': ..., 'status': ...}
+      - a plain dict with the same keys at the top level
+      - a JSON string (from json.dumps)
+      - a non-serializable object (we tag it with a type marker)
+    Normalise to a dict before slicing so this handler never crashes
+    with AttributeError("'str' object has no attribute 'get'").
+    """
+    raw: Any = outputs
+
     if isinstance(raw, str):
         try:
             parsed = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            parsed = {"raw": raw[:500] + "...[truncated]" if len(raw) > 500 else raw}
+            if isinstance(parsed, dict):
+                _data = parsed
+            else:
+                return {"_filtered": True, "preview": str(parsed)[:300]}
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return {"_filtered": True, "preview": raw[:500] + "...[truncated]" if len(raw) > 500 else raw}
     elif isinstance(raw, dict):
-        parsed = raw
+        _data = raw
+    elif raw is None:
+        return {"_filtered": True, "preview": None}
     else:
-        return {"output_type": type(raw).__name__}
+        return {"_filtered": True, "preview": repr(raw)[:300]}
+
+    if _data.get("output") is not None and isinstance(_data.get("output"), (dict, str, list)):
+        candidate = _data["output"]
+        if isinstance(candidate, dict):
+            _data = candidate
+        elif isinstance(candidate, str):
+            try:
+                parsed_inner = json.loads(candidate)
+                if isinstance(parsed_inner, dict):
+                    _data = parsed_inner
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
 
     result: dict = {}
-    for key in ("status", "symbol", "symbols"):
-        if key in parsed:
-            result[key] = parsed[key]
-    if "raw_analysis" in parsed:
-        v = parsed["raw_analysis"]
+    for key in ("status", "symbol", "symbols", "error"):
+        if key in _data and not isinstance(_data[key], (dict, list)):
+            result[key] = _data[key]
+    if "raw_analysis" in _data:
+        v = _data["raw_analysis"]
         result["raw_analysis"] = v[:500] + "...[truncated]" if isinstance(v, str) and len(v) > 500 else v
-    if "summary" in parsed:
-        result["summary"] = str(parsed["summary"])[:300]
+    if "summary" in _data:
+        result["summary"] = str(_data["summary"])[:300]
+    if not result:
+        result["_filtered"] = True
     return result
 
 

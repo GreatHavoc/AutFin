@@ -289,7 +289,10 @@ def calculate_indicators(data: pd.DataFrame) -> dict:
         data: DataFrame with columns: 'open', 'high', 'low', 'close', 'volume'
 
     Returns:
-        Dictionary containing all calculated indicators.
+        Dictionary containing all calculated indicators. If an indicator
+        fails (e.g. pandas-ta requires 200 rows for bbands but only 124 are
+        available), the failed entry falls back to None instead of raising
+        and aborting the whole analysis.
     """
     if data.empty:
         raise ValueError("Input data is empty")
@@ -307,33 +310,45 @@ def calculate_indicators(data: pd.DataFrame) -> dict:
 
     indicators: dict[str, Any] = {}
 
-    # Trend (6)
-    indicators["sma"] = calculate_sma(c)
-    indicators["multi_sma"] = calculate_multi_sma(c)
-    indicators["ema"] = calculate_ema(c)
-    indicators["wma"] = calculate_wma(c)
-    indicators["macd"] = calculate_macd(c)
-    indicators["adx"] = calculate_adx(h, l, c)
+    def _safe(key: str, fn, *args, **kwargs):
+        """Run fn safely; record the exception but don't abort the rest."""
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:
+            logger.warning(
+                "Indicator %s failed (%d rows available): %s",
+                key, len(data), exc,
+            )
+            return None
 
-    # Momentum (5)
-    indicators["rsi"] = calculate_rsi(c)
-    indicators["stoch"] = calculate_stoch(h, l, c)
-    indicators["cci"] = calculate_cci(h, l, c)
-    indicators["williams_r"] = calculate_williams_r(h, l, c)
-    indicators["ao"] = calculate_awesome(h, l)
+    # Trend (6) — short-period MAs (20/50) tolerate 124-row data;
+    # SMA 200 inside multi_sma may yield sparse tail, which pta handles.
+    indicators["sma"] = _safe("sma", calculate_sma, c)
+    indicators["multi_sma"] = _safe("multi_sma", calculate_multi_sma, c)
+    indicators["ema"] = _safe("ema", calculate_ema, c)
+    indicators["wma"] = _safe("wma", calculate_wma, c)
+    indicators["macd"] = _safe("macd", calculate_macd, c)
+    indicators["adx"] = _safe("adx", calculate_adx, h, l, c)
 
-    # Volatility (3)
-    indicators["bollinger_bands"] = calculate_bollinger_bands(c)
-    indicators["atr"] = calculate_atr(h, l, c)
-    indicators["keltner_channel"] = calculate_keltner_channel(h, l, c)
+    # Momentum (5) — require ~14 rows
+    indicators["rsi"] = _safe("rsi", calculate_rsi, c)
+    indicators["stoch"] = _safe("stoch", calculate_stoch, h, l, c)
+    indicators["cci"] = _safe("cci", calculate_cci, h, l, c)
+    indicators["williams_r"] = _safe("williams_r", calculate_williams_r, h, l, c)
+    indicators["ao"] = _safe("ao", calculate_awesome, h, l)
+
+    # Volatility (3) — bbands + keltner both need ~200 rows; graceful None
+    indicators["bollinger_bands"] = _safe("bollinger_bands", calculate_bollinger_bands, c)
+    indicators["atr"] = _safe("atr", calculate_atr, h, l, c)
+    indicators["keltner_channel"] = _safe("keltner_channel", calculate_keltner_channel, h, l, c)
 
     # Volume (3)
-    indicators["obv"] = calculate_obv(c, v)
-    indicators["mfi"] = calculate_mfi(h, l, c, v)
-    indicators["vwma"] = calculate_vwma(c, v)
+    indicators["obv"] = _safe("obv", calculate_obv, c, v)
+    indicators["mfi"] = _safe("mfi", calculate_mfi, h, l, c, v)
+    indicators["vwma"] = _safe("vwma", calculate_vwma, c, v)
 
     # Candlestick patterns (20+)
-    indicators["patterns"] = _detect_patterns(o, h, l, c)
+    indicators["patterns"] = _safe("patterns", _detect_patterns, o, h, l, c)
 
     logger.info("Calculated %d indicator groups", len(indicators))
     return indicators
@@ -704,7 +719,12 @@ async def technical_agent(state: AgentState, config: RunnableConfig | None = Non
         try:
             import yfinance as yf
             ticker = yf.Ticker(f"{symbol.removesuffix('.NS')}.NS")
-            hist = ticker.history(period="6mo", interval="1d")
+            # pandas-ta-classic bbands needs 200 rows; try 2y first to maximize
+            # the chance we have enough data for newly-listed NSE stocks
+            for period in ("2y", "1y", "6mo"):
+                hist = ticker.history(period=period, interval="1d")
+                if hist is not None and not hist.empty and len(hist) >= 200:
+                    break
             if hist is not None and not hist.empty:
                 price_data = hist.rename(columns={
                     "Open": "open", "High": "high", "Low": "low",
