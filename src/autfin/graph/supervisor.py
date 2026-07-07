@@ -98,6 +98,11 @@ SUB-AGENTS (call these as tools):
    depth: "quick" | "standard" | "deep"
    Use for: any stock analysis. Call multiple types in parallel.
 
+3. run_debate(symbol, analysis_data, additional_context) — Debate Agent
+   Run adversarial bull/bear debate. Two researchers argue opposing positions.
+   Based on TradingAgents (Columbia/NYU) — debate outperforms single-agent by 20-40%.
+   Use BEFORE any trade decision. Returns verdict (buy/sell/hold) with both arguments.
+
 3. research_stock(action, symbol, symbols, depth, criteria) — ResearchAgent
    Stock research and screening. research_synthesis is LLM-driven (expensive).
    action: "screen" | "research" | "research_batch" | "pitch" | "synthesize"
@@ -113,6 +118,19 @@ SUB-AGENTS (call these as tools):
    action: "retrieve" | "log" | "record" | "calibrate" | "detect" | "guardian" | "approve" | "finalize"
    Use for: accessing history, improving decisions, ending sessions.
 
+6. run_conference(conference_type, symbol, analyst_reports, trigger_description) — Conference Agent
+   Coordinate agents via conferences. Four types:
+   - morning: daily capital allocation (all analysts report)
+   - trade_review: bull+bear debate + risk gates (for specific stock)
+   - emergency: triggered by extreme market moves (>3% intraday)
+   - experience: weekly knowledge sharing (patterns, calibration)
+   Use for: coordinating multiple agents, making group decisions.
+
+7. manage_memory_system(action, symbol, data) — Memory System Agent
+   3-type persistent memory: market (what happened), reflection (what worked/failed), experience (patterns).
+   action: "record_market" | "record_trade" | "record_pattern" | "get_context" | "get_calibration" | "get_stats"
+   Use for: accessing cross-session memory, improving decisions over time.
+
 STRATEGY — BATCH sub-agent calls in a SINGLE response for maximum speed:
 All sub-agents run in parallel via asyncio.gather — calling 3 together takes ~5s, not ~15s.
 
@@ -126,24 +144,27 @@ WRONG (slow, ~15s):
   → 2 sequential LLM round-trips. Slow.
 
 Batching patterns:
-- Morning routine: get_market_data("all") + analyze_stock(symbol, "full") + research_stock("research_batch", symbols) (all in ONE response)
-  → then execute_trade("risk_check") → execute_trade("execute")
+- Morning routine: get_market_data("all") + run_conference("morning") + analyze_stock(symbol, "full") (all in ONE response)
+  → then run_debate(symbol, analysis_data) → execute_trade("risk_check") → execute_trade("execute")
 - Price alert: analyze_stock(symbol, "technical") + analyze_stock(symbol, "sentiment") + analyze_stock(symbol, "distortion") (3 in ONE response)
-  → then research_stock("synthesize") if needed
+  → then run_debate(symbol, analysis_data) if trade considered
 - Quarterly review: analyze_stock(holding, "deep") on EVERY holding (all in ONE response)
-  → then manage_memory("calibrate") on each
-- Manual: analyze_stock(symbol, "full") + research_stock("pitch", symbol) (2 in ONE response)
+  → then run_debate(holding, analysis_data) on each → manage_memory_system("record_trade", outcome)
+- Manual: analyze_stock(symbol, "full") + run_debate(symbol, analysis_data) (2 in ONE response)
+  → then execute_trade("risk_check") → execute_trade("execute")
 
 RULES:
 - ALWAYS batch sub-agent calls in a single response. Never call them one at a time.
-- Use research_stock("synthesize") ONLY for final investment decisions (bull/bear debate). It's LLM-driven and expensive.
+- ALWAYS run_debate BEFORE any trade decision. No exceptions.
+- Use run_conference("emergency") if market moves > 3% intraday.
 - Use analyze_stock("distortion") to check for price anomalies BEFORE recommending a trade.
 - Use analyze_stock("regulatory") to check for SEBI/RBI events BEFORE recommending a trade.
 - Depth tiers: quick=skip DCF/peers/moat. standard=all but DCF. deep=everything.
 - Respect risk/reward ≥ 2:1. Conviction ≥ 0.5 to trade.
 - Sector concentration max 30%. Cash reserve 10%.
 - If human approval needed → call manage_memory("approve").
-- End session → call manage_memory("finalize")."""
+- End session → call manage_memory("finalize").
+- Record trade outcomes in memory_system for future learning."""
 
     context_specific = ""
 

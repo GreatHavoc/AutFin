@@ -313,7 +313,8 @@ async def _call_research(
             return json.dumps({"action": "research_batch", "result": result}, default=str)
 
         elif action == "pitch" and symbol:
-            result = await build_stock_pitch(symbol, depth)
+            research_data = {"depth": depth, "symbol": symbol, "source": "supervisor"}
+            result = await build_stock_pitch(symbol, research_data)
             return json.dumps({"action": "pitch", "symbol": symbol, "result": result}, default=str)
 
         elif action == "synthesize" and symbol:
@@ -348,7 +349,9 @@ async def _call_risk(
             return json.dumps({"action": "risk_check", "result": result}, default=str)
 
         elif action == "allocate":
-            result = await allocate_capital(conviction)
+            trades = json.loads(trade_json) if trade_json else [{"conviction": conviction}]
+            available_cash = float(conviction) * 1_000_000  # scale by conviction
+            result = await allocate_capital(approved_trades=trades, available_cash=available_cash)
             return json.dumps({"action": "allocate", "conviction": conviction, "result": result}, default=str)
 
         elif action == "execute" and trade_json:
@@ -357,7 +360,17 @@ async def _call_risk(
             return json.dumps({"action": "execute", "result": result}, default=str)
 
         elif action == "validate_thesis" and thesis:
-            result = await validate_thesis(thesis)
+            sym = ""
+            if trade_json:
+                try:
+                    trade = json.loads(trade_json) if isinstance(trade_json, str) else trade_json
+                    sym = trade.get("symbol", "")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            result = await validate_thesis(
+                symbol=sym,
+                holding_data={"thesis": thesis, "symbol": sym},
+            )
             return json.dumps({"action": "validate_thesis", "result": result}, default=str)
 
         else:
@@ -381,21 +394,23 @@ async def _call_memory(
             calibrate_conviction_tool,
             detect_patterns_tool,
             check_guardian,
-            request_human_approval_tool,
+            request_human_approval,
             finalize_session,
         )
 
         if action == "retrieve":
-            result = await retrieve_learnings()
+            query = symbol or decision or "general learnings"
+            result = await retrieve_learnings(query)
             return json.dumps({"action": "retrieve", "result": result}, default=str)
 
         elif action == "log" and decision:
-            result = await log_decision(symbol, decision)
+            result = await log_decision(
+                decision_type=symbol or "trade",
+                details={"summary": decision, "symbol": symbol},
+            )
             return json.dumps({"action": "log", "symbol": symbol, "result": result}, default=str)
 
         elif action == "record" and symbol and outcome:
-            # record_learning_tool(symbol, action, conviction, pnl_pct, thesis_summary, outcome)
-            # Default conviction=0.5, action from outcome prefix or "BUY"
             action_side = "BUY" if outcome.lower().startswith("buy") else (
                 "SELL" if outcome.lower().startswith("sell") else "BUY"
             )
@@ -411,7 +426,8 @@ async def _call_memory(
             return json.dumps({"action": "record", "symbol": symbol, "result": result}, default=str)
 
         elif action == "calibrate" and symbol:
-            result = await calibrate_conviction_tool(symbol)
+            raw_conv = float(decision) if decision else 0.5
+            result = await calibrate_conviction_tool(raw_conviction=raw_conv)
             return json.dumps({"action": "calibrate", "symbol": symbol, "result": result}, default=str)
 
         elif action == "detect":
@@ -423,8 +439,8 @@ async def _call_memory(
             return json.dumps({"action": "guardian", "result": result}, default=str)
 
         elif action == "approve":
-            result = await request_human_approval_tool(
-                question="Trade requires human approval",
+            result = await request_human_approval(
+                question=decision or "Trade requires human approval",
                 trade_details={"symbol": symbol, "notes": decision},
             )
             return json.dumps({"action": "approve", "result": result, "symbol": symbol}, default=str)
@@ -450,4 +466,267 @@ SUBAGENT_CALLABLES: Dict[str, Callable] = {
     "research_stock": _call_research,
     "execute_trade": _call_risk,
     "manage_memory": _call_memory,
+    # v5.6: 8-Agent System additions
+    "run_debate": _call_debate,
+    "run_conference": _call_conference,
+    "manage_memory_system": _call_memory_system,
 }
+
+
+# ---------------------------------------------------------------------------
+# v5.6: 8-Agent System — Debate, Conferences, Memory
+# ---------------------------------------------------------------------------
+
+# Debate tool definition
+DEBATE_TOOL = _tool_def(
+    "run_debate",
+    "Run adversarial bull/bear debate on a stock. Two researchers argue "
+    "opposing positions before every trade decision. Based on TradingAgents "
+    "(Columbia/NYU) — ablation studies show systems without debate "
+    "underperform by 20-40%.",
+    {
+        "symbol": {
+            "type": "string",
+            "description": "Stock symbol to debate (e.g. 'RELIANCE')",
+        },
+        "analysis_data": {
+            "type": "string",
+            "description": "JSON string with analysis results from analyst team (fundamentals, technical, sentiment)",
+        },
+        "additional_context": {
+            "type": "string",
+            "description": "Optional additional context for the debate (news, catalysts, etc.)",
+        },
+    },
+)
+
+# Conference tool definition
+CONFERENCE_TOOL = _tool_def(
+    "run_conference",
+    "Run a conference to coordinate agents. Four types: "
+    "morning (daily capital allocation), trade_review (bull+bear debate + risk gates), "
+    "emergency (triggered by extreme market moves), experience (weekly knowledge sharing).",
+    {
+        "conference_type": {
+            "type": "string",
+            "enum": ["morning", "trade_review", "emergency", "experience"],
+            "description": "Type of conference to run",
+        },
+        "symbol": {
+            "type": "string",
+            "description": "Stock symbol for trade_review conference",
+        },
+        "analyst_reports": {
+            "type": "string",
+            "description": "JSON string with analyst reports for morning conference",
+        },
+        "trigger_description": {
+            "type": "string",
+            "description": "Trigger description for emergency conference (e.g. 'Nifty crashed 4%')",
+        },
+    },
+)
+
+# Memory system tool definition
+MEMORY_SYSTEM_TOOL = _tool_def(
+    "manage_memory_system",
+    "Manage 3-type persistent memory: market (what happened), reflection "
+    "(what worked/failed), experience (patterns that repeat). All memories "
+    "persist across sessions and compound over time.",
+    {
+        "action": {
+            "type": "string",
+            "enum": ["record_market", "record_trade", "record_pattern", "get_context", "get_calibration", "get_stats"],
+            "description": "Action: record_market (save market event), record_trade (save trade outcome), record_pattern (save pattern), get_context (get all context for decision), get_calibration (get conviction accuracy), get_stats (memory statistics)",
+        },
+        "symbol": {
+            "type": "string",
+            "description": "Stock symbol (required for most actions)",
+        },
+        "data": {
+            "type": "string",
+            "description": "JSON string with data to record (event, trade outcome, or pattern)",
+        },
+    },
+)
+
+
+async def _call_debate(
+    symbol: str,
+    analysis_data: str,
+    additional_context: str = "",
+) -> str:
+    """Run adversarial bull/bear debate on a stock."""
+    try:
+        from src.autfin.agents.debate import run_debate, format_debate_result
+
+        result = await run_debate(
+            symbol=symbol,
+            analysis_data=analysis_data,
+            additional_context=additional_context,
+        )
+
+        return json.dumps({
+            "symbol": result.symbol,
+            "verdict": result.verdict,
+            "final_conviction": result.final_conviction,
+            "confidence_in_verdict": result.confidence_in_verdict,
+            "bull_thesis": result.bull_argument.thesis,
+            "bull_conviction": result.bull_argument.conviction,
+            "bear_thesis": result.bear_argument.thesis,
+            "bear_conviction": result.bear_argument.conviction,
+            "key_insights": result.key_insights,
+            "unresolved_questions": result.unresolved_questions,
+            "formatted": format_debate_result(result),
+        }, default=str)
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+async def _call_conference(
+    conference_type: str,
+    symbol: str = "",
+    analyst_reports: str = "",
+    trigger_description: str = "",
+) -> str:
+    """Run a conference to coordinate agents."""
+    try:
+        from src.autfin.agents.conferences import (
+            run_morning_conference,
+            run_trade_review,
+            run_emergency_conference,
+            run_experience_conference,
+            MarketRegime,
+        )
+
+        if conference_type == "morning":
+            reports_data = json.loads(analyst_reports) if analyst_reports else []
+            result = await run_morning_conference(
+                analyst_reports=reports_data,
+                portfolio=[],  # will be filled by supervisor
+                available_cash=0,  # will be filled by supervisor
+            )
+            return json.dumps({
+                "conference_type": "morning",
+                "regime": result.regime.value,
+                "decisions": result.decisions,
+                "capital_allocation": result.capital_allocation,
+                "risk_alerts": result.risk_alerts,
+            }, default=str)
+
+        elif conference_type == "trade_review":
+            result = await run_trade_review(
+                symbol=symbol,
+                bull_argument=analyst_reports,  # reusing field for bull argument
+                bear_argument=trigger_description,  # reusing field for bear argument
+                risk_assessment="",
+                current_position="",
+                available_cash=0,
+                sector_exposure="",
+            )
+            return json.dumps({
+                "conference_type": "trade_review",
+                "symbol": symbol,
+                "decision": result.get("decision"),
+                "reasoning": result.get("reasoning"),
+            }, default=str)
+
+        elif conference_type == "emergency":
+            result = await run_emergency_conference(
+                trigger_description=trigger_description or "Emergency triggered",
+                regime=MarketRegime.HIGH_VOLATILITY,
+                portfolio=[],
+                available_cash=0,
+            )
+            return json.dumps({
+                "conference_type": "emergency",
+                "urgency": "high",
+                "decisions": result.decisions,
+                "risk_alerts": result.risk_alerts,
+            }, default=str)
+
+        elif conference_type == "experience":
+            result = await run_experience_conference(
+                agent_experiences=[],
+                trade_outcomes=[],
+            )
+            return json.dumps({
+                "conference_type": "experience",
+                "patterns": result.get("patterns_identified", []),
+                "calibration_updates": result.get("calibration_updates", []),
+            }, default=str)
+
+        else:
+            return json.dumps({"status": "error", "error": f"Unknown conference type: {conference_type}"})
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+async def _call_memory_system(
+    action: str,
+    symbol: str = "",
+    data: str = "",
+) -> str:
+    """Manage 3-type persistent memory."""
+    try:
+        from src.autfin.agents.memory_system import MemorySystem
+
+        memory = MemorySystem()
+
+        if action == "record_market":
+            event_data = json.loads(data) if data else {}
+            entry = await memory.record_market_event(
+                event=event_data.get("event", ""),
+                symbols=[symbol] if symbol else event_data.get("symbols", []),
+                regime=event_data.get("regime", "normal"),
+                confidence=event_data.get("confidence", 0.8),
+            )
+            return json.dumps({"action": "record_market", "key": entry.key}, default=str)
+
+        elif action == "record_trade":
+            trade_data = json.loads(data) if data else {}
+            entry = await memory.record_trade_outcome(
+                symbol=symbol,
+                action=trade_data.get("action", "BUY"),
+                entry_price=trade_data.get("entry_price", 0),
+                exit_price=trade_data.get("exit_price", 0),
+                thesis=trade_data.get("thesis", ""),
+                outcome=trade_data.get("outcome", ""),
+                pnl_pct=trade_data.get("pnl_pct", 0),
+                lessons=trade_data.get("lessons", []),
+            )
+            return json.dumps({"action": "record_trade", "key": entry.key}, default=str)
+
+        elif action == "record_pattern":
+            pattern_data = json.loads(data) if data else {}
+            entry = await memory.record_pattern(
+                pattern=pattern_data.get("pattern", ""),
+                symbols=pattern_data.get("symbols", [symbol] if symbol else []),
+                confidence=pattern_data.get("confidence", 0.7),
+                evidence=pattern_data.get("evidence", ""),
+            )
+            return json.dumps({"action": "record_pattern", "key": entry.key}, default=str)
+
+        elif action == "get_context":
+            context = await memory.get_context_for_decision(
+                symbol=symbol,
+                decision_type=data or "general",
+            )
+            return json.dumps({"action": "get_context", "context": context}, default=str)
+
+        elif action == "get_calibration":
+            calibration = await memory.get_calibration_data()
+            return json.dumps({"action": "get_calibration", "calibration": calibration}, default=str)
+
+        elif action == "get_stats":
+            stats = await memory.get_stats()
+            return json.dumps({
+                "action": "get_stats",
+                "total_memories": stats.total_memories,
+                "by_type": stats.by_type,
+            }, default=str)
+
+        else:
+            return json.dumps({"status": "error", "error": f"Unknown action: {action}"})
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})

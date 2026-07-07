@@ -73,7 +73,10 @@ autfin config set KEY VALUE    # Update configuration
 
 - Python 3.11+
 - A Zerodha account (for live portfolio data via Kite SDK)
-- Modal account (for self-hosted vLLM — free tier, cold starts after inactivity)
+- **Obscura** (free, on-device Rust browser for MCP) — required for NSE/Screener/MC/ET scraping.
+  Download the release `.zip`/`.tar.gz` for your OS from
+  <https://github.com/h4ckf0r0day/obscura/releases/latest>, extract, and put the
+  folder on `PATH`. AutFin starts it as a long-lived HTTP MCP server.
 
 ## Installation
 
@@ -87,7 +90,7 @@ python -m venv .venv
 source .venv/bin/activate  # Linux/Mac
 # .venv\Scripts\activate   # Windows
 
-# Install dependencies
+# Install dependencies (includes mcp + langchain-mcp-adapters)
 pip install -e .
 
 # Install dashboard (optional)
@@ -100,8 +103,14 @@ pip install -e ".[dashboard]"
    ```bash
    cp .env.example .env
    ```
-
-2. Get free API keys (no credit card required for any):
+2. Verify Obscura is reachable:  `obscura --version` should print a version.
+3. (Optional) Start Obscura as a long-lived HTTP MCP server:
+   ```bash
+   obscura mcp --http --port 8080
+   ```
+   AutFin will autostart it on first browser-mcp call if you skip this and
+   `BROWSER_MCP_AUTOSTART=true` (the default).
+4. Get free API keys (no credit card required for any):
    - **Modal**: [modal.com](https://modal.com) — Self-hosted vLLM (Qwen 3.6 35B), free tier
    - **NVIDIA NIM**: [build.nvidia.com](https://build.nvidia.com) — MiniMax M3 fallback (free, 1M context)
    - **LangSmith**: [smith.langchain.com](https://smith.langchain.com) — Tracing, evaluation (free Developer tier)

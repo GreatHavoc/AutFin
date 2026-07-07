@@ -29,6 +29,13 @@ dependencies = [
     
     # Web Scraping
     "httpx>=0.27.0",
+
+    # Browser MCP — hard runtime dependency for JS-rendered / anti-bot sites
+    # (NSE Cloudflare, Moneycontrol, Screener.in, Economic Times, Reddit no-API path).
+    # Obscura binary is the actual browser (Apache-2.0 Rust, 70 MB).
+    # This package binds MCP tools into LangGraph bind_tools() / ToolNode.
+    "mcp>=1.9.2",
+    "langchain-mcp-adapters>=0.3.0",
     
     # Scheduling
     "apscheduler>=3.10.0",

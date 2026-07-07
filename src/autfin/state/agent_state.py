@@ -153,3 +153,31 @@ class AgentState(TypedDict):
     fii_dii_data: NotRequired[dict | None]                             # FII/DII daily data
     cache_invalidation_tokens: NotRequired[list[str]]                  # supervisor's invalidation directives
     news_velocity_reports: Annotated[dict | None, dict_merge_reducer]  # {symbol: news velocity analysis}
+
+    # ── v5.6: 8-Agent System — Debate ──
+    debate_results: Annotated[dict | None, dict_merge_reducer]        # {symbol: DebateResult}
+    bull_arguments: Annotated[dict | None, dict_merge_reducer]        # {symbol: DebateArgument}
+    bear_arguments: Annotated[dict | None, dict_merge_reducer]        # {symbol: DebateArgument}
+
+    # ── v5.6: 8-Agent System — Conferences ──
+    conference_results: NotRequired[list[dict] | None]                # list of ConferenceResult dicts
+    active_conference: NotRequired[str | None]                        # "morning" | "trade_review" | "emergency" | "experience"
+    market_regime: NotRequired[str]                                   # "normal" | "high_volatility" | "crash" | "rally" | "low_liquidity"
+
+    # ── v5.6: 8-Agent System — Analyst Reports ──
+    global_analyst_report: NotRequired[dict | None]                   # GlobalAnalyst output
+    india_analyst_report: NotRequired[dict | None]                    # IndiaAnalyst output
+    sentiment_analyst_report: NotRequired[dict | None]                # SentimentAnalyst output
+    technical_analyst_report: NotRequired[dict | None]                # TechnicalAnalyst output
+
+    # ── v5.6: 8-Agent System — Memory ──
+    market_memory: NotRequired[list[dict] | None]                     # recent market events
+    reflection_memory: NotRequired[list[dict] | None]                 # past trade outcomes
+    experience_memory: NotRequired[list[dict] | None]                 # discovered patterns
+    memory_stats: NotRequired[dict | None]                            # memory system statistics
+
+    # ── v5.6: 8-Agent System — Risk Manager (veto power) ──
+    risk_veto: NotRequired[bool]                                      # true if risk manager vetoed trade
+    risk_veto_reason: NotRequired[str | None]                         # reason for veto
+    position_limits: NotRequired[dict | None]                         # {symbol: limit_amount}
+    sector_exposure: NotRequired[dict | None]                         # {sector: percentage}
