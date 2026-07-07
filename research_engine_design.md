@@ -1,8 +1,8 @@
-# AutFin Research Engine — v5.5 Design
+# AutFin Research Engine — v5.6 Design
 
 > **Date:** July 2026
-> **Status:** Complete. Tools architecture implemented.
-> **Sources:** Firecrawl research across Hebbia, Daloopa, Morningstar, New Constructs, Quant-Investing, Anand Rathi, Zerodha Varsity, Medium (Multi-Agent Fan-Out), arXiv (Autonomous Systematic Factor Investing)
+> **Status:** Complete. 8-Agent System with debate, conferences, memory.
+> **Sources:** TradingAgents (Columbia/NYU), HedgeAgents (2025), OpenClaw, Hebbia, Daloopa, Morningstar, arXiv (Autonomous Systematic Factor Investing)
 
 ---
 

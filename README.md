@@ -6,7 +6,7 @@ A personal multi-agentic system that runs daily autonomous financial research, m
 
 ## Features
 
-- **LangGraph Subagents Architecture** — 5 specialized sub-agents (MarketData, Analysis, Research, Risk, Memory) coordinated by a supervisor with 5 high-level tools. Context isolation, parallel execution, clean routing.
+- **LangGraph Subagents Architecture** — 8 specialized sub-agents (MarketData, Analysis, Research, Risk, Memory, Debate, Conferences, MemorySystem) coordinated by a supervisor. Context isolation, parallel execution, adversarial debate, coordination mechanisms, persistent memory.
 - **Deterministic-First Analysis** — 9 deterministic tools (fundamentals, technical, sentiment, macro, valuation, distortion, regulatory, risk, portfolio) + 1 LLM-driven (research synthesis). 3x faster than LLM-per-tool.
 - **NVIDIA NIM (Primary LLM)** — MiniMax M3 via NVIDIA NIM, 1M context, free tier, connects directly via openai SDK
 - **LangSmith Tracing** — Full observability with auto-tracing, Studio visual debugging, per-tool traces
@@ -43,12 +43,15 @@ autfin config set KEY VALUE    # Update configuration
 ├──────────────────────────────────────────────────────────┤
 │              LangGraph Supervisor (ReAct Loop)            │
 │  ┌────────────────────────────────────────────────────┐  │
-│  │  5 Sub-Agent Tools (context isolation):            │  │
+│  │  8 Sub-Agent Tools (context isolation):            │  │
 │  │  ├── get_market_data  → Portfolio, quotes, status  │  │
 │  │  ├── analyze_stock    → 7 analysis types           │  │
 │  │  ├── research_stock   → Screen, research, pitch    │  │
 │  │  ├── execute_trade    → Risk checks, execution     │  │
-│  │  └── manage_memory    → Learning, patterns, HITL   │  │
+│  │  ├── manage_memory    → Learning, patterns, HITL   │  │
+│  │  ├── run_debate       → Bull vs Bear adversarial   │  │
+│  │  ├── run_conference   → Coordination mechanisms    │  │
+│  │  └── manage_memory_system → 3-type persistent mem  │  │
 │  │  Each sub-agent runs in parallel via asyncio.gather│  │
 │  │  LangSmith traces each sub-agent individually      │  │
 │  └────────────────────────────────────────────────────┘  │
@@ -173,7 +176,10 @@ Dashboard pages:
 autfin/
 ├── src/autfin/
 │   ├── agents/           # Sub-agents + tool definitions
-│   │   ├── subagents.py        # 5 sub-agents (v5.5 subagents pattern)
+│   │   ├── subagents.py        # 8 sub-agents (v5.6: debate, conferences, memory)
+│   │   ├── debate.py           # Bull vs Bear adversarial research
+│   │   ├── conferences.py      # Morning/TradeReview/Emergency/Experience
+│   │   ├── memory_system.py    # 3-type persistent memory
 │   │   ├── agent_tools.py      # 10 deterministic tool wrappers (v5.4)
 │   │   ├── market_data.py
 │   │   ├── technical.py

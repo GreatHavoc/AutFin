@@ -1,6 +1,6 @@
 # AutFin — Technical Specification
 
-**Version**: 5.4 | **Date**: July 2026 | **Status**: Complete — Tools architecture restructure (deterministic-first), Modal vLLM integration (Qwen 3.6 35B), NVIDIA NIM fallback (MiniMax M3), openai SDK direct connection, LangSmith tracing, LangGraph Store for cross-session memory, `interrupt()` HITL, 113+ tests passing.
+**Version**: 5.6 | **Date**: July 2026 | **Status**: Complete — 8-Agent System (Debate, Conferences, Memory), Obscura browser MCP hard dependency, adversarial bull/bear research, coordination mechanisms, 3-type persistent memory.
 
 ---
 
@@ -51,12 +51,16 @@ autfin/
 │   │
 │   ├── graph/                             # LangGraph workflow definitions
 │   │   ├── __init__.py
-│   │   ├── supervisor.py                  # Supervisor with 5 sub-agent tools (v5.5)
+│   │   ├── supervisor.py                  # Supervisor with 8 sub-agent tools (v5.6)
 │   │   ├── builder.py                     # Graph builder with store support
 │   │   └── error_handler.py               # Retry policy + circuit breaker (548 lines)
 │   │
-│   ├── agents/                            # 10 specialized tools (9 deterministic + 1 LLM)
+│   ├── agents/                            # 8 sub-agents + 10 deterministic tools
 │   │   ├── __init__.py
+│   │   ├── subagents.py                   # 8 sub-agents (v5.6: debate, conferences, memory)
+│   │   ├── debate.py                      # Bull vs Bear adversarial research
+│   │   ├── conferences.py                 # Morning/TradeReview/Emergency/Experience
+│   │   ├── memory_system.py               # 3-type persistent memory
 │   │   ├── agent_tools.py                 # 10 deterministic tool wrappers (v5.4)
 │   │   ├── market_data.py                 # Balance, Price, Market Data (404 lines)
 │   │   ├── fundamentals.py                # Ratios, Health Score, Moat (1191 lines)
@@ -93,6 +97,10 @@ autfin/
 │   │   ├── market_feed.py                 # Real-time market feed
 │   │   ├── memory_tools.py                # Store/Vector Store retrieval
 │   │   └── reporting.py                   # Report generation
+│   │
+│   ├── mcp/                               # MCP (Model Context Protocol) integration
+│   │   ├── __init__.py                    # Re-exports public surface
+│   │   └── browser_client.py              # Obscura HTTP MCP client (singleton, autostart)
 │   │
 │   ├── memory/                            # Long-term memory layer
 │   │   ├── __init__.py

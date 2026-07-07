@@ -2,10 +2,10 @@
 
 ## Product Requirements Document (PRD)
 
-**Version**: 5.5  
+**Version**: 5.6  
 **Date**: July 2026  
 **Author**: Prakhar  
-**Status**: Complete — Subagents architecture (5 domain sub-agents), LangGraph best practices, 75+ tests passing.
+**Status**: Complete — 8-Agent System (Debate, Conferences, Memory), Obscura browser MCP hard dependency, adversarial bull/bear research, coordination mechanisms, 3-type persistent memory.
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### 1.1 What Is AutFin?
 
-AutFin is an **agentic-first AI portfolio management system** built on LangGraph's subagents pattern. A supervisor coordinates 5 specialized sub-agents (fundamentals, technical, sentiment, macro, risk) by calling them directly — each running deterministically with full LangSmith visibility. Per-stock depth decisions (Quick/Standard/Deep), 5 specialized sub-agents, long-term memory via LangGraph Store, and zero operating cost via NVIDIA NIM (MiniMax M3) and free data APIs.
+AutFin is an **agentic-first AI portfolio management system** built on LangGraph's subagents pattern. A supervisor coordinates 8 specialized sub-agents (MarketData, Analysis, Research, Risk, Memory, Debate, Conferences, MemorySystem) by calling them directly — each running deterministically with full LangSmith visibility. Adversarial bull/bear debate, coordination mechanisms, and 3-type persistent memory enable learning from every trade.
 
 ### 1.2 How It Works (User's Perspective)
 
