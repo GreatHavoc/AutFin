@@ -337,11 +337,12 @@ async def distortion_audit(
     """
     try:
         import yfinance as yf
+        from src.autfin.agents.yfinance_utils import normalize_symbol
 
         period_map = {"quick": "3mo", "standard": "6mo", "deep": "1y"}
         period = period_map.get(depth, "6mo")
 
-        ticker = yf.Ticker(f"{symbol.removesuffix('.NS')}.NS")
+        ticker = yf.Ticker(normalize_symbol(symbol))
         hist = ticker.history(period=period, interval="1d")
 
         if hist is None or hist.empty:
@@ -387,7 +388,7 @@ async def distortion_audit(
                 "Pharma": ["SUNPHARMA", "DRREDDY", "CIPLA", "AUROPHARMA", "DIVISLAB"],
             }
             stock_sector = None
-            stock_sym = symbol.upper().removesuffix(".NS")
+            stock_sym = normalize_symbol(symbol).removesuffix(".NS")
             for sector, syms in sector_map.items():
                 if stock_sym in syms:
                     stock_sector = sector

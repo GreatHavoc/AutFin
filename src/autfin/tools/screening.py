@@ -241,8 +241,9 @@ async def fetch_yfinance_bulk(symbols: list[str]) -> list[dict[str, Any]]:
     for symbol in symbols:
         try:
             import yfinance as yf
+            from src.autfin.agents.yfinance_utils import normalize_symbol
 
-            ticker = yf.Ticker(f"{symbol.removesuffix('.NS')}.NS")
+            ticker = yf.Ticker(normalize_symbol(symbol))
             info = ticker.info or {}
 
             hist = ticker.history(period="5d")

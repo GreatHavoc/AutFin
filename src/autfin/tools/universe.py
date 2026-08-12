@@ -150,9 +150,10 @@ async def fetch_universe_data(
     async def _fetch_one(sym: str) -> dict[str, Any] | None:
         try:
             import yfinance as yf
+            from src.autfin.agents.yfinance_utils import normalize_symbol
 
             async with semaphore:
-                ticker = yf.Ticker(f"{sym.removesuffix('.NS')}.NS")
+                ticker = yf.Ticker(normalize_symbol(sym))
                 info = ticker.info or {}
 
                 hist = ticker.history(period="5d")

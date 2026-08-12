@@ -19,8 +19,8 @@ class AutFinSettings(BaseSettings):
         description="Store mode: 'in-memory' or 'persistent' (SQLite)"
     )
     deep_model: str = Field(
-        default="nvidia_nim/minimaxai/minimax-m3",
-        description="Primary — MiniMax M3 via NVIDIA NIM (1M context, 61 tps, free)"
+        default="thinkingmachines/inkling",
+        description="Primary — ThinkingMachines Inkling (complex reasoning)"
     )
     fast_model: str = Field(
         default="nvidia_nim/meta/llama-3.1-8b-instruct",
@@ -115,67 +115,14 @@ class AutFinSettings(BaseSettings):
         default=300.0,
         description="Seconds to wait before retrying an opened circuit"
     )
-    
-    # ── Notifications / Alerts ───────────────────────
-    alerts_enabled: bool = Field(
-        default=True,
-        description="Enable/disable all alert notifications"
-    )
-    alert_console: bool = Field(
-        default=True,
-        description="Show alerts in console (always available)"
-    )
-    alert_desktop: bool = Field(
-        default=False,
-        description="Show desktop notifications (requires plyer)"
-    )
-    alert_pushover_enabled: bool = Field(
-        default=False,
-        description="Send alerts via Pushover (requires PUSHOVER_USER_KEY and PUSHOVER_API_TOKEN)"
-    )
-    alert_email_enabled: bool = Field(
-        default=False,
-        description="Send alerts via email (requires SMTP_* settings)"
-    )
-    alert_price_threshold_pct: float = Field(
-        default=2.0,
-        description="Minimum price move %% to trigger price alerts"
-    )
-    alert_stop_loss_enabled: bool = Field(
-        default=True,
-        description="Alert when a position hits stop-loss"
-    )
-    alert_trade_enabled: bool = Field(
-        default=True,
-        description="Alert on trade execution (paper or live)"
-    )
-    alert_daily_summary: bool = Field(
-        default=True,
-        description="Send daily portfolio summary alert"
-    )
-    alert_error_enabled: bool = Field(
-        default=True,
-        description="Alert on critical errors (circuit breaker open, etc.)"
-    )
-    
-    # ── SMTP (for email alerts) ──────────────────────
-    smtp_host: str = Field(default="", description="SMTP server host")
-    smtp_port: int = Field(default=587, description="SMTP server port")
-    smtp_username: str = Field(default="", description="SMTP username")
-    smtp_password: str = Field(default="", description="SMTP password")
-    smtp_from: str = Field(default="", description="Sender email address")
-    smtp_to: str = Field(default="", description="Recipient email address")
-    
+
     # ── API Keys (loaded from .env, not set here) ───
     # These are loaded automatically via model_config
 
 
-_settings_cache: AutFinSettings | None = None
+_settings = AutFinSettings()
 
 
 def get_settings() -> AutFinSettings:
-    """Return a cached singleton instance of AutFinSettings."""
-    global _settings_cache
-    if _settings_cache is None:
-        _settings_cache = AutFinSettings()
-    return _settings_cache
+    """Return the singleton AutFinSettings instance."""
+    return _settings

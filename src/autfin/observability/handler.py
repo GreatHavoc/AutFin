@@ -1,6 +1,6 @@
 """LangSmith tracing handler for AutFin.
 
-LangSmith auto-traces LangGraph node executions when LANGSMITH_TRACING=true
+LangSmith auto-traces Pydantic AI agent executions when LANGSMITH_TRACING=true
 is set in the environment. This module provides configuration checks and
 explicit tracing utilities.
 """
@@ -26,18 +26,18 @@ def is_langsmith_configured() -> bool:
 
 
 def get_callback_handler(trace_id: Optional[str] = None) -> Optional[object]:
-    """Get LangSmith callback handler for LangGraph.
+    """Get LangSmith callback handler for Pydantic AI.
 
-    With LANGSMITH_TRACING=true, LangGraph auto-traces all node executions.
+    With LANGSMITH_TRACING=true, Pydantic AI auto-traces all agent executions.
     This function returns None to signal that auto-tracing is active.
 
     Returns:
-        None — LangSmith auto-tracing handles LangGraph via env vars.
+        None — LangSmith auto-tracing handles Pydantic AI via env vars.
     """
     if not _check_langsmith():
         logger.debug("LangSmith not configured — tracing disabled")
         return None
 
-    # LangGraph auto-traces when LANGSMITH_TRACING=true is set.
+    # Pydantic AI auto-traces when LANGSMITH_TRACING=true is set.
     # No explicit callback handler needed.
     return None

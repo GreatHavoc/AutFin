@@ -78,7 +78,7 @@ class WatchlistCurator:
         logger.info("Watchlist curated: %d symbols", len(result))
         return result
 
-    async def _find_pre_earnings(self, current_symbols: List[str]) -> List[str]:
+    async def _find_pre_earnings(self) -> List[str]:
         """Find stocks with earnings in the next 14 days.
 
         Uses a static list of known quarterly result dates.

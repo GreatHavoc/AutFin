@@ -231,8 +231,9 @@ async def fetch_technical_indicators(symbol: str) -> str:
     """
     try:
         import yfinance as yf
+        from src.autfin.agents.yfinance_utils import normalize_symbol
 
-        ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+        ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         hist = ticker.history(period="6mo", interval="1d")
         if hist.empty:
             return json.dumps({"error": f"No price data for {symbol}", "symbol": symbol})
@@ -290,8 +291,9 @@ async def compute_custom_indicator(
     """
     try:
         import yfinance as yf
+        from src.autfin.agents.yfinance_utils import normalize_symbol
 
-        ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+        ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         hist = ticker.history(period="6mo", interval="1d")
         if hist.empty:
             return json.dumps({"error": f"No price data for {symbol}", "symbol": symbol})
@@ -351,8 +353,9 @@ async def detect_patterns(symbol: str) -> str:
     """
     try:
         import yfinance as yf
+        from src.autfin.agents.yfinance_utils import normalize_symbol
 
-        ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+        ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         hist = ticker.history(period="6mo", interval="1d")
         if hist.empty:
             return json.dumps({"error": f"No price data for {symbol}", "symbol": symbol})

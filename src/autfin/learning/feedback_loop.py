@@ -79,7 +79,8 @@ async def post_trade_learn(
 ) -> dict:
     """
     Record a completed trade outcome and return updated calibration.
-    Called after a position is closed (sell) or by the scheduler for open positions.
+    Called after a position is closed (sell). The scheduler was removed from
+    scope, so this is now invoked directly by the trade-close flow.
 
     Returns: {recorded: bool, updated_calibration: {...}, new_patterns: [...]}
     """

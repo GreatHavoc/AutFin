@@ -27,20 +27,14 @@ from ..memory.retrieval import (
     store_market_knowledge,
 )
 from ..memory.performance import (
-    record_learning,
-    get_learnings_for_symbol,
-    get_recent_learnings,
-    update_learning_outcome,
     get_win_rate,
-    get_profit_factor,
     get_symbol_performance,
     get_monthly_summary,
-    get_cumulative_pnl,
     get_drawdown_stats,
     get_all_performance_metrics,
     record_trade_outcome,
 )
-from ..memory.store import AutFinStore, get_store
+# # from ..memory.store import AutFinStore, get_store  # REMOVED  # REMOVED - use Pydantic AI Memory
 from ..memory.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)

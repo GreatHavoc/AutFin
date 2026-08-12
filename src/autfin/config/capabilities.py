@@ -96,7 +96,7 @@ CAPABILITIES: dict[str, dict[str, Any]] = {
     "langsmith": {
         "available": True,
         "configured": True,         # LangSmith API key present
-        "detail": "LangSmith cloud tracing with auto-tracing for LangGraph.",
+        "detail": "LangSmith cloud tracing with auto-tracing for Pydantic AI.",
     },
 }
 

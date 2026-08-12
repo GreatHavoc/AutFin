@@ -1,7 +1,7 @@
 """Tests for tool input validation (v4.2)."""
 
 import pytest
-from src.autfin.llm.client import _validate_tool_args, _compress_tool_result, TOOL_PARAM_RULES
+from src.autfin.llm.validation import _validate_tool_args, _compress_tool_result, TOOL_PARAM_RULES
 
 
 class TestValidateToolArgs:

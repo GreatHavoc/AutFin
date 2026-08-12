@@ -11,7 +11,7 @@ DB_PATH = Path(__file__).parent.parent.parent.parent / "data" / "autfin.db"
 def init_database():
     """Initialize the SQLite database with schema."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    
+
     conn = sqlite3.connect(DB_PATH)
     try:
         cursor = conn.cursor()
@@ -37,11 +37,10 @@ def init_database():
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
-
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades(timestamp)")
 
-        # Create portfolio_snapshots table
+        # Portfolio snapshots
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS portfolio_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,10 +54,9 @@ def init_database():
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
-
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_snapshots_date ON portfolio_snapshots(date)")
 
-        # Create signals table
+        # Signal log
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS signals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,11 +74,10 @@ def init_database():
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
-
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_acted ON signals(was_acted_on)")
 
-        # Create balance_history table
+        # Balance history
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS balance_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,7 +88,7 @@ def init_database():
             )
         """)
 
-        # Create learning_journal table (v3.0 schema)
+        # Learning journal (current schema)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS learning_journal (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,109 +102,11 @@ def init_database():
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
-
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_learning_symbol ON learning_journal(symbol)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_learning_sector ON learning_journal(sector)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_learning_outcome ON learning_journal(outcome)")
 
-        # Stock pitches table (v3.0) — 6-element buy-side pitches rendered by dashboard
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS stock_pitches (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                symbol TEXT NOT NULL,
-                context TEXT NOT NULL DEFAULT 'manual',
-                investment_thesis TEXT,
-                catalysts_json TEXT,
-                risks_json TEXT,
-                valuation_summary TEXT,
-                competitive_moat TEXT,
-                price_target_base REAL,
-                price_target_upside REAL,
-                price_target_downside REAL,
-                price_target_rationale TEXT,
-                raw_json TEXT,
-                created_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pitches_symbol ON stock_pitches(symbol)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pitches_created ON stock_pitches(created_at)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_pitches_context ON stock_pitches(context)")
-
-        # Fan-out progress (v3.0) — live status of concurrent research per symbol
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS fanout_progress (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                context TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending',
-                started_at TEXT,
-                finished_at TEXT,
-                error TEXT,
-                created_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fanout_session ON fanout_progress(session_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fanout_status ON fanout_progress(status)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_fanout_created ON fanout_progress(created_at)")
-
-        # Runs table (v5.0) — per-invocation structured trace
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS runs (
-                id TEXT PRIMARY KEY,
-                started_at TEXT NOT NULL,
-                finished_at TEXT,
-                status TEXT NOT NULL DEFAULT 'running',
-                trigger TEXT,
-                mode TEXT,
-                symbols_researched TEXT,
-                trades_executed INTEGER DEFAULT 0,
-                total_tokens INTEGER DEFAULT 0,
-                total_cost REAL DEFAULT 0.0,
-                errors_count INTEGER DEFAULT 0,
-                duration_ms INTEGER,
-                metadata_json TEXT
-            )
-        """)
-
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status)")
-
-        # SEBI audit trail (v5.0) — Strategy ID tags per SEBI Apr 2026 circular
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS sebi_audit (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id TEXT,
-                strategy_id TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                action TEXT NOT NULL,
-                quantity INTEGER,
-                price REAL,
-                order_type TEXT,
-                exchange TEXT DEFAULT 'NSE',
-                timestamp TEXT NOT NULL,
-                compliance_notes TEXT,
-                created_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sebi_strategy ON sebi_audit(strategy_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sebi_run ON sebi_audit(run_id)")
-
-        # Migration: if old columns exist, copy data then drop them
-        _migrate_learning_journal(cursor)
-
-        # ── Runs table (per-invocation trace) ────────────────
-        # Drop old v1 runs table if schema is incompatible
-        try:
-            cols = {r[1] for r in cursor.execute("PRAGMA table_info(runs)").fetchall()}
-            if "run_id" not in cols:
-                cursor.execute("DROP TABLE IF EXISTS runs")
-        except Exception:
-            pass
-
+        # Per-invocation structured trace
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -232,13 +131,35 @@ def init_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status)")
 
+        # SEBI audit trail — Strategy ID tags per SEBI Apr 2026 circular
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sebi_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT,
+                strategy_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                action TEXT NOT NULL,
+                quantity INTEGER,
+                price REAL,
+                order_type TEXT,
+                exchange TEXT DEFAULT 'NSE',
+                timestamp TEXT NOT NULL,
+                compliance_notes TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sebi_strategy ON sebi_audit(strategy_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sebi_run ON sebi_audit(run_id)")
+
+        _migrate_learning_journal(cursor)
+
         conn.commit()
     finally:
         conn.close()
 
 
 def _migrate_learning_journal(cursor):
-    """Migrate v2 learning_journal columns to v3.0. Destructive — old columns removed."""
+    """Copy values from legacy v2 columns into v3.0 columns when both exist."""
     try:
         existing = {r[1] for r in cursor.execute("PRAGMA table_info(learning_journal)").fetchall()}
 
@@ -247,9 +168,12 @@ def _migrate_learning_journal(cursor):
         if "lesson" in existing and "thesis_summary" in existing:
             cursor.execute("UPDATE learning_journal SET thesis_summary = lesson WHERE thesis_summary IS NULL AND lesson IS NOT NULL")
         if "was_correct" in existing and "outcome" in existing:
-            cursor.execute("UPDATE learning_journal SET outcome = CASE WHEN was_correct=1 THEN 'completed' WHEN was_correct=0 THEN 'loss' ELSE 'open' END WHERE outcome='open' AND was_correct IS NOT NULL")
+            cursor.execute(
+                "UPDATE learning_journal SET outcome = CASE WHEN was_correct=1 THEN 'completed' WHEN was_correct=0 THEN 'loss' ELSE 'open' END "
+                "WHERE outcome='open' AND was_correct IS NOT NULL"
+            )
     except Exception:
-        pass  # Migration is best-effort — tests recreate DB anyway
+        pass
 
 
 def get_connection():

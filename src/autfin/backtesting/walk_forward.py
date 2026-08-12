@@ -21,6 +21,7 @@ All arithmetic is deterministic — no LLM involved.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 from dataclasses import dataclass, field
@@ -232,6 +233,21 @@ class BacktestMetrics:
     n_trades: int = 0
 
 
+@dataclass
+class WalkForwardConfig:
+    """Configuration for walk-forward analysis with symbol + date range."""
+    symbol: str
+    start_date: str | None = None  # ISO date string
+    end_date: str | None = None    # ISO date string
+    as_of: str | None = None       # Point-in-time cutoff for backtests
+    strategy_fn: Callable = simple_sma_crossover
+    param_grid: Dict[str, List[Any]] | None = None
+    n_folds: int = 5
+    train_pct: float = 0.7
+    period: str = "2y"  # Fallback period if no start/end dates
+    interval: str = "1d"
+
+
 def _run_backtest(
     closes: List[float],
     strategy_fn: Callable,
@@ -381,3 +397,105 @@ def walk_forward(
             else "Strategy passes WFA — acceptable for paper trading"
         ),
     }
+
+
+async def fetch_price_data(
+    symbol: str,
+    start: str | None = None,
+    end: str | None = None,
+    as_of: str | None = None,
+    period: str = "2y",
+    interval: str = "1d",
+) -> List[float]:
+    """Fetch close prices for walk-forward backtesting.
+
+    Uses yfinance_utils.fetch_history for point-in-time safety.
+
+    Args:
+        symbol: Stock symbol (e.g. "RELIANCE")
+        start: ISO date string for data start (e.g. "2023-01-01")
+        end: ISO date string for data end (e.g. "2024-06-01")
+        as_of: Point-in-time cutoff — data after this date is excluded
+        period: yfinance period if no start/end (default "2y")
+        interval: yfinance interval (default "1d")
+
+    Returns:
+        List of close prices. Empty list if no data.
+    """
+    import yfinance as yf
+    from src.autfin.agents.yfinance_utils import normalize_symbol
+
+    ticker = yf.Ticker(normalize_symbol(symbol))
+
+    kwargs: dict = {"interval": interval}
+    if start and end:
+        kwargs["start"] = start
+        kwargs["end"] = end
+    else:
+        kwargs["period"] = period
+
+    df = await asyncio.to_thread(ticker.history, **kwargs)
+    if df is None or df.empty:
+        return []
+
+    # Point-in-time filtering
+    if as_of is not None:
+        if isinstance(as_of, str):
+            as_of_dt = datetime.fromisoformat(as_of)
+        else:
+            as_of_dt = as_of
+        df = df[df.index <= pd.Timestamp(as_of_dt)]
+
+    return df["Close"].tolist()
+
+
+async def walk_forward_with_symbol(
+    config: WalkForwardConfig,
+) -> Dict[str, Any]:
+    """Run walk-forward analysis on a symbol with point-in-time safety.
+
+    Fetches historical data using yfinance_utils.fetch_history (with as_of
+    for backtest safety), then runs the standard walk_forward analysis.
+
+    Args:
+        config: WalkForwardConfig with symbol, dates, strategy, etc.
+
+    Returns:
+        Same dict as walk_forward(), augmented with symbol + date metadata.
+    """
+    closes = await fetch_price_data(
+        symbol=config.symbol,
+        start=config.start_date,
+        end=config.end_date,
+        as_of=config.as_of,
+        period=config.period,
+        interval=config.interval,
+    )
+
+    if not closes:
+        return {
+            "symbol": config.symbol,
+            "error": "No price data available",
+            "n_folds": 0,
+            "fold_results": [],
+            "aggregate": {},
+            "assessment": "NO_DATA",
+            "is_overfit": False,
+            "recommendation": "Cannot evaluate — no historical data for this symbol/date range",
+        }
+
+    result = walk_forward(
+        closes=closes,
+        strategy_fn=config.strategy_fn,
+        param_grid=config.param_grid,
+        n_folds=config.n_folds,
+        train_pct=config.train_pct,
+    )
+
+    result["symbol"] = config.symbol
+    result["start_date"] = config.start_date
+    result["end_date"] = config.end_date
+    result["as_of"] = config.as_of
+    result["n_bars"] = len(closes)
+
+    return result

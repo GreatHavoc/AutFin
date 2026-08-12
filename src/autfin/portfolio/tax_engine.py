@@ -57,20 +57,16 @@ class TaxEngine:
             try:
                 where = "WHERE symbol = ?" if symbol else ""
                 params = [symbol] if symbol else []
-                for tbl, ts_col in [("trades", "timestamp"), ("paper_trades", "filled_at")]:
-                    try:
-                        rows = conn.execute(
-                            f"SELECT symbol, action, quantity, price, {ts_col}, pnl FROM {tbl} {where} ORDER BY {ts_col}",
-                            params,
-                        ).fetchall()
-                        for r in rows:
-                            trades.append({
-                                "symbol": r[0], "action": r[1], "quantity": r[2],
-                                "price": r[3], "timestamp": r[4],
-                                "pnl": r[5] or 0.0, "source": tbl,
-                            })
-                    except Exception:
-                        continue
+                rows = conn.execute(
+                    f"SELECT symbol, action, quantity, price, timestamp, pnl FROM trades {where} ORDER BY timestamp",
+                    params,
+                ).fetchall()
+                for r in rows:
+                    trades.append({
+                        "symbol": r[0], "action": r[1], "quantity": r[2],
+                        "price": r[3], "timestamp": r[4],
+                        "pnl": r[5] or 0.0, "source": "trades",
+                    })
             finally:
                 conn.close()
         except Exception as e:

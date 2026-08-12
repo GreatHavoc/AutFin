@@ -4,7 +4,7 @@ Thin singleton wrapper around ``langchain_mcp_adapters.client.MultiServerMCPClie
 talking to a long-lived **Obscura** HTTP MCP server.
 
 Why this module exists:
- - Holds a process-wide singleton MCP session so all LangGraph worker threads
+ - Holds a process-wide singleton MCP session so all Pydantic AI worker threads
    share one browser context (cookies + tabs + storage_state).
  - Auto-spawns ``obscura mcp --http --port 8080`` as a background subprocess
    on first use when ``BROWSER_MCP_AUTOSTART=true`` (default).
@@ -14,8 +14,7 @@ Why this module exists:
 Public surface:
  - ``get_browser_mcp_client()`` — returns the singleton, lazy-initialised.
  - ``browser_mcp_register_tools()`` — returns a list of LangChain tools bound
-   to the MCP session, ready to splice into a LangGraph ``ToolNode`` or passed
-   via ``llm.bind_tools(tools=[...])``.
+   to the MCP session, ready to use with Pydantic AI agents.
 """
 from __future__ import annotations
 
@@ -187,7 +186,7 @@ def autostart_observa(settings: Optional[BrowserMCPSettings] = None) -> subproce
 def managed_observa(settings: Optional[BrowserMCPSettings] = None):
     """Context manager: autostart obscura on enter, terminate on exit.
 
-    Useful inside scripts (`python -m autfin.<tool>`); inside ``langgraph dev``
+    Useful inside scripts (`python -m autfin.<tool>`); inside Pydantic AI dev
     the subprocess is left running for the lifetime of the dev server, so we
     autostart once at module import instead.
     """
@@ -308,7 +307,7 @@ def reset_browser_mcp_client() -> None:
 def _client_lock():
     """Tiny cooperative lock around the singleton dict."""
     # Re-entrant single-thread guard — multiprocess safety is the responsibility
-    # of the host (each `langgraph dev` worker is its own process).
+    # of the host (each Pydantic AI worker is its own process).
     yield
 
 

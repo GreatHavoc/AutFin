@@ -3,7 +3,7 @@ Performance tracking for AutFin.
 
 Provides win/loss ratio tracking, strategy comparison, and learning journal
 CRUD operations. Computes metrics from SQLite tables (trades, portfolio_snapshots,
-learning_journal) and integrates with LangGraph Store for cross-thread memory.
+learning_journal) and integrates with Pydantic AI Memory for cross-thread memory.
 
 Design references:
 - technical_spec.md §7: learning_journal table schema (v3.0)

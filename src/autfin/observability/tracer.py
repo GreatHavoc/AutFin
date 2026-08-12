@@ -1,14 +1,14 @@
 """LangSmith tracer for AutFin — LLM call and agent node tracing.
 
 Uses @traceable decorator and langsmith.Client for explicit trace management.
-For LangGraph auto-tracing, see handler.py (LANGSMITH_TRACING=true handles it).
+For Pydantic AI auto-tracing, see handler.py (LANGSMITH_TRACING=true handles it).
 This module handles manual tracing for direct LLM calls and custom spans.
 Persists traces to SQLite for durability beyond in-memory cap.
 
 Key tracing setup:
 - wrap_openai() in llm/client.py wraps the OpenAI client for automatic LLM tracing
 - @traceable decorator on tool functions creates nested spans
-- LANGSMITH_TRACING=true enables LangGraph auto-tracing for node executions
+- LANGSMITH_TRACING=true enables Pydantic AI auto-tracing for agent executions
 """
 from __future__ import annotations
 

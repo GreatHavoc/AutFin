@@ -1,15 +1,15 @@
 """
-Conference System — Multi-Agent Coordination Mechanisms.
+Conference System -- Multi-Agent Coordination Mechanisms.
 
-Inspired by HedgeAgents (2025) — their ablation study shows removing
+Inspired by HedgeAgents (2025) -- their ablation study shows removing
 coordination mechanisms drops performance by 17-38%. Coordination is
 not optional overhead; it's the source of edge.
 
 Four conference types:
-  1. Morning Conference — daily: all analysts report, allocate capital
-  2. Trade Review Conference — on-demand: bull+bear debate, risk gates
-  3. Emergency Conference — triggered: when market moves > 3% intraday
-  4. Experience Conference — weekly: agents share lessons, update memory
+  1. Morning Conference -- daily: all analysts report, allocate capital
+  2. Trade Review Conference -- on-demand: bull+bear debate, risk gates
+  3. Emergency Conference -- triggered: when market moves > 3% intraday
+  4. Experience Conference -- weekly: agents share lessons, update memory
 """
 from __future__ import annotations
 
@@ -19,25 +19,56 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
+from typing import Literal
 
-from src.autfin.llm.client import get_client, primary_model
+from src.autfin.llm.client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
 
-class ConferenceType(str, Enum):
+async def _llm_json(client, prompt: str, temperature: float, max_tokens: int, model: str | None = None) -> dict:
+    """Call the LLM and return parsed JSON via the real LLMClient API.
+
+    ``LLMClient`` exposes ``generate()`` (which internally wraps the OpenAI
+    ``chat.completions.create``); it does NOT expose ``.chat`` directly.
+    ``extract_json`` robustly strips code fences before ``json.loads``.
+    """
+    from src.autfin.utils import extract_json
+
+    raw = await client.generate(
+        prompt=prompt, temperature=temperature, max_tokens=max_tokens, model=model,
+    )
+    if not raw:
+        raise ValueError("empty LLM response")
+    data = extract_json(raw)
+    if data is None:
+        raise ValueError("failed to parse JSON from LLM response")
+    return data
+
+
+ConferenceType = Literal["morning", "trade_review", "emergency", "experience"]
+
+# Backward compat for code using ConferenceType.MORNING etc.
+class _ConferenceType:
     MORNING = "morning"
     TRADE_REVIEW = "trade_review"
     EMERGENCY = "emergency"
     EXPERIENCE = "experience"
 
+ConferenceType = _ConferenceType
 
-class MarketRegime(str, Enum):
+
+MarketRegime = Literal["normal", "high_volatility", "crash", "rally", "low_liquidity"]
+
+# Backward-compat constants for tests using MarketRegime.NORMAL etc.
+class _MarketRegime:
     NORMAL = "normal"
     HIGH_VOLATILITY = "high_volatility"
     CRASH = "crash"
     RALLY = "rally"
     LOW_LIQUIDITY = "low_liquidity"
+
+MarketRegime = _MarketRegime
 
 
 @dataclass
@@ -65,7 +96,7 @@ class ConferenceResult:
 
 
 # ---------------------------------------------------------------------------
-# Morning Conference — daily capital allocation
+# Morning Conference -- daily capital allocation
 # ---------------------------------------------------------------------------
 
 MORNING_CONFERENCE_PROMPT = """You are running a MORNING CONFERENCE for a trading desk.
@@ -108,6 +139,7 @@ async def run_morning_conference(
     analyst_reports: list[AnalystReport],
     portfolio: list[dict],
     available_cash: float,
+    model: str | None = None,
 ) -> ConferenceResult:
     """
     Run the Morning Conference.
@@ -122,7 +154,7 @@ async def run_morning_conference(
     # Format reports for the LLM
     reports_text = "\n\n".join([
         f"--- {r.agent.upper()} ANALYST ---\n"
-        f"Regime: {r.regime.value}\n"
+        f"Regime: {r.regime}\n"
         f"Confidence: {r.confidence:.0%}\n"
         f"Findings:\n" + "\n".join(f"  - {f}" for f in r.findings) +
         (f"\nAlerts: {r.alerts}" if r.alerts else "")
@@ -131,7 +163,7 @@ async def run_morning_conference(
 
     portfolio_text = json.dumps(portfolio[:10], indent=2, default=str)
 
-    client = get_client()
+    client = get_llm_client()
     prompt = MORNING_CONFERENCE_PROMPT.format(
         analyst_reports=reports_text,
         portfolio=portfolio_text,
@@ -139,14 +171,7 @@ async def run_morning_conference(
     )
 
     try:
-        response = await client.chat.completions.create(
-            model=primary_model(),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=3000,
-        )
-        content = response.choices[0].message.content or "{}"
-        data = json.loads(content)
+        data = await _llm_json(client, prompt, 0.2, 3000, model=model)
     except Exception as e:
         logger.error("Morning conference failed: %s", e)
         data = {
@@ -160,15 +185,14 @@ async def run_morning_conference(
         }
 
     regime_str = data.get("regime", "normal")
-    try:
-        regime = MarketRegime(regime_str)
-    except ValueError:
-        regime = MarketRegime.NORMAL
+    if regime_str in ("normal", "high_volatility", "crash", "rally", "low_liquidity"):
+        regime = regime_str
+    else:
+        regime = "normal"
 
     next_hours = data.get("next_meeting_hours", 4)
-    next_meeting = datetime.now().replace(
-        hour=datetime.now().hour + next_hours
-    )
+    from datetime import timedelta
+    next_meeting = datetime.now() + timedelta(hours=next_hours)
 
     return ConferenceResult(
         conference_type=ConferenceType.MORNING,
@@ -183,7 +207,7 @@ async def run_morning_conference(
 
 
 # ---------------------------------------------------------------------------
-# Trade Review Conference — on-demand bull+bear debate
+# Trade Review Conference -- on-demand bull+bear debate
 # ---------------------------------------------------------------------------
 
 TRADE_REVIEW_PROMPT = """You are running a TRADE REVIEW CONFERENCE for {symbol}.
@@ -233,13 +257,14 @@ async def run_trade_review(
     current_position: str,
     available_cash: float,
     sector_exposure: str,
+    model: str | None = None,
 ) -> dict:
     """
     Run a Trade Review Conference for a specific stock.
 
     Combines bull/bear debate with risk assessment to make a final decision.
     """
-    client = get_client()
+    client = get_llm_client()
     prompt = TRADE_REVIEW_PROMPT.format(
         symbol=symbol,
         bull_argument=bull_argument,
@@ -251,14 +276,7 @@ async def run_trade_review(
     )
 
     try:
-        response = await client.chat.completions.create(
-            model=primary_model(),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=2000,
-        )
-        content = response.choices[0].message.content or "{}"
-        return json.loads(content)
+        return await _llm_json(client, prompt, 0.1, 2000, model=model)
     except Exception as e:
         logger.error("Trade review conference failed for %s: %s", symbol, e)
         return {
@@ -269,10 +287,10 @@ async def run_trade_review(
 
 
 # ---------------------------------------------------------------------------
-# Emergency Conference — triggered by extreme market moves
+# Emergency Conference -- triggered by extreme market moves
 # ---------------------------------------------------------------------------
 
-EMERGENCY_PROMPT = """EMERGENCY CONFERENCE TRIGGERED — Market move detected.
+EMERGENCY_PROMPT = """EMERGENCY CONFERENCE TRIGGERED -- Market move detected.
 
 TRIGGER: {trigger_description}
 REGIME: {regime}
@@ -316,30 +334,24 @@ async def run_emergency_conference(
     regime: MarketRegime,
     portfolio: list[dict],
     available_cash: float,
+    model: str | None = None,
 ) -> ConferenceResult:
     """
     Run an Emergency Conference triggered by extreme market moves.
 
     Priority: capital preservation over profit.
     """
-    client = get_client()
+    client = get_llm_client()
     prompt = EMERGENCY_PROMPT.format(
         trigger_description=trigger_description,
-        regime=regime.value,
+        regime=regime,
         timestamp=datetime.now().isoformat(),
         portfolio=json.dumps(portfolio[:10], indent=2, default=str),
         cash=available_cash,
     )
 
     try:
-        response = await client.chat.completions.create(
-            model=primary_model(),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=2000,
-        )
-        content = response.choices[0].message.content or "{}"
-        data = json.loads(content)
+        data = await _llm_json(client, prompt, 0.1, 2000, model=model)
     except Exception as e:
         logger.error("Emergency conference failed: %s", e)
         data = {
@@ -363,10 +375,10 @@ async def run_emergency_conference(
 
 
 # ---------------------------------------------------------------------------
-# Experience Conference — weekly knowledge sharing
+# Experience Conference -- weekly knowledge sharing
 # ---------------------------------------------------------------------------
 
-EXPERIENCE_PROMPT = """EXPERIENCE CONFERENCE — Weekly knowledge sharing session.
+EXPERIENCE_PROMPT = """EXPERIENCE CONFERENCE -- Weekly knowledge sharing session.
 
 All agents share what they learned this week. Goals:
 1. Identify patterns that worked/failed
@@ -404,9 +416,10 @@ Respond in JSON:
 async def run_experience_conference(
     agent_experiences: list[dict],
     trade_outcomes: list[dict],
+    model: str | None = None,
 ) -> dict:
     """
-    Run the Experience Conference — weekly knowledge sharing.
+    Run the Experience Conference -- weekly knowledge sharing.
 
     Agents share lessons, update calibration, extract patterns.
     """
@@ -417,21 +430,14 @@ async def run_experience_conference(
 
     outcomes_text = json.dumps(trade_outcomes[:20], indent=2, default=str)
 
-    client = get_client()
+    client = get_llm_client()
     prompt = EXPERIENCE_PROMPT.format(
         agent_experiences=exp_text,
         trade_outcomes=outcomes_text,
     )
 
     try:
-        response = await client.chat.completions.create(
-            model=primary_model(),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=3000,
-        )
-        content = response.choices[0].message.content or "{}"
-        return json.loads(content)
+        return await _llm_json(client, prompt, 0.3, 3000, model=model)
     except Exception as e:
         logger.error("Experience conference failed: %s", e)
         return {
@@ -448,7 +454,7 @@ async def run_experience_conference(
 
 def should_trigger_emergency(
     market_data: dict,
-    current_regime: MarketRegime = MarketRegime.NORMAL,
+    current_regime: MarketRegime = "normal",
 ) -> tuple[bool, str]:
     """
     Check if market conditions warrant an Emergency Conference.
@@ -467,7 +473,7 @@ def should_trigger_emergency(
         return True, f"India VIX at {india_vix:.1f} (extreme fear)"
 
     # Check for regime change
-    if current_regime == MarketRegime.NORMAL and india_vix >= 20:
+    if current_regime == "normal" and india_vix >= 20:
         return True, f"Regime shift to high volatility (VIX {india_vix:.1f})"
 
     return False, ""

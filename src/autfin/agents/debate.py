@@ -1,338 +1,255 @@
-"""
-Debate System — Adversarial Bull/Bear Research.
+"""AutFin v7.0 — Debate Agent
 
-Two researcher agents explicitly argue opposing positions before every
-trade decision. Based on TradingAgents (Columbia/NYU) — ablation studies
-show systems without debate underperform by 20-40%.
-
-Architecture:
-  1. Bull Researcher argues FOR the trade
-  2. Bear Researcher argues AGAINST the trade
-  3. Synthesizer reads both arguments, produces final verdict
-
-The debate forces counter-arguments and stress-tests every assumption.
-No trade proceeds without explicit bear case being addressed.
+Bull/Bear adversarial debate for trade decisions.
 """
 from __future__ import annotations
 
-import json
-import logging
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Literal
 
-from src.autfin.llm.client import get_client, primary_model
+from pydantic_ai import Agent, RunContext
+from pydantic_ai.capabilities import Thinking
 
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class DebateArgument:
-    """One side's argument in the debate."""
-    side: str  # "bull" or "bear"
-    thesis: str
-    key_points: list[str]
-    risk_factors: list[str]
-    conviction: float  # 0.0 to 1.0
-    evidence: list[dict]  # supporting data points
+from autfin.agents.base import create_agent, get_model
+from autfin.agents.managed_prompts import debate_instructions
+from autfin.agents.observability import create_debug_instrumentation
+from autfin.types import (
+    AgentDeps,
+    DebateResult,
+    DebateArgument,
+    AnalysisReport,
+)
 
 
-@dataclass
-class DebateResult:
-    """Final output of a bull/bear debate."""
-    symbol: str
-    bull_argument: DebateArgument
-    bear_argument: DebateArgument
-    verdict: str  # "buy" | "sell" | "hold" | "insufficient_evidence"
-    final_conviction: float  # adjusted after debate
-    key_insights: list[str]  # most important points from both sides
-    unresolved_questions: list[str]  # what couldn't be resolved
-    confidence_in_verdict: float  # how confident we are in the verdict itself
+debate_agent = create_agent(
+    name="debate",
+    output_type=DebateResult,
+    model_type="deep",
+    instructions=debate_instructions.default,
+    capabilities=[
+        Thinking(effort="high"),
+        create_debug_instrumentation(),
+    ],
+)
 
 
-BULL_PROMPT = """You are the BULL RESEARCHER for {symbol}. Your job is to argue FOR buying/holding this stock.
-
-You have access to analysis data. Build the strongest possible case for {symbol}.
-
-Your argument must include:
-1. THESIS: One-sentence investment thesis (why this stock will outperform)
-2. KEY POINTS: 3-5 strongest arguments with supporting data
-3. RISK FACTORS: Acknowledge the top 1-2 risks (shows intellectual honesty)
-4. CONVICTION: Your conviction score (0.0-1.0) based on the evidence
-5. EVIDENCE: Specific data points that support your case
-
-Be rigorous. Don't exaggerate. A strong bull case acknowledges weaknesses.
-
-ANALYSIS DATA:
-{analysis_data}
-
-{additional_context}
-
-Respond in JSON:
-{{
-    "thesis": "...",
-    "key_points": ["...", "..."],
-    "risk_factors": ["..."],
-    "conviction": 0.75,
-    "evidence": [{{"type": "...", "detail": "...", "strength": "strong|moderate|weak"}}]
-}}"""
-
-
-BEAR_PROMPT = """You are the BEAR RESEARCHER for {symbol}. Your job is to argue AGAINST buying/holding this stock.
-
-You have access to analysis data. Build the strongest possible case against {symbol}.
-
-Your argument must include:
-1. THESIS: One-sentence thesis for why this stock will underperform or is overvalued
-2. KEY POINTS: 3-5 strongest arguments against with supporting data
-3. STRENGTHS: Acknowledge 1-2 genuine strengths (shows you're not biased)
-4. CONVICTION: Your conviction score for the bear case (0.0-1.0)
-5. EVIDENCE: Specific data points that support your bear case
-
-Be rigorous. Don't cherry-pick. A strong bear case acknowledges genuine strengths.
-
-ANALYSIS DATA:
-{analysis_data}
-
-{additional_context}
-
-Respond in JSON:
-{{
-    "thesis": "...",
-    "key_points": ["...", "..."],
-    "strengths_acknowledged": ["..."],
-    "conviction": 0.65,
-    "evidence": [{{"type": "...", "detail": "...", "strength": "strong|moderate|weak"}}]
-}}"""
-
-
-SYNTHESIS_PROMPT = """You are the DEBATE SYNTHESIZER for {symbol}. You have read arguments from both the Bull and Bear researchers.
-
-Your job is to produce a final, balanced verdict. Consider:
-- Which arguments are strongest (backed by concrete evidence)?
-- Where did the debate produce new insights?
-- What questions remain unresolved?
-- What is the risk/reward profile?
-
-BULL ARGUMENT:
-{bull_argument}
-
-BEAR ARGUMENT:
-{bear_argument}
-
-ADDITIONAL CONTEXT:
-{additional_context}
-
-Respond in JSON:
-{{
-    "verdict": "buy" | "sell" | "hold" | "insufficient_evidence",
-    "final_conviction": 0.65,
-    "reasoning": "Brief explanation of why this verdict",
-    "key_insights": ["Most important insight from the debate", "..."],
-    "unresolved_questions": ["What we couldn't determine", "..."],
-    "confidence_in_verdict": 0.8,
-    "bull_score": 0.7,
-    "bear_score": 0.6,
-    "risk_reward_ratio": "2.5:1"
-}}"""
-
-
-async def run_bull_argument(
-    symbol: str,
-    analysis_data: str,
-    additional_context: str = "",
-) -> DebateArgument:
-    """Run the Bull Researcher agent."""
-    client = get_client()
-    prompt = BULL_PROMPT.format(
-        symbol=symbol,
-        analysis_data=analysis_data,
-        additional_context=additional_context or "No additional context.",
-    )
-
-    try:
-        response = await client.chat.completions.create(
-            model=primary_model(),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=2000,
-        )
-        content = response.choices[0].message.content or "{}"
-        data = json.loads(content)
-
-        return DebateArgument(
-            side="bull",
-            thesis=data.get("thesis", ""),
-            key_points=data.get("key_points", []),
-            risk_factors=data.get("risk_factors", []),
-            conviction=float(data.get("conviction", 0.5)),
-            evidence=data.get("evidence", []),
-        )
-    except Exception as e:
-        logger.error("Bull researcher failed for %s: %s", symbol, e)
-        return DebateArgument(
-            side="bull",
-            thesis=f"Error: {e}",
-            key_points=[],
-            risk_factors=[],
-            conviction=0.0,
-            evidence=[],
-        )
-
-
-async def run_bear_argument(
-    symbol: str,
-    analysis_data: str,
-    additional_context: str = "",
-) -> DebateArgument:
-    """Run the Bear Researcher agent."""
-    client = get_client()
-    prompt = BEAR_PROMPT.format(
-        symbol=symbol,
-        analysis_data=analysis_data,
-        additional_context=additional_context or "No additional context.",
-    )
-
-    try:
-        response = await client.chat.completions.create(
-            model=primary_model(),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=2000,
-        )
-        content = response.choices[0].message.content or "{}"
-        data = json.loads(content)
-
-        return DebateArgument(
-            side="bear",
-            thesis=data.get("thesis", ""),
-            key_points=data.get("key_points", []),
-            risk_factors=data.get("strengths_acknowledged", []),
-            conviction=float(data.get("conviction", 0.5)),
-            evidence=data.get("evidence", []),
-        )
-    except Exception as e:
-        logger.error("Bear researcher failed for %s: %s", symbol, e)
-        return DebateArgument(
-            side="bear",
-            thesis=f"Error: {e}",
-            key_points=[],
-            risk_factors=[],
-            conviction=0.0,
-            evidence=[],
-        )
-
-
+@debate_agent.tool
 async def run_debate(
+    ctx: RunContext[AgentDeps],
     symbol: str,
-    analysis_data: str,
-    additional_context: str = "",
+    analysis_data: AnalysisReport | dict,
+    trade_direction: Literal["buy", "sell"] = "buy",
 ) -> DebateResult:
-    """
-    Run a full bull/bear debate on a stock.
-
-    1. Bull argues FOR
-    2. Bear argues AGAINST (sees bull's argument for counter-points)
-    3. Synthesizer reads both, produces verdict
-
-    Returns DebateResult with both arguments and final verdict.
-    """
+    """Run full bull/bear debate on a symbol."""
     import asyncio
 
-    # Step 1: Run bull and bear in parallel
-    bull_task = run_bull_argument(symbol, analysis_data, additional_context)
-    bear_task = run_bear_argument(symbol, analysis_data, additional_context)
+    # Generate bull and bear arguments in parallel
+    bull_task = generate_bull_case(ctx, symbol, analysis_data, trade_direction)
+    bear_task = generate_bear_case(ctx, symbol, analysis_data, trade_direction)
 
-    bull_arg, bear_arg = await asyncio.gather(bull_task, bear_task)
+    bull_args, bear_args = await asyncio.gather(bull_task, bear_task)
 
-    # Step 2: Synthesize — bear sees bull's argument for counter-points
-    bull_text = json.dumps({
-        "thesis": bull_arg.thesis,
-        "key_points": bull_arg.key_points,
-        "risk_factors": bull_arg.risk_factors,
-        "conviction": bull_arg.conviction,
-    }, indent=2)
-
-    bear_text = json.dumps({
-        "thesis": bear_arg.thesis,
-        "key_points": bear_arg.key_points,
-        "strengths_acknowledged": bear_arg.risk_factors,
-        "conviction": bear_arg.conviction,
-    }, indent=2)
-
-    client = get_client()
-    synth_prompt = SYNTHESIS_PROMPT.format(
-        symbol=symbol,
-        bull_argument=bull_text,
-        bear_argument=bear_text,
-        additional_context=additional_context or "No additional context.",
-    )
-
-    try:
-        response = await client.chat.completions.create(
-            model=primary_model(),
-            messages=[{"role": "user", "content": synth_prompt}],
-            temperature=0.2,
-            max_tokens=2000,
-        )
-        content = response.choices[0].message.content or "{}"
-        synth = json.loads(content)
-    except Exception as e:
-        logger.error("Debate synthesis failed for %s: %s", symbol, e)
-        synth = {
-            "verdict": "insufficient_evidence",
-            "final_conviction": 0.0,
-            "reasoning": f"Synthesis failed: {e}",
-            "key_insights": [],
-            "unresolved_questions": ["Synthesis failed"],
-            "confidence_in_verdict": 0.0,
-        }
+    # Synthesize
+    synthesis = synthesize_debate(bull_args, bear_args)
+    decision, confidence = make_decision(bull_args, bear_args, trade_direction)
 
     return DebateResult(
         symbol=symbol,
-        bull_argument=bull_arg,
-        bear_argument=bear_arg,
-        verdict=synth.get("verdict", "insufficient_evidence"),
-        final_conviction=float(synth.get("final_conviction", 0.5)),
-        key_insights=synth.get("key_insights", []),
-        unresolved_questions=synth.get("unresolved_questions", []),
-        confidence_in_verdict=float(synth.get("confidence_in_verdict", 0.5)),
+        bull_thesis=bull_args[0].argument if bull_args else "",
+        bear_thesis=bear_args[0].argument if bear_args else "",
+        bull_arguments=bull_args,
+        bear_arguments=bear_args,
+        rebuttal="",
+        synthesis=synthesis,
+        decision=decision,
+        confidence=confidence,
     )
 
 
-def format_debate_result(result: DebateResult) -> str:
-    """Format a DebateResult for display or storage."""
-    lines = [
-        f"=== DEBATE: {result.symbol} ===",
-        "",
-        f"VERDICT: {result.verdict.upper()} (conviction: {result.final_conviction:.0%})",
-        f"Confidence in verdict: {result.confidence_in_verdict:.0%}",
-        "",
-        "--- BULL CASE ---",
-        f"Thesis: {result.bull_argument.thesis}",
-        "Key points:",
-    ]
-    for pt in result.bull_argument.key_points:
-        lines.append(f"  + {pt}")
-    lines.append(f"Conviction: {result.bull_argument.conviction:.0%}")
+async def generate_bull_case(
+    ctx: RunContext[AgentDeps],
+    symbol: str,
+    analysis_data: AnalysisReport | dict,
+    trade_direction: str,
+) -> list[DebateArgument]:
+    """Generate bull arguments."""
+    args = []
 
-    lines.extend([
-        "",
-        "--- BEAR CASE ---",
-        f"Thesis: {result.bear_argument.thesis}",
-        "Key points:",
-    ])
-    for pt in result.bear_argument.key_points:
-        lines.append(f"  - {pt}")
-    lines.append(f"Conviction: {result.bear_argument.conviction:.0%}")
+    if isinstance(analysis_data, AnalysisReport):
+        data = analysis_data
+    else:
+        data = analysis_data
 
-    if result.key_insights:
-        lines.extend(["", "--- KEY INSIGHTS ---"])
-        for insight in result.key_insights:
-            lines.append(f"  * {insight}")
+    # Fundamental bull case
+    if data.get("fundamental"):
+        f = data["fundamental"]
+        if f.health_score > 60:
+            args.append(DebateArgument(
+                symbol=symbol,
+                side="bull",
+                argument=f"Strong fundamentals: health score {f.health_score}/100, ROE {f.roe}%",
+                evidence=[f"ROE: {f.roe}%", f"Revenue growth: {f.revenue_growth}%"],
+                confidence=0.7,
+            ))
 
-    if result.unresolved_questions:
-        lines.extend(["", "--- UNRESOLVED ---"])
-        for q in result.unresolved_questions:
-            lines.append(f"  ? {q}")
+    # Technical bull case
+    if data.get("technical"):
+        t = data["technical"]
+        if t.signal in ("buy", "strong_buy"):
+            args.append(DebateArgument(
+                symbol=symbol,
+                side="bull",
+                argument=f"Technical signal: {t.signal}, RSI {t.rsi}, trend positive",
+                evidence=[f"Signal: {t.signal}", f"RSI: {t.rsi}"],
+                confidence=0.65,
+            ))
 
-    return "\n".join(lines)
+    # Valuation bull case
+    if data.get("valuation") and data["valuation"].upside_pct:
+        v = data["valuation"]
+        if v.upside_pct > 15:
+            args.append(DebateArgument(
+                symbol=symbol,
+                side="bull",
+                argument=f"Undervalued: {v.upside_pct:.1f}% upside to fair value",
+                evidence=[f"Fair value range: {v.fair_value_range}"],
+                confidence=0.7,
+            ))
+
+    # Moat
+    if data.get("moat") and data["moat"].rating == "wide":
+        m = data["moat"]
+        args.append(DebateArgument(
+            symbol=symbol,
+            side="bull",
+            argument=f"Wide moat: {m.score}/100 - sustainable competitive advantage",
+            evidence=m.sources,
+            confidence=0.75,
+        ))
+
+    # Sentiment
+    if data.get("sentiment") and data["sentiment"].sentiment_label == "bullish":
+        s = data["sentiment"]
+        args.append(DebateArgument(
+            symbol=symbol,
+            side="bull",
+            argument=f"Positive sentiment: {s.sentiment_score:.2f}, catalysts: {s.catalysts}",
+            evidence=s.catalysts,
+            confidence=0.6,
+        ))
+
+    return args
+
+
+async def generate_bear_case(
+    ctx: RunContext[AgentDeps],
+    symbol: str,
+    analysis_data: AnalysisReport | dict,
+    trade_direction: str,
+) -> list[DebateArgument]:
+    """Generate bear arguments."""
+    args = []
+
+    if isinstance(analysis_data, AnalysisReport):
+        data = analysis_data
+    else:
+        data = analysis_data
+
+    # Fundamental bear case
+    if data.get("fundamental"):
+        f = data["fundamental"]
+        if f.debt_equity and f.debt_equity > 1.5:
+            args.append(DebateArgument(
+                symbol=symbol,
+                side="bear",
+                argument=f"High leverage: D/E {f.debt_equity:.1f}, financial risk elevated",
+                evidence=[f"D/E: {f.debt_equity:.1f}", f"Interest coverage: {f.get('interest_coverage', 'N/A')}"],
+                confidence=0.7,
+            ))
+        if f.revenue_growth and f.revenue_growth < 5:
+            args.append(DebateArgument(
+                symbol=symbol,
+                side="bear",
+                argument=f"Slowing growth: Revenue growth only {f.revenue_growth}%",
+                evidence=[f"Revenue growth: {f.revenue_growth}%"],
+                confidence=0.6,
+            ))
+
+    # Technical bear case
+    if data.get("technical"):
+        t = data["technical"]
+        if t.signal in ("sell", "strong_sell"):
+            args.append(DebateArgument(
+                symbol=symbol,
+                side="bear",
+                argument=f"Technical breakdown: {t.signal}, below key MAs",
+                evidence=[f"Signal: {t.signal}", f"Below SMA200: {t.sma_200}"],
+                confidence=0.65,
+            ))
+        if t.rsi and t.rsi > 75:
+            args.append(DebateArgument(
+                symbol=symbol,
+                side="bear",
+                argument=f"Overbought: RSI {t.rsi:.1f}, pullback risk high",
+                evidence=[f"RSI: {t.rsi:.1f}"],
+                confidence=0.6,
+            ))
+
+    # Valuation bear case
+    if data.get("valuation") and data["valuation"].upside_pct:
+        v = data["valuation"]
+        if v.upside_pct < -10:
+            args.append(DebateArgument(
+                symbol=symbol,
+                side="bear",
+                argument=f"Overvalued: {abs(v.upside_pct):.1f}% above fair value",
+                evidence=[f"Fair value: {v.fair_value_range}"],
+                confidence=0.7,
+            ))
+
+    # Risks from all dimensions
+    all_risks = []
+    for key in ["fundamental", "technical", "sentiment"]:
+        if data.get(key) and data[key].risks:
+            all_risks.extend(data[key].risks)
+
+    if all_risks:
+        args.append(DebateArgument(
+            symbol=symbol,
+            side="bear",
+            argument=f"Key risks: {'; '.join(all_risks[:3])}",
+            evidence=all_risks[:5],
+            confidence=0.65,
+        ))
+
+    return args
+
+
+def synthesize_debate(bull_args: list[DebateArgument], bear_args: list[DebateArgument]) -> str:
+    """Synthesize bull and bear cases into balanced view."""
+    bull_points = [a.argument for a in bull_args]
+    bear_points = [a.argument for a in bear_args]
+
+    return f"""
+BULL CASE: {'; '.join(bull_points[:3])}
+BEAR CASE: {'; '.join(bear_points[:3])}
+
+SYNTHESIS: The bull case rests on {len(bull_args)} arguments (avg confidence: {sum(a.confidence for a in bull_args)/len(bull_args):.2f if bull_args else 0:.2f}).
+The bear case rests on {len(bear_args)} arguments (avg confidence: {sum(a.confidence for a in bear_args)/len(bear_args):.2f if bear_args else 0:.2f}).
+""".strip()
+
+
+def make_decision(
+    bull_args: list[DebateArgument],
+    bear_args: list[DebateArgument],
+    trade_direction: str,
+) -> tuple[str, float]:
+    """Make final decision from debate."""
+    bull_strength = sum(a.confidence for a in bull_args)
+    bear_strength = sum(a.confidence for a in bear_args)
+
+    if bull_strength > bear_strength * 1.5:
+        return ("buy" if trade_direction == "buy" else "sell", min(bull_strength / (bull_strength + bear_strength), 0.9))
+    elif bear_strength > bull_strength * 1.5:
+        return ("sell" if trade_direction == "buy" else "buy", min(bear_strength / (bull_strength + bear_strength), 0.9))
+    else:
+        return ("hold", 0.5)

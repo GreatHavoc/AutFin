@@ -18,16 +18,12 @@ from src.autfin.portfolio.tax_engine import (
 
 @pytest.fixture
 def tmp_db(tmp_path):
-    """Create a temp SQLite DB with trades + paper_trades tables."""
+    """Create a temp SQLite DB with the trades table."""
     db = tmp_path / "test_tax.db"
     conn = sqlite3.connect(db)
     conn.execute("""CREATE TABLE trades (
         symbol TEXT, action TEXT, quantity INTEGER, price REAL,
         timestamp TEXT, pnl REAL
-    )""")
-    conn.execute("""CREATE TABLE paper_trades (
-        symbol TEXT, action TEXT, quantity INTEGER, price REAL,
-        filled_at TEXT, pnl REAL
     )""")
     conn.commit()
     conn.close()

@@ -21,7 +21,8 @@ class FundamentalTools:
         """
         try:
             import yfinance as yf
-            ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+            from src.autfin.agents.yfinance_utils import normalize_symbol
+            ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             info = ticker.info or {}
 
             return {
@@ -157,7 +158,8 @@ class FundamentalTools:
         """Fetch balance sheet data from yfinance."""
         try:
             import yfinance as yf
-            ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+            from src.autfin.agents.yfinance_utils import normalize_symbol
+            ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             bs = ticker.balance_sheet
             if bs is not None and not bs.empty:
                 latest = bs.iloc[:, 0]
@@ -178,7 +180,8 @@ class FundamentalTools:
         """Fetch income statement data from yfinance."""
         try:
             import yfinance as yf
-            ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+            from src.autfin.agents.yfinance_utils import normalize_symbol
+            ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             inc = ticker.financials
             if inc is not None and not inc.empty:
                 latest = inc.iloc[:, 0]
@@ -198,7 +201,8 @@ class FundamentalTools:
         """Fetch cash flow statement data from yfinance."""
         try:
             import yfinance as yf
-            ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+            from src.autfin.agents.yfinance_utils import normalize_symbol
+            ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             cf = ticker.cashflow
             if cf is not None and not cf.empty:
                 latest = cf.iloc[:, 0]

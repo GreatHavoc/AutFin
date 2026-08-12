@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from src.autfin.tools.sentiment_analyzer import get_sentiment_analyzer
+from .sentiment_analyzer import get_sentiment_analyzer
 
 logger = logging.getLogger(__name__)
 

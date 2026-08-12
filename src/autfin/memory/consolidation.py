@@ -43,7 +43,7 @@ class MemoryConsolidator:
         Returns:
             Stats dict with expired, trimmed, and errors counts
         """
-        from src.autfin.memory.store import get_store
+        # from src.autfin.memory.store import get_store  # REMOVED
         store = self._store or get_store()
 
         stats: Dict[str, int] = {"expired": 0, "trimmed": 0, "errors": 0}
@@ -152,7 +152,7 @@ class MemoryConsolidator:
 
 
 async def consolidate_memory() -> Dict[str, int]:
-    """Convenience function for scheduler integration.
+    """Run memory consolidation (TTL expiry + capacity trimming).
 
     Returns:
         Stats dict with expired, trimmed, and errors counts

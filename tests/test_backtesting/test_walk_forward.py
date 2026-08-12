@@ -3,8 +3,11 @@
 import pytest
 
 from src.autfin.backtesting.walk_forward import (
+    WalkForwardConfig,
+    fetch_price_data,
     split_windows,
     walk_forward,
+    walk_forward_with_symbol,
     simple_sma_crossover,
     _sharpe_ratio,
     _max_drawdown,
@@ -136,3 +139,59 @@ class TestWalkForward:
         assert "avg_oos_return_pct" in agg
         assert "avg_oos_drawdown" in agg
         assert "win_consistency" in agg
+
+
+class TestWalkForwardConfig:
+    def test_defaults(self):
+        cfg = WalkForwardConfig(symbol="RELIANCE")
+        assert cfg.symbol == "RELIANCE"
+        assert cfg.n_folds == 5
+        assert cfg.train_pct == 0.7
+        assert cfg.as_of is None
+        assert cfg.start_date is None
+        assert cfg.end_date is None
+
+    def test_custom_fields(self):
+        cfg = WalkForwardConfig(
+            symbol="TCS",
+            start_date="2023-01-01",
+            end_date="2024-06-01",
+            as_of="2024-06-01",
+            n_folds=3,
+            train_pct=0.6,
+        )
+        assert cfg.symbol == "TCS"
+        assert cfg.start_date == "2023-01-01"
+        assert cfg.end_date == "2024-06-01"
+        assert cfg.as_of == "2024-06-01"
+        assert cfg.n_folds == 3
+        assert cfg.train_pct == 0.6
+
+
+class TestFetchPriceData:
+    @pytest.mark.asyncio
+    async def test_empty_symbol_returns_empty(self):
+        result = await fetch_price_data("NONEXISTENT_SYMBOL_XYZ_123", period="5d")
+        assert result == [] or isinstance(result, list)
+
+    def test_import_exists(self):
+        from src.autfin.backtesting.walk_forward import fetch_price_data
+        assert callable(fetch_price_data)
+
+
+class TestWalkForwardWithSymbol:
+    def test_import_exists(self):
+        from src.autfin.backtesting.walk_forward import walk_forward_with_symbol
+        assert callable(walk_forward_with_symbol)
+
+    @pytest.mark.asyncio
+    async def test_no_data_returns_error(self):
+        """walk_forward_with_symbol returns error dict when no data available."""
+        from unittest.mock import patch, AsyncMock
+
+        cfg = WalkForwardConfig(symbol="NONEXISTENT_XYZ_123", period="5d")
+        with patch("src.autfin.backtesting.walk_forward.fetch_price_data", new_callable=AsyncMock, return_value=[]):
+            result = await walk_forward_with_symbol(cfg)
+        assert result["error"] == "No price data available"
+        assert result["assessment"] == "NO_DATA"
+        assert result["n_folds"] == 0

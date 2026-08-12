@@ -1,7 +1,7 @@
 """
 Memory retrieval strategies for AutFin.
 
-Provides cross-thread memory via LangGraph Store and semantic search
+Provides cross-thread memory via Pydantic AI Memory and semantic search
 via ChromaDB Vector Store. Used by agents to build context from
 past research, trade history, and learnings.
 
@@ -15,7 +15,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Sequence
 
-from .store import AutFinStore, get_store
+# from .store import AutFinStore, get_store  # REMOVED - use Pydantic AI Memory
 from .vector_store import VectorStore, get_or_create_collection
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ async def store_research_report(
     store: Optional[AutFinStore] = None,
 ) -> None:
     """
-    Persist a research report for a stock in the LangGraph Store.
+    Persist a research report for a stock in the Pydantic AI Store.
 
     Args:
         stock: NSE symbol (e.g. "RELIANCE")

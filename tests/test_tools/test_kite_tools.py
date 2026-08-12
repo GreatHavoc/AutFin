@@ -237,5 +237,5 @@ async def test_auth_failure_returns_error(monkeypatch):
     kt = KiteTools(api_key="test_key", api_secret="test_secret")
     monkeypatch.setattr(kt, "_load_token", lambda: None)
 
-    with pytest.raises(PermissionError, match="Not authenticated"):
+    with pytest.raises(PermissionError, match="Auto-login failed"):
         kt._ensure_auth()

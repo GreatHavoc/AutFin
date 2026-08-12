@@ -46,8 +46,9 @@ async def fetch_financial_info(symbol: str) -> str:
     """Fetch all financial info for a stock from yfinance (ratios, growth, balance sheet)."""
     try:
         import yfinance as yf
+        from src.autfin.agents.yfinance_utils import normalize_symbol
 
-        ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+        ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         info = ticker.info or {}
 
         keys = {
@@ -71,8 +72,9 @@ async def fetch_balance_sheet(symbol: str) -> str:
     """Fetch the balance sheet for a stock from yfinance."""
     try:
         import yfinance as yf
+        from src.autfin.agents.yfinance_utils import normalize_symbol
 
-        ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+        ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         bs = ticker.balance_sheet
         if bs is None or bs.empty:
             return str({"error": f"No balance sheet data for {symbol}"})
@@ -86,8 +88,9 @@ async def fetch_income_statement(symbol: str) -> str:
     """Fetch the income statement for a stock from yfinance."""
     try:
         import yfinance as yf
+        from src.autfin.agents.yfinance_utils import normalize_symbol
 
-        ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+        ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         inc = ticker.financials
         if inc is None or inc.empty:
             return str({"error": f"No income statement data for {symbol}"})
@@ -101,8 +104,9 @@ async def fetch_cashflow(symbol: str) -> str:
     """Fetch the cash flow statement for a stock from yfinance."""
     try:
         import yfinance as yf
+        from src.autfin.agents.yfinance_utils import normalize_symbol
 
-        ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+        ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         cf = ticker.cashflow
         if cf is None or cf.empty:
             return str({"error": f"No cash flow data for {symbol}"})
@@ -122,8 +126,9 @@ async def fetch_historical_ohlcv(symbol: str, period: str = "6mo", interval: str
     """
     try:
         import yfinance as yf
+        from src.autfin.agents.yfinance_utils import normalize_symbol
 
-        ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+        ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         df = ticker.history(period=period, interval=interval)
         if df.empty:
             return str({"error": f"No price data for {symbol}"})
@@ -137,8 +142,9 @@ async def fetch_company_info(symbol: str) -> str:
     """Fetch company profile info (sector, industry, market cap, employees)."""
     try:
         import yfinance as yf
+        from src.autfin.agents.yfinance_utils import normalize_symbol
 
-        ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+        ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         info = ticker.info or {}
         profile = {
             "symbol": symbol,
@@ -629,7 +635,8 @@ async def compare_peers(symbol: str, metric: str = "valuation") -> str:
 
         try:
             import yfinance as yf
-            ticker = yf.Ticker(f"{symbol.upper().removesuffix('.NS')}.NS")
+            from src.autfin.agents.yfinance_utils import normalize_symbol
+            ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             info = ticker.info or {}
             sector = info.get("sector", "N/A")
         except Exception:

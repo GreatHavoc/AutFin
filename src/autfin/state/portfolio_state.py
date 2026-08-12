@@ -5,7 +5,7 @@ from typing import TypedDict
 
 
 class DecisionRecord(TypedDict):
-    """Stored in LangGraph Store for cross-thread memory."""
+    """Stored in Pydantic AI Memory for cross-thread memory."""
     decision_id: str                # UUID
     timestamp: str                  # ISO 8601
     symbol: str

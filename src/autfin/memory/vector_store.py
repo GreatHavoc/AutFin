@@ -3,7 +3,6 @@
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 import chromadb
-from chromadb.config import Settings
 from chromadb import EmbeddingFunction, Documents, Embeddings
 from ..config.settings import AutFinSettings
 
@@ -334,9 +333,3 @@ class VectorStore:
         if collection_name in self.collections:
             self.client.delete_collection(name=collection_name)
             del self.collections[collection_name]
-    
-    def persist(self) -> None:
-        """Persist changes to disk (PersistentClient handles this automatically)."""
-        # PersistentClient automatically persists to disk
-        # This method exists for API compatibility but is a no-op
-        pass

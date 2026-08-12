@@ -38,7 +38,7 @@ def _tool_def(name: str, description: str, parameters: Dict) -> Dict:
 # ================== SEMANTIC EMBEDDING ==================
 # Delegates to shared memory.embeddings module (single model instance)
 
-from src.autfin.memory.embeddings import generate_embedding as _generate_embedding, cosine_similarity
+from src.autfin.memory.embeddings import generate_embedding as _generate_embedding
 
 
 # ================== TOOL IMPLEMENTATIONS ==================
@@ -561,56 +561,22 @@ async def research_batch(symbols: List[str], depth: str = "standard") -> Dict[st
     Run research_stock on multiple symbols concurrently.
     Parameter: symbols (array), depth (string).
     Returns dict of symbol → research.
-
-    Persists per-symbol progress to the fanout_progress table (Phase 3.2)
-    so the dashboard can show the live status of the wave. Each symbol is
-    marked 'running' before dispatch, then 'completed' / 'failed' after the
-    coroutine resolves.
     """
     if not symbols:
         return {"status": "error", "message": "No symbols provided"}
 
     try:
-        # --- Fan-out progress persistence (Phase 3.2) ---
         import uuid as _uuid
 
         session_id = _uuid.uuid4().hex
-        context = "morning_routine"  # default; supervisor overrides via state if available
-        try:
-            import os as _os
-            context = _os.environ.get("AUTFIN_LIVE_CONTEXT", context)
-        except Exception:
-            pass
-
-        try:
-            from src.autfin.dashboard.data import (
-                record_fanout_start,
-                update_fanout_status,
-            )
-            record_fanout_start(session_id, context, list(symbols))
-        except Exception:
-            logger.debug("fanout tracking init skipped", exc_info=True)
 
         async def _run_one(sym: str):
             try:
                 res = await research_stock(sym, depth)
                 ok = isinstance(res, dict) and res.get("status") == "success"
-                try:
-                    update_fanout_status(
-                        session_id,
-                        sym,
-                        "completed" if ok else "failed",
-                        error=(None if ok else str(res.get("message", "unknown"))),
-                    )
-                except Exception:
-                    logger.debug("fanout status update failed", exc_info=True)
                 return res
             except Exception as exc:
-                try:
-                    update_fanout_status(session_id, sym, "failed", error=str(exc))
-                except Exception:
-                    logger.debug("fanout status update failed", exc_info=True)
-                raise
+                return {"status": "error", "message": str(exc), "symbol": sym}
 
         tasks = [_run_one(sym) for sym in symbols]
         results_list = await asyncio.gather(*tasks, return_exceptions=True)
@@ -643,10 +609,6 @@ async def build_stock_pitch(symbol: str, research_data: Dict[str, Any]) -> Dict[
     Generate 6-element buy-side stock pitch for a symbol.
     Parameter: symbol (string), research_data (dict).
     Implementation: calls researcher_agent with instruction to produce 6-element pitch format. LLM-driven.
-
-    On success the pitch is persisted to the stock_pitches table so the dashboard
-    can render it (Phase 3.1). The context is read from AgentState if available,
-    otherwise defaults to "manual".
     """
     try:
         from src.autfin.llm.client import get_llm_client
@@ -680,15 +642,6 @@ async def build_stock_pitch(symbol: str, research_data: Dict[str, Any]) -> Dict[
                 pitch = json.loads(response) if isinstance(response, str) else response
             except json.JSONDecodeError:
                 pitch = {"raw_response": str(response)[:2000]}
-
-            # Persist pitch for the dashboard (Phase 3.1).
-            # Read context from current research_data if available, else default.
-            persist_ctx = research_data.get("context", "manual") if isinstance(research_data, dict) else "manual"
-            try:
-                from src.autfin.dashboard.data import save_stock_pitch
-                save_stock_pitch(symbol=symbol, context=str(persist_ctx), pitch=pitch)
-            except Exception:
-                logger.debug("save_stock_pitch persistence skipped", exc_info=True)
 
             return {
                 "status": "success",

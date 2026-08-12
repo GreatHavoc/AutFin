@@ -56,8 +56,9 @@ async def peer_compare_agent(state: dict, symbol: str | None = None) -> dict[str
 
     try:
         import yfinance as yf
+        from src.autfin.agents.yfinance_utils import normalize_symbol
 
-        ticker = yf.Ticker(f"{symbol.removesuffix('.NS')}.NS")
+        ticker = yf.Ticker(normalize_symbol(symbol))
         info = ticker.info or {}
 
         peer_symbols = _get_peer_symbols(symbol)
@@ -65,7 +66,7 @@ async def peer_compare_agent(state: dict, symbol: str | None = None) -> dict[str
         peers: dict[str, dict[str, Any]] = {symbol: _extract_metrics(info)}
         for peer_sym in peer_symbols:
             try:
-                pt = yf.Ticker(f"{peer_sym.removesuffix('.NS')}.NS")
+                pt = yf.Ticker(normalize_symbol(peer_sym))
                 pi = pt.info or {}
                 peers[peer_sym] = _extract_metrics(pi)
             except Exception:

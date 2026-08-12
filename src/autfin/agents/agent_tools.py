@@ -170,7 +170,7 @@ async def fundamentals_tool(symbol: str, depth: str = "standard") -> str:
 
 
 @_traceable(name="technical_analysis", run_type="chain", process_inputs=_filter_symbol_inputs, process_outputs=_filter_agent_outputs)
-async def technical_tool(symbol: str, depth: str = "standard") -> str:
+async def technical_tool(symbol: str, depth: str = "standard", as_of: str | None = None) -> str:
     """Run technical analysis on a stock. Deterministic — no LLM.
 
     Fetches OHLCV via yfinance, then calls TechnicalAgent.analyze()
@@ -180,18 +180,16 @@ async def technical_tool(symbol: str, depth: str = "standard") -> str:
     Args:
         symbol: Stock symbol (e.g. 'RELIANCE')
         depth: quick (3mo), standard (6mo), deep (1y)
+        as_of: ISO datetime for point-in-time backtests (None = live)
     """
     from src.autfin.agents.technical import TechnicalAgent
-    import pandas as pd
+    from src.autfin.agents.yfinance_utils import fetch_history
 
     try:
-        import yfinance as yf
-
         period_map = {"quick": "3mo", "standard": "6mo", "deep": "1y"}
         period = period_map.get(depth, "6mo")
 
-        ticker = yf.Ticker(f"{symbol.removesuffix('.NS')}.NS")
-        hist = ticker.history(period=period, interval="1d")
+        hist = await fetch_history(symbol, as_of=as_of, period=period, interval="1d")
 
         if hist is None or hist.empty:
             return json.dumps({
@@ -278,6 +276,39 @@ async def portfolio_tool() -> str:
         return json.dumps(portfolio_data, default=str)
     except Exception as e:
         logger.warning("portfolio_allocation failed: %s", e)
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+@_traceable(name="market_status", run_type="chain", process_inputs=_filter_no_args_inputs, process_outputs=_filter_agent_outputs)
+async def market_status_tool() -> str:
+    """Check market status: open/closed, Nifty, Bank Nifty, global indices, sector performance.
+    Deterministic — no LLM. No arguments.
+    Returns {is_open, nifty_level, nifty_change_pct, bank_nifty, global_indices, sectors}.
+    """
+    from src.autfin.tools.supervisor_tools import get_market_status
+
+    try:
+        status = await get_market_status()
+        return json.dumps(status, default=str)
+    except Exception as e:
+        logger.warning("market_status failed: %s", e)
+        return json.dumps({"status": "error", "message": str(e)})
+
+
+@_traceable(name="market_quotes", run_type="chain", process_inputs=_filter_symbols_inputs, process_outputs=_filter_agent_outputs)
+async def quotes_tool(symbols: str = "") -> str:
+    """Get live price quotes for symbols. Deterministic — no LLM.
+    Uses Kite SDK with yfinance fallback.
+    Args: symbols (comma-separated, e.g. 'RELIANCE,TCS,INFY')
+    """
+    from src.autfin.tools.supervisor_tools import get_market_quotes
+
+    try:
+        sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()] if symbols else []
+        quotes = await get_market_quotes(sym_list)
+        return json.dumps(quotes, default=str)
+    except Exception as e:
+        logger.warning("market_quotes failed: %s", e)
         return json.dumps({"status": "error", "message": str(e)})
 
 
@@ -497,6 +528,7 @@ TOOL_DEFINITIONS: List[Dict] = [
         {
             "symbol": {"type": "string", "description": "Stock symbol (e.g. RELIANCE)"},
             "depth": {"type": "string", "description": "quick/standard/deep (default: standard)"},
+            "as_of": {"type": "string", "description": "ISO datetime for point-in-time backtests (omit for live)"},
         },
     ),
     _tool_def(
