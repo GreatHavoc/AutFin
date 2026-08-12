@@ -1,6 +1,6 @@
-# AutFin — Technical Specification
+# AutFin — Technical Specification v7.0
 
-**Version**: 5.6 | **Date**: July 2026 | **Status**: Complete — 8-Agent System (Debate, Conferences, Memory), Obscura browser MCP hard dependency, adversarial bull/bear research, coordination mechanisms, 3-type persistent memory.
+**Version**: 7.0.0 | **Date**: August 2026 | **Status**: Complete — Pydantic AI SubAgents + DynamicWorkflow, Model Tiers, Alpha Decay, Walk-Forward Backtesting, Logfire Observability
 
 ---
 
@@ -8,29 +8,28 @@
 
 | Layer | Technology | Version | Justification |
 |-------|-----------|---------|---------------|
-| **Orchestration** | LangGraph | `>=1.0.0` | MIT. Tools pattern, StateGraph, Store API, `interrupt()` HITL, checkpointing |
+| **Orchestration** | Pydantic AI | `>=0.2.0` | MIT-licensed. SubAgents, DynamicWorkflow, Planning, Memory, CodeMode, Guardrails, SystemReminders. Atomic state + Command routing in one return. |
 | **Kite/Zerodha** | KiteConnect SDK | `>=5.0.0` | Direct pykiteconnect SDK: auth, portfolio, orders, GTT, WebSocket. TOTP auto-login. |
-| **LLM Client** | openai SDK | `>=1.0.0` | Direct connection to OpenAI-compatible endpoints (Modal vLLM, NVIDIA NIM, etc.) |
-| **LLM — Primary** | Modal vLLM (self-hosted) | via openai SDK | `qwen3.6-35b-a3b` — Qwen 3.6 35B, zero cost, no rate limits, cold starts |
-| **LLM — Fallback** | NVIDIA NIM | via openai SDK | `meta/llama-3.1-8b-instruct` — Llama 3.1 8B, free tier |
+| **LLM Client** | openai SDK | `>=1.0.0` | Direct connection to OpenAI-compatible endpoints (Modal vLLM, NVIDIA NIM, etc.). Parallel tool execution. |
+| **LLM — Primary** | NVIDIA NIM | via openai SDK | `meta/llama-3.3-70b-instruct`, `deepseek-ai/deepseek-v4-flash` — 70B MoE, 1M context, free tier. |
+| **LLM — Fallback** | Modal vLLM | via openai SDK | `qwen3.6-35b-a3b` — Qwen 3.6 35B, zero cost, no rate limits, cold starts. |
 | **Database** | SQLite | via `sqlite-utils` | 5+ tables: trades, portfolio_snapshots, signals, balance_history, learning_journal. WAL mode. |
-| **Checkpointer** | SqliteSaver | `langgraph-checkpoint-sqlite>=2.0.0` | Node-level checkpointing, crash recovery, thread-level state isolation |
 | **Vector Store** | ChromaDB | `>=0.5.0` | 3 collections: market_data, learning_journal, research_notes. Local-first. 384-dim embeddings. |
-| **Long-Term Memory** | LangGraph Store API | `langgraph>=1.0.0` | Multi-scope (user/agent/run/app). Episodic + semantic + procedural. Cross-session learning. |
-| **Observability** | LangSmith | `langsmith>=0.3.0` | Auto-tracing via env vars, per-agent traces, Studio visual debugging, RAGAS evaluation |
+| **Observability** | Logfire | `>=0.1.0` | Auto-tracing via env vars, per-agent traces, prompt version control, RAGAS evaluation. Replaces LangSmith. |
 | **Indian Stock Data** | NSE Public APIs | REST (no key) | Unlimited, real-time. Primary for Indian equity prices. |
 | **Historical Data** | yfinance | `>=0.2.0` | Free, no key. `.NS`/`.BO` Indian tickers. OHLCV candles + fundamentals. |
-| **Market Data Fallback** | NSE Public API | REST (no key) | Real-time NSE quotes as primary yfinance backup |
-| **News Sentiment** | Marketaux + Alpha Vantage | REST (free keys) | Marketaux: 100 req/day NLP. Alpha Vantage: 200K+ tickers. NSE announcements as Indian fallback. |
+| **Market Data Fallback** | yfinance | REST (no key) | Real-time NSE quotes as primary yfinance backup. |
+| **News Sentiment** | Marketaux + Alpha Vantage | REST (free keys) | Marketaux: 100 articles/day NLP. Alpha Vantage: 200K+ tickers. NSE announcements as Indian fallback. |
 | **Fundamentals** | yfinance (primary) + Screener.in | — | yfinance: ROIC, FCF yield, moat, health score. Screener.in: Firecrawl fallback for deep Indian fundamentals. |
 | **Global Macro** | yfinance + FRED API | REST (free keys) | yfinance: S&P, NASDAQ, VIX, DXY, INR, crude, gold, US 10Y. FRED: GDP, CPI, Fed Funds with 24h cache. |
 | **Technical Analysis** | pandas-ta-classic (pure Python) | `pandas-ta-classic>=0.6.0` | SMA 20/50/200, EMA, RSI, MACD, ADX, Bollinger, ATR, OBV. Multi-period + golden/death cross. |
-| **Scheduling** | APScheduler | `>=3.10.0` | Cron-style job scheduling |
-| **Data** | Pandas + NumPy | `pandas>=2.2.0`, `numpy>=1.26.0` | All numerical computation |
-| **HTTP** | httpx | `>=0.27.0` | Async HTTP client |
-| **Config** | python-dotenv + settings.py | `python-dotenv>=1.0.0` | Environment + typed settings |
-| **CLI** | Rich | `>=13.0.0` | Terminal output formatting |
-| **Validation** | Pydantic | `>=2.0.0` | All state schemas, config models |
+| **Data** | Pandas + NumPy | `pandas>=2.2.0`, `numpy>=1.26.0` | All numerical computation. |
+| **HTTP** | httpx | `>=0.27.0` | Async HTTP client. |
+| **Config** | python-dotenv + settings.py | `python-dotenv>=1.0.0` | Environment + typed settings (Pydantic models). |
+| **CLI** | Rich | `>=13.0.0` | Terminal output formatting. |
+| **Validation** | Pydantic | `>=2.0.0` | All state schemas, config models. |
+| **Capabilities** | pydantic-ai-harness | `>=0.1.0` | SubAgents, DynamicWorkflow, Planning, Memory, CodeMode, Guardrails, SystemReminders, Skills. |
+| **Evals** | pydantic-evals | `>=0.1.0` | Structured evaluation suites, RAG quality assessment. |
 
 ---
 
@@ -42,206 +41,126 @@ autfin/
 ├── .env                                   # API keys, secrets (gitignored)
 ├── .env.example                           # Template for required env vars
 ├── README.md                              # Project overview, getting started
-├── autfin_prd.md                          # v5.3 Product Requirements Document
-├── technical_spec.md                      # v5.3 Technical Specification (this file)
-├── IMPROVEMENT_PLAN_V5_3.md               # v5.3 restructure plan (Subagents, Store, interrupts)
-│
-├── src/autfin/
+├── technical_spec.md                      # v7.0 Technical Specification (this file)
+├── tests/                                 # 52 test files across 10 categories
+│   ├── test_agents/       # Sub-agent tests (7 agents × parallel/modes)
+│   ├── test_tools/        # Tool integration tests (Kite, yfinance, NSE, etc.)
+│   ├── test_backtest/     # Walk-forward + alpha decay tests
+│   ├── test_memory/       # Memory persistence & RAG eval tests
+│   ├── test_learning/     # Online learning, calibration, critique tests
+│   ├── test_risk/         # Risk management, Kelly, anomaly, regime tests
+│   ├── test_tools/        # Sentiment, Reddit, NSE fix, screening tests
+│   ├── test_llm/          # LLM client tests (model tiers, parallel exec)
+│   └── test_validator.py  # Validation gates (8 gates)
+├── technical_spec.md                      # v7.0 Technical Specification
+├── .gitignore
+└── uv.lock
+
+src/autfin/
+├── __init__.py
+├── agents/            # 7 sub-agents + shared infrastructure
 │   ├── __init__.py
-│   │
-│   ├── graph/                             # LangGraph workflow definitions
-│   │   ├── __init__.py
-│   │   ├── supervisor.py                  # Supervisor with 8 sub-agent tools (v5.6)
-│   │   ├── builder.py                     # Graph builder with store support
-│   │   └── error_handler.py               # Retry policy + circuit breaker (548 lines)
-│   │
-│   ├── agents/                            # 8 sub-agents + 10 deterministic tools
-│   │   ├── __init__.py
-│   │   ├── subagents.py                   # 8 sub-agents (v5.6: debate, conferences, memory)
-│   │   ├── debate.py                      # Bull vs Bear adversarial research
-│   │   ├── conferences.py                 # Morning/TradeReview/Emergency/Experience
-│   │   ├── memory_system.py               # 3-type persistent memory
-│   │   ├── agent_tools.py                 # 10 deterministic tool wrappers (v5.4)
-│   │   ├── market_data.py                 # Balance, Price, Market Data (404 lines)
-│   │   ├── fundamentals.py                # Ratios, Health Score, Moat (1191 lines)
-│   │   ├── technical.py                   # SMA 20/50/200, Indicators, Signals (777 lines)
-│   │   ├── sentiment.py                   # Marketaux + NSE fallback (499 lines)
-│   │   ├── global_macro.py                # yfinance + FRED API + 16 Indices + Sector Matrix
-│   │   ├── researcher.py                  # Weighted synthesis + LLM recommendation (951 lines)
-│   │   ├── risk_manager.py                # 14 checks: VaR, CVaR, news risk (1005 lines)
-│   │   ├── portfolio_manager.py           # Capital allocation, tax, top-up (613 lines)
-│   │   ├── executor.py                    # Kite SDK order execution, 3 modes (421 lines)
-│   │   ├── valuation.py                   # DCF valuation (deterministic)
-│   │   ├── distortion.py                  # Price-distortion detection (deterministic)
-│   │   ├── regulatory.py                  # SEBI/RBI regulatory scanner (deterministic)
-│   │   ├── peer_compare.py                # Peer comparison agent
-│   │   ├── moat.py                        # Moat assessment agent
-│   │   └── auto_execute.py                # Automated execution orchestration
-│   │
-│   ├── state/                             # State type definitions
-│   │   ├── __init__.py
-│   │   └── agent_state.py                 # AgentState TypedDict (errors reducer, schema_version)
-│   │
-│   ├── tools/                             # Agent tool implementations
-│   │   ├── __init__.py                    # Lazy imports via __getattr__
-│   │   ├── kite_tools.py                  # KiteConnect SDK wrappers (809 lines)
-│   │   ├── fundamental_tools.py           # Ratio computation, DCF models
-│   │   ├── sentiment_tools.py             # HybridSentimentAnalyzer + multi-source (339+ lines)
-│   │   ├── sentiment_analyzer.py          # FinBERT + VADER + keyword hybrid
-│   │   ├── reddit_sentiment.py            # Reddit PRAW integration
-│   │   ├── technical_tools.py             # Indicator computation (pandas-ta-classic)
-│   │   ├── scraper_tools.py              # NSE cookies, nselib, web scraping (315+ lines)
-│   │   ├── supervisor_tools.py            # 20 supervisor tools + callables
-│   │   ├── screening.py                   # Magic Formula, F-Score, liquidity gate
-│   │   ├── universe.py                    # Nifty 500 universe management
-│   │   ├── market_feed.py                 # Real-time market feed
-│   │   ├── memory_tools.py                # Store/Vector Store retrieval
-│   │   └── reporting.py                   # Report generation
-│   │
-│   ├── mcp/                               # MCP (Model Context Protocol) integration
-│   │   ├── __init__.py                    # Re-exports public surface
-│   │   └── browser_client.py              # Obscura HTTP MCP client (singleton, autostart)
-│   │
-│   ├── memory/                            # Long-term memory layer
-│   │   ├── __init__.py
-│   │   ├── setup.py                       # Async checkpointer/store initialization
-│   │   ├── store.py                       # LangGraph Store operations + AutFinStore
-│   │   ├── vector_store.py                # ChromaDB collections (325 lines, AutFinEmbeddingFunction)
-│   │   ├── database.py                    # SQLite schema + CRUD (128 lines)
-│   │   ├── connection_pool.py             # Thread-safe SQLite connection pool
-│   │   ├── retrieval.py                   # Multi-scope memory retrieval (688 lines)
-│   │   └── rag_eval.py                    # RAG quality evaluation
-│   │
-│   ├── llm/                               # LLM client abstraction
-│   │   ├── __init__.py
-│   │   └── client.py                      # LLMClient: generate(), generate_json(), generate_with_tools()
-│   │                                     # openai SDK direct (Modal vLLM, NVIDIA NIM, parallel tool execution)
-│   │
-│   ├── prompts/                           # Agent system prompts (all 8 created)
-│   │   ├── __init__.py
-│   │   ├── supervisor.py
-│   │   ├── market_data.py
-│   │   ├── fundamentals.py
-│   │   ├── technical.py
-│   │   ├── sentiment.py
-│   │   ├── global_macro.py
-│   │   ├── researcher.py
-│   │   └── risk_manager.py
-│   │
-│   ├── config/
-│   │   ├── __init__.py
-│   │   ├── settings.py                    # AutFinSettings Pydantic model (modal_vllm_url, modal_vllm_model)
-│   │   └── capabilities.py               # System capability flags
-│   │
-│   ├── observability/                     # LangSmith tracing + metrics
-│   │   ├── __init__.py
-│   │   ├── handler.py                     # LangSmith auto-tracing handler
-│   │   ├── tracer.py                      # @traceable decorator, SQLite persistence
-│   │   ├── metrics.py
-│   │   ├── roro.py                        # Return on Research Output
-│   │   └── thesis_ab.py                   # A/B thesis framework
-│   │
-│   ├── scheduler/                         # APScheduler jobs
-│   │   ├── __init__.py
-│   │   └── jobs.py                        # APScheduler: 4 cron jobs (393 lines)
-│   │
-│   ├── dashboard/                         # Streamlit web UI
-│   │   ├── __init__.py
-│   │   ├── app.py                         # 7-page dashboard with auto-refresh (465 lines)
-│   │   └── data.py                        # Real-time SQLite queries (471 lines)
-│   │
-│   ├── paper_trading/                     # Simulated trading
-│   │   ├── __init__.py
-│   │   ├── engine.py                      # 372 lines — fills, P&L, lifecycle
-│   │   └── reconciliation.py              # Paper-live reconciliation
-│   │
-│   ├── backtest/                          # Historical backtesting
-│   │   ├── __init__.py
-│   │   ├── engine.py                      # BacktestEngine (303 lines)
-│   │   ├── strategies.py                  # 5 strategies (546 lines)
-│   │   └── metrics.py                     # 18+ metrics (181 lines)
-│   │
-│   ├── risk/                              # Risk management modules
-│   │   ├── __init__.py
-│   │   ├── kelly.py                       # Kelly criterion with regime gates
-│   │   ├── anomaly.py                     # Rolling z-score anomaly detection
-│   │   ├── regime.py                      # VIX/volatility regime detector
-│   │   └── vol_targeting.py               # Volatility-targeting overlay
-│   │
-│   ├── learning/                          # Self-learning modules
-│   │   ├── __init__.py
-│   │   ├── judge.py                       # LLM-as-Judge
-│   │   ├── critique.py                    # Self-critique loop
-│   │   ├── calibrator.py                  # Conviction calibration
-│   │   ├── online.py                      # O(1) incremental online learning
-│   │   └── feedback_loop.py               # Trade outcome feedback
-│   │
-│   ├── alerts/                            # Alert notification system
-│   │   ├── __init__.py
-│   │   └── notifier.py                    # 4 backends: Console, Desktop, Pushover, Email (509 lines)
-│   │
-│   └── cli/                               # CLI interface
-│       ├── __init__.py
-│       └── main.py                        # 7 commands: status|analyze|scan|start|backtest|history|config (916 lines)
-│
-├── agent.py                               # LangGraph dev entry point (exposes compiled graph)
-├── langgraph.json                         # LangGraph dev config
-├── start.bat                              # Launch script (uses .venv\Scripts\python.exe)
-│
-├── tests/                                 # 972+ tests, all passing
-│   ├── test_agents/
-│   │   ├── test_market_data.py
-│   │   ├── test_global_macro.py
-│   │   ├── test_global_macro_v4.py
-│   │   ├── test_fundamentals.py
-│   │   ├── test_technical.py
-│   │   ├── test_sentiment.py
-│   │   ├── test_researcher.py
-│   │   ├── test_risk_manager.py
-│   │   ├── test_portfolio_manager.py
-│   │   ├── test_executor.py
-│   │   └── test_auto_execute.py
-│   ├── test_tools/
-│   │   ├── test_kite_tools.py
-│   │   ├── test_sentiment_analyzer.py
-│   │   ├── test_reddit_and_multi_source.py
-│   │   ├── test_nse_fix.py
-│   │   ├── test_paper_trading.py
-│   │   └── test_universe.py
-│   ├── test_graphs/
-│   │   ├── test_v3_integration.py
-│   │   ├── test_v4_integration.py
-│   │   ├── test_hitl.py
-│   │   ├── test_error_handler.py
-│   │   └── test_supervisor.py
-│   ├── test_memory/
-│   │   ├── test_store.py
-│   │   ├── test_vector_store.py
-│   │   ├── test_database.py
-│   │   ├── test_performance.py
-│   │   └── test_memory_integration.py
-│   ├── test_learning/
-│   │   ├── test_calibrator.py
-│   │   ├── test_retriever.py
-│   │   └── test_feedback_loop.py
-│   ├── test_dashboard/
-│   │   ├── test_phase3.py
-│   │   └── test_phase4.py
-│   ├── test_llm/
-│   │   └── test_client.py
-│   ├── test_backtest/
-│   ├── test_alerts/
-│   ├── test_cli/
-│   └── test_scheduler/
-│
-├── data/                                  # Local data storage (gitignored)
-│   ├── checkpoints.db                     # LangGraph checkpoints (SQLite WAL)
-│   ├── autfin.db                          # Structured data: trades, signals, portfolio
-│   └── chroma/                            # ChromaDB persistence directory
-│
-└── notebooks/                             # Exploration & backtesting
-    └── backtesting.ipynb
+│   ├── market_data.py      # Portfolio, quotes, market status, risk alerts
+│   ├── analysis.py         # Technical + fundamental + sentiment + valuation
+│   ├── research.py         # Deep research, screening, thesis generation
+│   ├── risk.py             # Position sizing, stop-loss, correlation, portfolio heat
+│   ├── debate.py           # Bull vs Bear adversarial debate (MANDATORY before trades)
+│   ├── conference.py       # Multi-agent coordination conferences
+│   ├── memory.py           # Cross-session memory: events, trades, patterns, calibration
+│   ├── quant.py            # Kelly criterion with regime gates
+│   ├── guardrails.py       # Input/output/tool guardrails per agent
+│   ├── managed_prompts.py  # ManagedPrompt instances via Logfire (8 prompts)
+│   ├── base.py             # Agent factory, create_agent(), create_subagent(), get_model()
+│   ├── observability.py    # Logfire configuration, create_instrumentation(), etc.
+│   └── tools/              # Agent tool implementations
+│       ├── __init__.py                    # Lazy imports via __getattr__
+│       ├── kite_tools.py                  # KiteConnect SDK wrappers (809 lines)
+│       ├── fundamental_tools.py           # Ratio computation, DCF models
+│       ├── sentiment_analyzer.py          # FinBERT + VADER + keyword hybrid
+│       ├── sentiment_tools.py             # HybridSentimentAnalyzer + multi-source (339+ lines)
+│       ├── reddit_sentiment.py            # Reddit PRAW integration
+│       ├── technical_tools.py             # Indicator computation (pandas-ta-classic)
+│       ├── scraper_tools.py              # NSE cookies, nselib, web scraping
+│       ├── supervisor_tools.py            # 20 supervisor tools + callables
+│       ├── screening.py                   # Magic Formula, F-Score, liquidity gate
+│       ├── universe.py                    # Nifty 500 universe management
+│       ├── market_feed.py                 # Real-time market feed
+│       ├── memory_tools.py                # Store/Vector Store retrieval
+│       └── reporting.py                   # Report generation
+├── config/            # Settings management
+│   ├── __init__.py
+│   ├── settings.py                    # AutFinSettings Pydantic model (modal_vllm_url, modal_vllm_model, nvidia_nim_api_key, etc.)
+│   └── capabilities.py                # Data source capabilities registry (auto-updated, graceful degradation)
+├── llm/               # LLM client abstraction
+│   ├── __init__.py
+│   ├── client.py                      # LLMClient: generate(), generate_json(), generate_with_tools()
+│   │                                 # openai SDK direct (NVIDIA NIM + Modal vLLM, parallel tool execution)
+│   ├── langchain_model.py             # ChatOpenAI wrapper for LangGraph (legacy import compatibility)
+│   └── model_tiers.py                 # ModelTier, MODEL_REGISTRY, AGENT_TIERS (deep/medium/fast per-agent)
+├── memory/            # Long-term memory layer
+│   ├── __init__.py
+│   ├── setup.py                       # Async checkpointer/store initialization
+│   ├── store.py                       # Memory store operations (SQLite + ChromaDB + managed prompts)
+│   ├── vector_store.py                # ChromaDB collections (325 lines, AutFinEmbeddingFunction)
+│   ├── database.py                    # SQLite schema + CRUD (128 lines)
+│   ├── connection_pool.py             # Thread-safe SQLite connection pool
+│   ├── retrieval.py                   # Multi-scope memory retrieval (688 lines)
+│   └── rag_eval.py                    # RAG quality evaluation
+├── state/             # State type definitions
+│   ├── __init__.py
+│   └── agent_state.py                 # AgentState TypedDict (errors reducer, schema_version, run_mode)
+├── learning/          # Self-learning modules
+│   ├── __init__.py
+│   ├── judge.py                       # LLM-as-Judge
+│   ├── critique.py                    # Self-critique loop
+│   ├── calibrator.py                  # Conviction calibration
+│   ├── online.py                      # O(1) incremental online learning
+│   └── feedback_loop.py               # Trade outcome feedback
+├── backtest/          # Historical backtesting
+│   ├── __init__.py
+│   ├── engine.py                      # BacktestEngine (303 lines)
+│   ├── strategies.py                  # 5 strategies (546 lines)
+│   └── metrics.py                     # 18+ metrics (181 lines)
+├── backtesting/       # Walk-forward + alpha decay (v7.0)
+│   ├── __init__.py
+│   ├── walk_forward.py                # WalkForwardConfig, fetch_price_data, walk_forward_with_symbol
+│   └── alpha_decay.py                 # AlphaDecayTracker, FoldSnapshot, DecayReport
+├── risk/              # Risk management modules
+│   ├── __init__.py
+│   ├── kelly.py                       # Kelly criterion with regime gates
+│   ├── anomaly.py                     # Rolling z-score anomaly detection
+│   ├── regime.py                      # VIX/volatility regime detector
+│   └── vol_targeting.py               # Volatility-targeting overlay
+├── cli/               # CLI interface
+│   ├── __init__.py
+│   └── main.py                        # 7 commands: status|analyze|scan|start|backtest|history|config (916 lines)
+├── prompts/           # Agent system prompts (all 8 created via ManagedPrompt)
+│   ├── __init__.py
+│   ├── supervisor.py
+│   ├── market_data.py
+│   ├── fundamentals.py
+│   ├── technical.py
+│   ├── sentiment.py
+│   ├── global_macro.py
+│   ├── researcher.py
+│   └── risk_manager.py
+└── universe/          # Stock universe management
+    └── curator.py
 ```
+
+### Key v7.0 Changes vs v6.0
+
+| Aspect | v6.0 | v7.0 |
+|---|---|---|
+| **Orchestration** | LangGraph StateGraph, `interrupt()`, `Command` | Pydantic AI SubAgents + DynamicWorkflow, `Command`-based routing |
+| **LLM** | Modal vLLM primary, NVIDIA NIM fallback | NVIDIA NIM primary, Modal vLLM fallback |
+| **Observability** | LangSmith (cloud) | Logfire (auto-tracing, per-agent, prompt versioning) |
+| **Agents** | 8 LangGraph sub-agents + compiled StateGraph | 7 Pydantic AI SubAgents + DynamicWorkflow |
+| **Workflow** | LangGraph `interrupt()` + HITL + conditional edges | Pydantic AI `DynamicWorkflow` + `Command`-based routing |
+| **Memory** | LangGraph Store API | SQLite + ChromaDB + ManagedPrompts (Logfire) |
+| **Validation** | Manual/partial | 8 automated gates (type_checking, unit_tests, eval_suite, guardrails, memory_persistence, plan_persistence, load_test, durable_execution) |
+| **Prompts** | Static files in `prompts/` | Logfire ManagedPrompt (version-controlled) |
+| **Capabilities** | Manual dict in `config/capabilities.py` | Pydantic AI harness capabilities (SubAgents, DynamicWorkflow, etc.) |
 
 ---
 
@@ -286,1114 +205,1169 @@ class AgentState(TypedDict):
     next_agent: str | None          # Which agent to route to next
 
     # Metadata
-    thread_id: str                  # LangGraph thread identifier
+    thread_id: str                  # LangGraph thread identifier (for compat)
     run_mode: str                   # "daily_morning" | "adrenaline" | "quarterly"
     errors: list[str]               # Accumulated error messages
 ```
 
-### 3.2 Decision Record (stored in Store)
+### 3.2 Decision Record (stored in ManagedPrompt/Logfire)
 
 ```python
 class DecisionRecord(TypedDict):
-    decision_id: str                # UUID
-    timestamp: str                  # ISO 8601
-    symbol: str
-    action: str                     # "BUY" | "SELL" | "HOLD" | "REDUCE"
-    conviction: float               # 0.0 - 1.0
-
-    # Input context
-    fundamentals_score: float       # 0-1
-    technical_score: float          # 0-1
-    sentiment_score: float          # -1 to +1
-    macro_score: float              # -1 to +1
-    risk_score: float               # 0-1
-
-    # Output
-    rationale: str                  # LLM-generated explanation
-    position_size: float | None     # ₹ amount
-    price: float | None             # Execution price
-    budget_deployed: float | None   # ₹ from balance used
-
-    # Outcome (filled later)
-    outcome_pnl: float | None       # Realized P&L
-    outcome_date: str | None        # When position closed
-    was_correct: bool | None        # Retrospective accuracy
+    decision_id: str                # UUID v4
+    timestamp: str                  # ISO 8601 UTC
+    symbol: str                     # Ticker symbol (e.g., "RELIANCE", "TCS")
+    side: Literal["buy", "sell"]    # Trade side
+    quantity: int                   # Number of shares
+    price: float                    # Execution price (LTP)
+    order_id: str                   # Kite order ID
+    status: Literal["pending", "filled", "cancelled", "rejected"]
+    conviction: float               # Agent conviction score (0.0–1.0)
+    rationale: str                  # Free-text rationale from agent
+    timestamp_created: str          # ISO 8601 when record was created
 ```
 
----
-
-## 4. AGENT INTERFACES
-
-### 4.1 All agents follow this pattern
-
-Every agent node is an async function with this signature:
+### 3.3 ModelConfig (model tier registry)
 
 ```python
-async def agent_name(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-    """
-    All agents:
-    1. Read what they need from state (NOT the entire state)
-    2. Call their tools / LLM
-    3. Return a partial state update (only the keys they changed)
-    4. NEVER modify state directly — always return
-    """
-    # 1. Extract relevant context
-    symbols = [h["trading_symbol"] for h in state.get("holdings", [])]
-
-    # 2. Do the work (LLM call, tool call, computation)
-    result = await do_analysis(symbols, state)
-
-    # 3. Return ONLY what this agent produced
-    return {
-        "fundamental_reports": result,
-        "errors": []  # Clear any prior errors
-    }
-```
-
-### 4.2 Example: Market Data Agent
-
-```python
-# agents/market_data.py
-async def market_data_agent(state: AgentState, config: RunnableConfig) -> dict:
-    """Reads balances, holdings, positions, live prices from KiteConnect SDK."""
-    from .tools import kite_tools
-
-    # Fetch ALL Kite data in parallel
-    margins, holdings, positions = await asyncio.gather(
-        kite_tools.get_margins(),
-        kite_tools.get_holdings(),
-        kite_tools.get_positions()
-    )
-
-    available_cash = margins.get("available", {}).get("cash", 0)
-    utilized = margins.get("utilised", {}).get("debits", 0)
-
-    return {
-        "available_cash": available_cash,
-        "utilized_margin": utilized,
-        "holdings": holdings if isinstance(holdings, list) else [],
-        "positions": positions if isinstance(positions, dict) else {},
-        "errors": [],
-    }
-```
-
-### 4.3 Example: Fundamentals Agent
-
-```python
-# agents/fundamentals.py
-async def fundamentals_agent(state: AgentState, config: RunnableConfig) -> dict:
-    """
-    Computes fundamental analysis for holdings + watchlist.
-    Primary: Screener.in via Firecrawl. Fallback: yfinance fundamentals.
-    """
-    from .tools import fundamental_tools
-    from ..memory import retrieval
-
-    symbols = _extract_symbols(state)
-
-    # 1. Check memory — do we have recent reports?
-    cached = await retrieval.get_latest_research(symbols, "fundamentals", max_age_days=7)
-
-    needs_refresh = [s for s in symbols if s not in cached]
-    if not needs_refresh:
-        return {"fundamental_reports": cached}
-
-    # 2. Scrape Screener.in for stocks needing refresh
-    reports = {}
-    for symbol in needs_refresh:
-        try:
-            report = await fundamental_tools.scrape_screener(symbol)
-            reports[symbol] = report
-        except Exception as e:
-            reports[symbol] = {"error": str(e), "source": "failed"}
-            # Fallback: try yfinance
-            try:
-                fallback = await fundamental_tools.yfinance_fundamentals(symbol + ".NS")
-                reports[symbol] = {**reports[symbol], "fallback": fallback}
-            except:
-                pass
-
-    # 3. Compute ratios + DCF via LLM
-    analyzed = await _analyze_with_llm(reports, state)
-
-    # 4. Cache in memory
-    await retrieval.store_research(symbols, "fundamentals", analyzed)
-
-    return {
-        "fundamental_reports": {**cached, **analyzed},
-        "errors": [],
-    }
-```
-
-### 4.4 Example: Researcher Agent (Bull/Bear debate)
-
-```python
-# agents/researcher.py
-async def researcher_agent(state: AgentState, config: RunnableConfig) -> dict:
-    """
-    Takes Layer 1 research outputs, runs structured Bull/Bear debate,
-    and produces balanced synthesis for each stock.
-    """
-    symbols = _get_analyzed_symbols(state)
-
-    debates = {}
-    for symbol in symbols:
-        # Build context from all research agents
-        context = _build_stock_context(symbol, state)
-
-        # Bull case
-        bull_case = await _generate_case(context, stance="bull")
-
-        # Bear case
-        bear_case = await _generate_case(context, stance="bear")
-
-        # Synthesis (compare bull vs bear, decide weighted recommendation)
-        synthesis = await _synthesize(bull_case, bear_case, context)
-
-        debates[symbol] = {
-            "bull_case": bull_case,
-            "bear_case": bear_case,
-            "synthesis": synthesis,
-            "rating": synthesis["rating"],
-            "conviction": synthesis["conviction"],
-        }
-
-    return {
-        "research_debates": debates,
-        "errors": [],
-    }
-```
-
-### 4.5 Example: Risk Manager Agent (veto power)
-
-```python
-# agents/risk_manager.py
-async def risk_manager_agent(state: AgentState, config: RunnableConfig) -> dict:
-    """
-    Gatekeeper. Evaluates every trade proposal. Has VETO power.
-    Checks: cash availability, position sizing, sector exposure,
-            drawdown, volatility, liquidity, pacing.
-    """
-    available_cash = state["available_cash"]
-    proposals = state.get("research_debates", {})
-    settings = _load_settings(config)
-
-    assessments = {}
-    for symbol, debate in proposals.items():
-        checks = []
-
-        # 1. Cash available?
-        checks.append(_check_cash(available_cash, settings.min_trade_amount))
-
-        # 2. Position size within limits?
-        proposed_size = _calculate_position_size(debate, available_cash)
-        checks.append(_check_position_size(proposed_size, available_cash, settings))
-
-        # 3. Sector exposure?
-        checks.append(_check_sector_exposure(symbol, state, proposed_size, settings))
-
-        # 4. Drawdown halt?
-        checks.append(_check_drawdown(state, settings))
-
-        # 5. Liquidity?
-        checks.append(_check_liquidity(symbol, proposed_size, state))
-
-        # 6. Pacing (deploying too fast?)
-        checks.append(_check_pacing(state, settings))
-
-        # 7. Volatility regime?
-        checks.append(_check_volatility_regime(state, settings))
-
-        # Aggregate
-        passed = all(c["passed"] for c in checks)
-        critical_blocks = any(c["severity"] == "critical" for c in checks if not c["passed"])
-
-        if critical_blocks:
-            verdict = "BLOCKED"
-        elif not passed:
-            verdict = "SIZE_REDUCED"
-        else:
-            verdict = "APPROVED"
-
-        assessments[symbol] = {
-            "checks": checks,
-            "verdict": verdict,
-            "approved_size": proposed_size if verdict != "BLOCKED" else 0,
-            "rationale": "; ".join(c["message"] for c in checks if not c["passed"]),
-        }
-
-    return {
-        "risk_assessments": assessments,
-        "errors": [],
-    }
-```
-
----
-
-## 5. GRAPH DESIGNS
-
-> **v5.5 NOTE:** AutFin follows LangGraph's **subagents pattern**. The supervisor coordinates specialist tools by calling them directly — each running deterministically with its own context. This gives full LangSmith visibility, context isolation, and parallel execution. See `V5_4_IMPLEMENTATION_PLAN.md` for the full rationale.
-
-### 5.0 v5.5 Subagents Architecture
-
-The v5.5 research engine uses LangGraph's **subagents pattern**: a central supervisor calls specialist tools, each running deterministically in clean context.
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│  supervisor (main agent)                                     │
-│  Calls tools: fundamentals, technical, sentiment, etc.       │
-│  LangSmith traces each tool call individually                │
-└──────────────────────────────────────────────────────────────┘
-         │
-         ├──→ fundamentals_tool → (own LLM call + tools)
-         ├──→ technical_tool → (own LLM call + tools)
-         ├──→ sentiment_tool → (own LLM call + tools)
-         ├──→ macro_tool → (own LLM call + tools)
-         ├──→ risk_tool → (own LLM call + tools)
-         ├──→ portfolio_tool → (own LLM call + tools)
-         └──→ research_tool → (own LLM call + tools)
-```
-
-**Key characteristics:**
-- **Context isolation**: Each agent gets clean context window (no bloat from other agents)
-- **Parallel execution**: Supervisor can call multiple agents simultaneously (3-5x faster)
-- **Full LangSmith visibility**: Each agent traced individually (not one big blob)
-- **Centralized control**: Supervisor makes final investment decisions, acts as circuit breaker
-- **Stateless subagents**: Simpler memory management, no cross-contamination
-
-**Information flow between agents (financial-specific):**
-```
-fundamentals_agent → "High debt detected"
-    ↓
-supervisor → passes context to technical_agent
-    ↓
-technical_agent → "Note: high debt company, be cautious on technicals"
-    ↓
-supervisor → synthesizes both signals
-```
-
-**Screening Pipeline (3 deterministic filters):**
-1. **Liquidity Gate**: Avg daily volume ≥ ₹1 Cr, Market Cap ≥ ₹500 Cr
-2. **Magic Formula** (Greenblatt): Rank by Earnings Yield + ROIC → top 85
-3. **Piotroski F-Score ≥ 6** + Indian red-flag auto-reject
-
-**6 Fan-Out Research Agents:**
-| Agent | Time | Key Insight |
-|-------|------|-------------|
-| fundamentals | 10 min | F-Score, ratios, health, growth trends |
-| technical | 3 min | Multi-TF indicators, S/R, patterns, signal |
-| sentiment | 5 min | Hard/soft catalysts with dates, insider activity |
-| valuation | 20 min | 3-scenario DCF + Reverse DCF (implied growth) |
-| peer_compare | 8 min | 8-metric ranking vs sector peers |
-| moat | 5 min | Morningstar 5-source moat score (0-100) |
-
-### 5.1 Supervisor Graph (Subagents coordinator)
-
-```python
-# graph/supervisor.py
-from langgraph.graph import StateGraph, START, END
-from langgraph.graph import MessagesState
-from langgraph.types import Command
 from typing import Literal
 
-# Define routing types
-class Router(TypedDict):
-    next: Literal[
-        "market_data",
-        "global_macro",
-        "fundamentals",
-        "technical",
-        "sentiment",
-        "researcher",
-        "risk_manager",
-        "portfolio_manager",
-        "executor",
-        "human_review",
-        "__end__",
-    ]
+class ModelTier(str, Literal["deep", "medium", "fast"]):
+    """Model tier for per-agent selection."""
+    pass
 
-def supervisor_node(state: AgentState) -> Command[Router]:
-    """
-    LLM-based supervisor. Reads state, decides next agent.
-    Uses structured output to guarantee valid routing.
-    """
-    system = """You are the AutFin Supervisor. Route tasks to specialist agents.
+MODEL_REGISTRY = {
+    "deep": "deepseek-ai/deepseek-v4-flash",      # 284B MoE, 1M context, complex reasoning
+    "medium": "meta/llama-3.3-70b-instruct",      # 70B, reliable, balanced
+    "fast": "meta/llama-3.1-8b-instruct",          # 8B, low latency, time-sensitive
+}
 
-    AGENTS AVAILABLE:
-    - market_data: Fetch live quotes, margins, holdings from Kite SDK
-    - global_macro: Fetch global indices, macro indicators, compute impact signal
-    - fundamentals: Financial statement analysis, ratios, DCF
-    - technical: Price pattern detection, indicators, signals
-    - sentiment: News NLP sentiment scores
-    - researcher: Bull/Bear debate and synthesis
-    - risk_manager: Pre-trade risk checks (CAN VETO trades)
-    - portfolio_manager: Capital allocation, trade prioritization
-    - executor: Place/modify/cancel orders via Kite SDK
-    - human_review: Pause for user approval
-
-    ROUTING RULES:
-    - Morning scan → market_data first, then parallel research
-    - Trade signal → researcher → risk_manager → portfolio_manager → executor
-    - FULL scan → market_data → parallel(global_macro, fundamentals, technical, sentiment) → researcher → risk_manager
-    - Risk fail → stop, do NOT proceed to executor
-    - All done → __end__
-    """
-
-    messages = [SystemMessage(content=system)] + state["messages"]
-    response = model.with_structured_output(Router).invoke(messages)
-    return Command(goto=response["next"])
-
-
-def build_supervisor_graph() -> StateGraph:
-    builder = StateGraph(AgentState)
-
-    # Add all agent nodes
-    builder.add_node("supervisor", supervisor_node)
-    builder.add_node("market_data", market_data_agent)
-    builder.add_node("global_macro", global_macro_agent)
-    builder.add_node("fundamentals", fundamentals_agent)
-    builder.add_node("technical", technical_agent)
-    builder.add_node("sentiment", sentiment_agent)
-    builder.add_node("researcher", researcher_agent)
-    builder.add_node("risk_manager", risk_manager_agent)
-    builder.add_node("portfolio_manager", portfolio_manager_agent)
-    builder.add_node("executor", executor_agent)
-    builder.add_node("human_review", human_review_node)
-
-    # Start → supervisor
-    builder.add_edge(START, "supervisor")
-
-    # All agents route back to supervisor (dynamic routing)
-    builder.add_edge("market_data", "supervisor")
-    builder.add_edge("global_macro", "supervisor")
-    builder.add_edge("fundamentals", "supervisor")
-    builder.add_edge("technical", "supervisor")
-    builder.add_edge("sentiment", "supervisor")
-    builder.add_edge("researcher", "supervisor")
-    builder.add_edge("risk_manager", "supervisor")
-    builder.add_edge("portfolio_manager", "supervisor")
-    builder.add_edge("executor", "supervisor")
-    builder.add_edge("human_review", "supervisor")
-
-    return builder
-```
-
-### 5.2 Daily Morning Graph (structured pipeline)
-
-```python
-# [REMOVED] graph/daily_morning.py — retired, logic absorbed into supervisor
-# def build_daily_morning_graph() -> StateGraph:
-#     """
-    Deterministic morning routine — no LLM routing overhead.
-    Two parallel tracks:
-      Track A: New buys (if cash > min_trade_amount)
-      Track B: Portfolio guardian (ALWAYS runs)
-    """
-    builder = StateGraph(AgentState)
-
-    # --- Phase 0: Capital Check ---
-    builder.add_node("capital_check", capital_check_node)
-    builder.add_node("route_decision", route_decision_node)  # conditional edge
-
-    # --- Track A: New Buys ---
-    builder.add_node("parallel_research", parallel_research_node)  # Send API to 4 agents
-    builder.add_node("researcher", researcher_agent)
-    builder.add_node("risk_manager", risk_manager_agent)
-    builder.add_node("portfolio_manager", portfolio_manager_agent)
-    builder.add_node("executor", executor_agent)
-
-    # --- Track B: Portfolio Guardian ---
-    builder.add_node("position_monitor", position_monitor_node)
-    builder.add_node("sell_executor", sell_executor_node)
-
-    # --- Report ---
-    builder.add_node("daily_report", daily_report_node)
-
-    # Edges
-    builder.add_edge(START, "capital_check")
-    builder.add_conditional_edges(
-        "capital_check",
-        route_decision,
-        {
-            "scan_and_guard": "parallel_research",  # Cash available → Track A
-            "guard_only": "position_monitor",        # No cash → Track B only
-        }
-    )
-
-    # Track A: Buys
-    builder.add_edge("parallel_research", "researcher")
-    builder.add_edge("researcher", "risk_manager")
-    builder.add_edge("risk_manager", "portfolio_manager")
-    builder.add_edge("portfolio_manager", "executor")
-    builder.add_edge("executor", "daily_report")
-
-    # Track B: Guardian (always runs after capital check)
-    builder.add_edge("position_monitor", "sell_executor")
-    builder.add_edge("sell_executor", "daily_report")
-
-    builder.add_edge("daily_report", END)
-
-    return builder
-```
-
-### 5.3 Adrenaline Graph (real-time alert)
-
-```python
-# [REMOVED] graph/adrenaline.py — retired, logic absorbed into supervisor
-# def build_adrenaline_graph() -> StateGraph:
-#     """Triggered by significant price move (>2%). Budget-aware."""
-    builder = StateGraph(AgentState)
-
-    builder.add_node("price_alert", price_alert_node)       # Verify alert
-    builder.add_node("quick_technical", technical_agent)      # Re-analyze
-    builder.add_node("quick_research", researcher_agent)      # Re-evaluate signal
-    builder.add_node("quick_risk", risk_manager_agent)        # Quick risk check
-    builder.add_node("quick_execute", executor_agent)         # Act if approved
-
-    builder.add_edge(START, "price_alert")
-    builder.add_conditional_edges(
-        "price_alert",
-        lambda s: "analyze" if s["price_move_pct"] > 2.0 else "ignore",
-        {"analyze": "quick_technical", "ignore": END}
-    )
-    builder.add_edge("quick_technical", "quick_research")
-    builder.add_edge("quick_research", "quick_risk")
-    builder.add_edge("quick_risk", "quick_execute")
-    builder.add_edge("quick_execute", END)
-
-    return builder
+# Agent → tier mapping
+AGENT_TIERS = {
+    "supervisor": "deep",           # Debate, research synthesis
+    "market_data": "fast",          # Quotes, status checks
+    "analysis": "medium",           # TA, fundamentals, sentiment
+    "research": "deep",             # Screening, thesis generation
+    "risk": "medium",               # Position sizing, risk checks
+    "debate": "deep",               # Mandatory before any trade
+    "conference": "medium",         # Coordination, rebalancing
+    "memory": "fast",               # Pattern lookup, calibration
+}
 ```
 
 ---
 
-## 6. COMPILED GRAPH WITH ALL BACKENDS
+## 4. CAPABILITIES REGISTRY
+
+### 4.1 Data Source Capabilities
 
 ```python
-# graph/__init__.py
-from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.store.memory import InMemoryStore  # Phase 1
-# from langgraph.store.sqlite import SqliteStore   # Phase 4+
-import chromadb
-
-def create_autfin_graph():
-    """
-    Compiles the full AutFin graph with all backends attached.
-    Returns: (compiled_graph, store, vector_store)
-    """
-    # 1. Checkpointer (durability)
-    checkpointer = SqliteSaver.from_conn_string(
-        "data/checkpoints.db",
-        wal=True  # Write-ahead logging for crash safety
-    )
-
-    # 2. Store (cross-thread long-term memory)
-    store = InMemoryStore()
-    # Phase 4 upgrade: SqliteStore for cross-process persistence
-
-    # 3. Vector Store (semantic search)
-    chroma_client = chromadb.PersistentClient(path="data/chroma")
-    vector_store = chroma_client
-
-    # 4. Build & compile
-    from .supervisor import build_supervisor_graph
-    graph = build_supervisor_graph()
-    compiled = graph.compile(
-        checkpointer=checkpointer,
-        store=store
-    )
-
-    return compiled, store, vector_store
+CAPABILITIES: dict[str, dict[str, Any]] = {
+    # ── Kite SDK (Personal tier ≠ Connect tier) ──
+    "kite": {
+        "auto_login": True,
+        "holdings": True,
+        "positions": True,
+        "margins": True,
+        "orders": True,
+        "order_place": True,
+        "order_modify": True,
+        "order_cancel": True,
+        "trades": True,
+        "profile": True,
+        "ltp": False,               # BLOCKED on Personal — needs Connect (₹500/mo)
+        "quotes": False,            # BLOCKED on Personal — needs Connect (₹500/mo)
+        "ohlc": False,              # BLOCKED on Personal
+        "historical_data": False,   # BLOCKED on Personal
+        "gtt": True,
+        "detail": "Personal tier: ltp/quote/ohlc blocked. Use holdings LTP or yfinance fallback.",
+    },
+    # ── yfinance ──
+    "yfinance": {
+        "ohlcv": True,
+        "ratios": True,             # PE, PB, ROE, D/E, market cap (reliable)
+        "financials": "partial",    # Balance sheet/income/cashflow: structure exists,
+                                    # values can be 0 for some Indian stocks
+        "global_indices": True,
+        "forex": True,
+        "commodities": True,
+        "detail": "No API key needed. 15-min delay for NSE. Financial statements partially populated.",
+    },
+    # ── LLM Providers ──
+    "nvidia_nim": {
+        "available": True,
+        "rate_limited": False,      # Separately quota per model
+        "best_models": [
+            "deepseek-ai/deepseek-v4-flash",     # 284B MoE, 1M context
+            "meta/llama-3.3-70b-instruct",        # 70B, reliable
+            "meta/llama-3.1-8b-instruct",         # 8B, fast
+        ],
+        "detail": "NVIDIA-hosted, free tier. Better reliability than OpenRouter.",
+    },
+    "openrouter": {
+        "available": True,
+        "rate_limited": "often",    # 50 free/day shared across all users
+        "best_model": "google/gemma-4-31b-it:free",
+        "detail": "Rate-limited often. Use NVIDIA NIM as primary instead.",
+    },
+    # ── News / Macro / Scraping ──
+    "marketaux": {
+        "available": True,
+        "rate_limit": "100 articles/day",
+        "detail": "Working. 5000+ news sources.",
+    },
+    "fred": {
+        "available": True,
+        "rate_limit": "120 requests/min",
+        "detail": "Working. US macro indicators only.",
+    },
+    "firecrawl": {
+        "available": True,
+        "rate_limit": "500 credits/month",
+        "detail": "Used for Screener.in, NSE, Moneycontrol scraping.",
+    },
+    # ── Observability ──
+    "langsmith": {
+        "available": False,         # LangSmith API key not configured in v7.0
+        "configured": False,
+        "detail": "LangSmith tracing disabled. Use Logfire instead.",
+    },
+    "logfire": {
+        "available": True,
+        "configured": True,         # Logfire token present
+        "detail": "Logfire tracing with auto-tracing for Pydantic AI.",
+    },
+}
 ```
 
----
-
-## 7. DATABASE SCHEMA (SQLite)
-
-```sql
--- Table: trades
--- Every order placed, every order filled
-CREATE TABLE IF NOT EXISTS trades (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT NOT NULL,              -- ISO 8601
-    symbol TEXT NOT NULL,
-    exchange TEXT NOT NULL DEFAULT 'NSE',
-    action TEXT NOT NULL,                 -- 'BUY' | 'SELL'
-    quantity INTEGER NOT NULL,
-    price REAL NOT NULL,
-    total_value REAL NOT NULL,
-    order_id TEXT,                        -- Kite order ID
-    order_status TEXT,                    -- 'COMPLETE' | 'PENDING' | 'REJECTED'
-    decision_id TEXT,                     -- Links to DecisionRecord in Store
-    rationale_summary TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
-CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades(timestamp);
-
--- Table: portfolio_snapshots
--- Daily snapshot of account state at market close
-CREATE TABLE IF NOT EXISTS portfolio_snapshots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT NOT NULL,                   -- 'YYYY-MM-DD'
-    available_cash REAL NOT NULL,
-    utilized_margin REAL NOT NULL,
-    total_holdings_value REAL NOT NULL,
-    total_pnl REAL NOT NULL,
-    total_pnl_pct REAL NOT NULL,
-    holdings_json TEXT NOT NULL,          -- Full holdings as JSON
-    created_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_snapshots_date ON portfolio_snapshots(date);
-
--- Table: signals
--- Every buy/sell/hold signal generated
-CREATE TABLE IF NOT EXISTS signals (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT NOT NULL,
-    symbol TEXT NOT NULL,
-    signal_type TEXT NOT NULL,            -- 'BUY' | 'SELL' | 'HOLD'
-    strength REAL NOT NULL,               -- 0.0 - 1.0
-    fundamentals_score REAL,
-    technical_score REAL,
-    sentiment_score REAL,
-    macro_score REAL,
-    risk_score REAL,
-    rationale TEXT,
-    was_acted_on BOOLEAN DEFAULT FALSE,
-    created_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol);
-CREATE INDEX IF NOT EXISTS idx_signals_acted ON signals(was_acted_on);
-
--- Table: balance_history
--- Daily balance snapshot from KiteConnect SDK
-CREATE TABLE IF NOT EXISTS balance_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT NOT NULL,
-    available_cash REAL NOT NULL,
-    utilized_margin REAL NOT NULL,
-    source TEXT DEFAULT 'kite_sdk'
-);
-
--- Table: learning_journal (v3.0 schema)
--- Post-trade reflections stored by the system
-CREATE TABLE IF NOT EXISTS learning_journal (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    symbol TEXT NOT NULL,
-    action TEXT NOT NULL DEFAULT 'BUY',
-    conviction REAL NOT NULL DEFAULT 0.5,
-    pnl_pct REAL,
-    thesis_summary TEXT,
-    outcome TEXT DEFAULT 'open',
-    sector TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_learning_symbol ON learning_journal(symbol);
-CREATE INDEX IF NOT EXISTS idx_learning_sector ON learning_journal(sector);
-CREATE INDEX IF NOT EXISTS idx_learning_outcome ON learning_journal(outcome);
-
--- Table: stock_pitches (v3.0)
--- 6-element buy-side pitches rendered by dashboard
-CREATE TABLE IF NOT EXISTS stock_pitches (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    symbol TEXT NOT NULL,
-    context TEXT NOT NULL DEFAULT 'manual',
-    investment_thesis TEXT,
-    catalysts_json TEXT,
-    risks_json TEXT,
-    valuation_summary TEXT,
-    competitive_moat TEXT,
-    price_target_base REAL,
-    price_target_upside REAL,
-    price_target_downside REAL,
-    price_target_rationale TEXT,
-    raw_json TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_pitches_symbol ON stock_pitches(symbol);
-CREATE INDEX IF NOT EXISTS idx_pitches_created ON stock_pitches(created_at);
-CREATE INDEX IF NOT EXISTS idx_pitches_context ON stock_pitches(context);
-
--- Table: fanout_progress (v3.0)
--- Live status of concurrent research per symbol
-CREATE TABLE IF NOT EXISTS fanout_progress (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    context TEXT NOT NULL,
-    symbol TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    started_at TEXT,
-    finished_at TEXT,
-    error TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_fanout_session ON fanout_progress(session_id);
-CREATE INDEX IF NOT EXISTS idx_fanout_status ON fanout_progress(status);
-CREATE INDEX IF NOT EXISTS idx_fanout_created ON fanout_progress(created_at);
-
--- Table: thesis_check_ab
--- A/B testing framework for LLM vs rule-based thesis checks
-CREATE TABLE IF NOT EXISTS thesis_check_ab (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    symbol TEXT NOT NULL,
-    llm_verdict TEXT,
-    rule_verdict TEXT NOT NULL,
-    llm_reasoning TEXT,
-    price_change_pct REAL DEFAULT 0,
-    days_held INTEGER DEFAULT 0,
-    subsequent_outcome TEXT,
-    subsequent_pnl_pct REAL,
-    timestamp TEXT NOT NULL
-);
-
--- Table: research_output
--- RORO tracking: research depth vs trade outcomes
-CREATE TABLE IF NOT EXISTS research_output (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    decision_id TEXT NOT NULL,
-    symbol TEXT NOT NULL,
-    depth TEXT NOT NULL,
-    research_weight INTEGER NOT NULL,
-    fundamentals_score REAL,
-    technical_score REAL,
-    sentiment_score REAL,
-    macro_score REAL,
-    valuation_score REAL,
-    research_duration_ms REAL,
-    created_at TEXT DEFAULT (datetime('now'))
-);
-
--- Table: trace_history (v4.1)
--- Observability traces persisted to SQLite
-CREATE TABLE IF NOT EXISTS trace_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    trace_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    model TEXT,
-    total_tokens INTEGER DEFAULT 0,
-    total_cost REAL DEFAULT 0.0,
-    errors_json TEXT,
-    metadata_json TEXT,
-    duration_ms REAL DEFAULT 0.0,
-    created_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_trace_id ON trace_history(trace_id);
-CREATE INDEX IF NOT EXISTS idx_trace_created ON trace_history(created_at);
-```
-
----
-
-## 8. MEMORY RETRIEVAL STRATEGIES
+### 4.2 Capability Functions
 
 ```python
-# memory/retrieval.py
+def can_use(source: str, capability: str) -> bool:
+    """Check if a capability is available. Returns True/False/partial."""
+    cap = CAPABILITIES.get(source, {}).get(capability)
+    if cap is True:
+        return True
+    if cap == "partial":
+        return True  # Partial still works, caller should handle empty results
+    return False
 
-async def build_research_context(
-    symbol: str,
-    store: BaseStore,
-    vector_store,
-    thread_id: str
-) -> dict:
-    """
-    When analyzing a stock, automatically:
-    1. Retrieves past research on this stock (Store)
-    2. Retrieves similar past trade rationales (Vector similarity)
-    3. Retrieves sector knowledge (Vector Store)
-    4. Includes relevant past outcomes
-    """
 
-    # 1. Cross-thread memory via Store
-    past_reports = await store.aget(("research_reports", symbol))
-    past_trades = await store.aget(("trade_history", symbol))
-    past_decisions = await store.aget(("decisions", symbol))
+def get_fallback(source: str, capability: str) -> str | None:
+    """Return the recommended fallback for a blocked capability."""
+    if source == "kite" and capability in ("ltp", "quotes", "ohlc"):
+        return "Use holdings.last_price for owned stocks, yfinance for others"
+    if source == "kite" and capability == "historical_data":
+        return "Use yfinance.history() for OHLCV"
+    if source == "nsepython" and capability in ("quotes", "ohlcv"):
+        return "Use yfinance (15-min delayed) or Kite holdings LTP"
+    if source == "nvidia_nim" and capability == "available":
+        return "Use Modal vLLM fallback"
+    return None
 
-    # 2. Semantic memory via vector store
-    similar_trades = vector_store.get(
-        collection="strategy_learnings",
-        where={"symbol": symbol},
-        limit=5
-    )
 
-    sector_info = vector_store.get(
-        collection="company_knowledge",
-        where={"sector": _get_sector(symbol)},
-        limit=5
-    )
+def mark_failed(source: str, capability: str) -> None:
+    """Mark a capability as failed so agents skip it next time."""
+    CAPABILITIES.setdefault(source, {})[capability] = False
+    logger.warning("Capability %s.%s marked as failed", source, capability)
 
-    # 3. Recent performance
-    recent_pnl = await _get_recent_pnl(symbol, days=90)
 
+def mark_available(source: str, capability: str) -> None:
+    """Mark a capability as available after successful use."""
+    CAPABILITIES.setdefault(source, {})[capability] = True
+
+
+def get_status() -> dict:
+    """Return a summary of all capabilities for dashboard/system page."""
     return {
-        "past_research": past_reports,
-        "trade_history": past_trades,
-        "past_decisions": past_decisions,
-        "similar_trades_learnings": similar_trades,
-        "sector_context": sector_info,
-        "recent_90d_pnl": recent_pnl,
+        source: {
+            cap: val for cap, val in caps.items() if cap != "detail"
+        }
+        for source, caps in CAPABILITIES.items()
     }
+
+
+def print_capabilities():
+    """Print human-readable capability summary."""
+    print("\nData Source Capabilities:")
+    for source, caps in sorted(CAPABILITIES.items()):
+        detail = caps.pop("detail", "")
+        failed = [c for c, v in caps.items() if v is False]
+        partial = [c for c, v in caps.items() if v == "partial"]
+        ok = [c for c, v in caps.items() if v is True]
+        
+        status = "OK" if not failed else f"BLOCKED: {', '.join(failed)}"
+        print(f"  {source:15s} [{status}]")
+        if partial:
+            print(f"    partial: {', '.join(partial)}")
+        if detail:
+            print(f"    {detail}")
+    print()
 ```
 
 ---
 
-## 9. CONFIGURATION
+## 5. AGENT ARCHITECTURE
 
-### 9.1 Environment Variables (`.env`)
+### 5.1 SubAgents Capability
 
-```bash
-# ===== REQUIRED =====
-# NVIDIA NIM (primary LLM — MiniMax M3)
-MODAL_VLLM_URL=https://prakhar201ps--qwen36-35b-vllm-deployment-serve.modal.run/v1
-MODAL_VLLM_MODEL=qwen3.6-35b-a3b
+```python
+from pydantic_ai_harness.subagents import SubAgents, SubAgent
+from pydantic_ai_harness.dynamic_workflow import DynamicWorkflow, WorkflowAgent
+from pydantic_ai_harness.planning import Planning
+from pydantic_ai_harness.memory import Memory
+from pydantic_ai_harness.system_reminders import SystemReminders
 
-# NVIDIA NIM (fallback LLM — MiniMax M3, 1M context, free)
-NVIDIA_NIM_API_KEY=...
+subagents_capability = SubAgents(
+    agents=[
+        SubAgent(market_data_agent, name="market_data", ...),
+        SubAgent(analysis_agent, name="analyze", ...),
+        SubAgent(research_agent, name="research", ...),
+        SubAgent(risk_agent, name="risk", ...),
+        SubAgent(debate_agent, name="debate", ...),
+        SubAgent(conference_agent, name="conference", ...),
+        SubAgent(memory_agent, name="memory", ...),
+    ],
+    models={
+        "fast": get_model("fast"),
+        "standard": get_model("deep"),
+        "deep": get_model("reasoning"),
+    },
+    forward_usage=True,
+    inherit_tools=False,
+    shared_capabilities=[],
+    tool_retries=2,
+    contain_errors=True,
+)
+```
 
-# LangSmith (observability — free Developer tier)
-LANGSMITH_TRACING=true
-LANGSMITH_API_KEY=lsv2_pt_...
-LANGSMITH_PROJECT=autfin
+### 5.2 DynamicWorkflow
 
-# Marketaux (news sentiment — free tier, 100 req/day)
-MARKETAUX_API_KEY=...
+```python
+# Morning routine workflow
+morning_workflow = DynamicWorkflow(
+    agents=[
+        WorkflowAgent(market_data_agent, name="market_data"),
+        WorkflowAgent(analysis_agent, name="analyze"),
+        WorkflowAgent(research_agent, name="research"),
+        WorkflowAgent(debate_agent, name="debate"),
+        WorkflowAgent(risk_agent, name="risk"),
+        WorkflowAgent(conference_agent, name="conference"),
+    ],
+    max_agent_calls=50,
+    sub_agent_usage_limits=UsageLimits(request_limit=20, total_tokens_limit=50000),
+    forward_usage=True,
+    resource_limits={"max_duration_secs": 300},
+    inherit_model=False,
+    id="morning_workflow",
+    defer_loading=True,
+    description="Full morning routine workflow",
+    tool_name="run_morning_workflow",
+)
 
-# FRED (macro data — free tier)
-FRED_API_KEY=...
+# Quarterly review workflow
+quarterly_workflow = DynamicWorkflow(
+    agents=[
+        WorkflowAgent(market_data_agent, name="market_data"),
+        WorkflowAgent(analysis_agent, name="analyze"),
+        WorkflowAgent(research_agent, name="research"),
+        WorkflowAgent(debate_agent, name="debate"),
+        WorkflowAgent(risk_agent, name="risk"),
+        WorkflowAgent(conference_agent, name="conference"),
+    ],
+    max_agent_calls=100,
+    sub_agent_usage_limits=UsageLimits(request_limit=50, total_tokens_limit=200000),
+    forward_usage=True,
+    resource_limits={"max_duration_secs": 600},
+    inherit_model=False,
+    id="quarterly_workflow",
+    defer_loading=True,
+    description="Quarterly portfolio review workflow",
+    tool_name="run_quarterly_workflow",
+)
+```
 
-# ===== OPTIONAL: Zerodha KiteConnect SDK (Personal tier) =====
+### 5.3 Planning Capability
+
+```python
+planning_capability = Planning(
+    store=None,  # In-memory by default, can use SqlitePlanStore
+    enable_subtasks=True,
+    inject=True,
+    cache_ttl="5m",
+)
+```
+
+### 5.4 Memory Capability
+
+```python
+memory_capability = Memory(
+    FileStore("./data/memory"),
+    namespace=lambda ctx: ctx.deps.user_id,
+    max_tokens=5000,
+    max_lines=500,
+    inject_memory=True,
+)
+```
+
+### 5.4 System Reminders
+
+```python
+system_reminders_capability = SystemReminders(
+    reminders=[
+        "Stay focused on risk management. Check risk/reward >= 2:1 before any trade.",
+        "Verify conviction >= 0.5 before any trade execution.",
+        "ALWAYS run debate before any trade decision. No exceptions.",
+        "Batch sub-agent calls in a single response for speed.",
+        "Use dynamic workflow for complex multi-step orchestration.",
+    ],
+    dynamic_reminders=[],
+    cache_ttl="5m",
+)
+```
+
+### 5.4 Supervisor Agent
+
+```python
+from autfin.agents.base import create_agent, get_model
+from autfin.agents.managed_prompts import supervisor_instructions
+from autfin.agents.observability import create_debug_instrumentation
+from autfin.types import AgentDeps, SupervisorOutput, MarketSnapshotOutput, ...
+
+supervisor_agent = create_agent(
+    name="supervisor",
+    output_type=SupervisorOutput,
+    model_type="deep",
+    instructions=supervisor_instructions.default,
+    capabilities=[
+        subagents_capability,
+        morning_workflow,
+        quarterly_workflow,
+        planning_capability,
+        memory_capability,
+        system_reminders_capability,
+        Thinking(effort="high"),
+        WebSearch(local="duckduckgo"),
+        create_debug_instrumentation(),
+    ],
+    model_settings=ModelSettings(temperature=0.0, max_tokens=8192),
+)
+```
+
+### 5.5 Supervisor Tools
+
+```python
+@supervisor_agent.tool
+async def run_morning_routine(ctx: RunContext[AgentDeps]) -> SupervisorOutput:
+    """Run the full morning routine workflow."""
+    ...
+```
+
+---
+
+## 6. MANAGED PROMPTS (Logfire)
+
+### 6.1 Prompt Structure
+
+All 8 agent prompts are managed via Logfire `ManagedPrompt`, providing:
+
+- **Version control**: Each prompt has immutable template versions
+- **Rollout**: Labels (production/canary/staging) control which version is served
+- **Template inputs**: Handlebars `{{field}}` placeholders filled from per-request inputs
+- **Composition**: `@{other_variable}@` references splice in other managed variable values
+
+### 6.2 Prompt Instances
+
+```python
+from pydantic_ai_harness.logfire import ManagedPrompt
+
+supervisor_instructions = ManagedPrompt(
+    name="supervisor_instructions",
+    default="""You are the AutFin v7.0 Supervisor — a PM-level AI coordinating a 7-agent financial team.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+YOUR TEAM (7 Sub-Agents via SubAgents):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. market_data  → Portfolio, quotes, market status, risk alerts
+2. analyze      → Technical + fundamental + sentiment + valuation
+3. research     → Deep research, screening, thesis generation
+4. risk         → Position sizing, stop-loss, correlation, portfolio heat
+5. debate       → Bull/Bear adversarial debate (MANDATORY before trades)
+6. conference   → Multi-agent coordination conferences
+7. memory       → Cross-session learning & calibration
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ORCHESTRATION RULES (CRITICAL):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚡ BATCHING (SPEED):
+- ALWAYS batch sub-agent calls in ONE response
+- 3 parallel calls = ~5s, 3 sequential = ~15s
+- WRONG:  Response 1 → analyze("RELIANCE")
+- CORRECT:  Response 1 → [analyze("RELIANCE"), analyze("TCS"), analyze("HDFC")]
+
+📋 CONTEXT ROUTING:
+- "morning_routine"  → Full portfolio scan + screening + research + debate + trade
+- "price_alert"      → Quick 3-agent fan-out on one symbol (market_data, analyze, risk)
+- "quarterly_review" → Deep dive all holdings with DCF + debate + rebalancing
+- "manual"           → User-requested single analysis
+- "distortion_check" → Quick distortion audit on symbol
+
+🎯 TRADING RULES (NON-NEGOTIABLE):
+- ALWAYS run_debate BEFORE any trade. No exceptions.
+- Risk/reward MUST be >= 2:1. Conviction >= 0.5.
+- run_conference("emergency") if intraday move > 3%.
+- analyze("distortion") BEFORE recommending trade.
+- Risk agent has VETO power. Respect it.
+""",
+)
+```
+
+### 6.3 Prompt Versioning
+
+```
+prompt_create_version(supervisor_instructions, version=1, template=...)
+prompt_create_version(supervisor_instructions, version=2, template=...)
+# Edit rollout via variable_assign_label / variable_update_rollout
+```
+
+### 6.4 Prompt Resolution
+
+```
+prompt_preview(supervisor_instructions, inputs={"agent_count": 7})
+# Returns rendered template with Handlebars filled + @{...} composition resolved
+```
+
+---
+
+## 7. LLM TIER SELECTION
+
+### 7.1 Model Configuration
+
+```python
+from autfin.agents.base import get_model, MODEL_REGISTRY, AGENT_TIERS
+
+# Get model by tier
+fast_model = get_model("fast")      # Llama 3.1 8B via NVIDIA NIM
+deep_model = get_model("deep")      # Deepseek v4-flash via NVIDIA NIM
+medium_model = get_model("medium")  # Llama 3.3 70B via NVIDIA NIM
+
+# Per-agent tier
+tier = AGENT_TIERS["risk"]  # Returns "medium"
+model = get_model(tier)
+```
+
+### 7.2 Agent Model Assignment
+
+| Agent | Tier | Model | Purpose |
+|---|---|---|---|
+| supervisor | deep | deepseek-v4-flash | Complex reasoning, debate oversight |
+| market_data | fast | Llama 3.1 8B | Quick quotes, status checks |
+| analysis | medium | Llama 3.3 70B | TA, fundamentals, sentiment |
+| research | deep | deepseek-v4-flash | Screening, thesis generation |
+| risk | medium | Llama 3.3 70B | Position sizing, correlation |
+| debate | deep | deepseek-v4-flash | Mandatory adversarial debate |
+| conference | medium | Llama 3.3 70B | Coordination, rebalancing |
+| memory | fast | Llama 3.1 8B | Pattern lookup, calibration |
+
+### 7.3 Model Tiers Summary
+
+- **deep**: Highest capability, 1M+ context, slowest, most expensive (free tier via NVIDIA NIM). Used for: debate, research synthesis, supervisor oversight.
+- **medium**: Balanced capability and speed, 70B parameter, reliable. Used for: technical analysis, fundamentals, risk assessment, conference coordination.
+- **fast**: Lowest latency, 8B parameter, fastest responses. Used for: market data, memory pattern lookup, quick checks.
+
+### 7.4 Model Switching
+
+```python
+# Switch agent to different tier dynamically
+async def switch_agent_tier(agent_name: str, new_tier: str):
+    tier = AGENT_TIERS.get(agent_name, "deep")
+    if new_tier != tier:
+        # Update the agent's model type
+        await agent.override(model_type=new_tier)
+```
+
+---
+
+## 8. WALK-FORCE BACKTESTING
+
+### 8.1 WalkForwardConfig
+
+```python
+class WalkForwardConfig(TypedDict):
+    symbol: str          # Ticker symbol
+    interval: str        # "1D", "1H", "30MIN", etc.
+    walk_forward_len: int    # In-sample length (days)
+    walk_forward_step: int   # Step size between folds (days)
+    walk_forward_total: int  # Total number of folds
+    regime_filter: bool     # Whether to apply VIX regime filter
+    min_sharpe: float       # Minimum Sharpe for a fold to pass
+    max_drawdown: float     # Maximum acceptable drawdown
+```
+
+### 8.2 WalkForwardEngine
+
+```python
+class WalkForwardEngine:
+    def __init__(self, config: WalkForwardConfig):
+        self.config = config
+    
+    def run(self) -> WalkForwardReport:
+        """Run walk-forward backtesting across all folds."""
+        ...
+    
+    def _run_fold(self, fold_idx: int) -> FoldSnapshot:
+        """Run a single walk-forward fold."""
+        ...
+    
+    def _calculate_metrics(self, prices: pd.DataFrame) -> dict:
+        """Calculate performance metrics for a fold."""
+        ...
+```
+
+### 8.3 AlphaDecayTracker
+
+```python
+class AlphaDecayTracker:
+    def __init__(self, config: dict):
+        self.fold_sharpe_history = []  # Sharpe per fold
+        self.fold_number = 0
+        self.floor = config.get("sharpe_floor", 0.5)
+        self.decay_threshold = config.get("decay_threshold", 0.3)
+    
+    def record_fold(self, sharpe: float, fold_number: int):
+        """Record Sharpe ratio for a completed fold."""
+        self.fold_sharpe_history.append((fold_number, sharpe))
+        self.fold_number = fold_number + 1
+    
+    def check_decay(self) -> bool:
+        """Check if alpha decay exceeds threshold."""
+        if len(self.fold_sharpe_history) < 2:
+            return False
+        
+        recent_sharpe = self.fold_sharpe_history[-1][1]
+        historical_sharpe = sum(s for _, s in self.fold_sharpe_history[:-1]) / (len(self.fold_sharpe_history) - 1)
+        
+        return (historical_sharpe - recent_sharpe) > self.decay_threshold
+    
+    def should_alert(self) -> bool:
+        """Check if Sharpe has fallen below floor."""
+        if not self.fold_sharpe_history:
+            return False
+        latest_sharpe = self.fold_sharpe_history[-1][1]
+        return latest_sharpe < self.floor
+```
+
+### 8.4 DecayReport
+
+```python
+class DecayReport(TypedDict):
+    fold_count: int
+    sharpe_history: list[tuple[int, float]]  # (fold_number, sharpe)
+    current_sharpe: float
+    floor_sharpe: float
+    decay_detected: bool
+    alerts: list[str]  # Human-readable alert messages
+```
+
+### 8.5 Walk-Forward Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                Walk-Forward Backtesting Pipeline                │
+├─────────────────────────────────────────────────────────────────┤
+│  1. Load historical price data for all portfolio symbols         │
+│  2. Split into in-sample / out-of-sample periods per config      │
+│  3. For each fold:                                     │
+│     a. Train strategy on in-sample data                        │
+│     b. Execute on out-of-sample data                           │
+│     c. Calculate metrics: Sharpe, Sortino, Max DD, Win Rate     │
+│     d. Record results in FoldSnapshot                          │
+│  4. Compile all fold results into DecayReport                    │
+│  5. Check alpha decay: if detected → alert via Logfire           │
+│  6. Return report + recommendations (rebalance, walk-forward step)│
+│  └────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 9. EVALUATION SUITE
+
+### 9.1 AutFin Dataset
+
+```python
+from autfin.evals import create_autfin_dataset, run_evaluations
+
+dataset = create_autfin_dataset(
+    include_llm_judges=False,
+    include_span_eval=True,
+)
+
+agents = {
+    "market_data_agent": market_data_agent,
+    "analysis_agent": analysis_agent,
+    "research_agent": research_agent,
+    "risk_agent": risk_agent,
+    "debate_agent": debate_agent,
+    "memory_agent": memory_agent,
+}
+
+# Run evaluations with concurrency limit
+results = await run_evaluations(agents, max_concurrency=3)
+
+# Calculate overall pass rate
+total_cases = 0
+passed_cases = 0
+
+for agent_name, result in results.items():
+    if "case_results" in result:
+        for cr in result["case_results"]:
+            total_cases += 1
+            if cr.get("passed"):
+                passed_cases += 1
+
+pass_rate = passed_cases / total_cases if total_cases > 0 else 0.0
+```
+
+### 9.2 Evaluation Types
+
+- **Span evaluation**: LLM judges span quality (coverage, relevance)
+- **RAG evaluation**: Retrieval quality, relevance scoring
+- **Tool use evaluation**: Correct tool selection, parameter passing
+- **Output format validation**: Pydantic output type compliance
+- **Model tier selection**: Correct tier for given task
+
+### 9.3 Pass Rate Threshold
+
+```
+Target: > 80% across all evaluation categories
+Warning: 70–80% — review eval suite
+Fail: < 70% — require model/tier/prompt updates
+```
+
+---
+
+## 10. VALIDATION GATES (8 Gates)
+
+### 10.1 Type Checking (pyright)
+
+```
+Run: pyright --outputjson
+Pass: 0 errors (or only pre-existing suppressible warnings)
+Fail: Any type errors blocking build
+```
+
+### 10.2 Unit Tests
+
+```
+Run: pytest -x -v --tb=short
+Pass: All tests pass (52 files, 5400+ tests)
+Fail: Any test failure
+```
+
+### 10.3 Evaluation Suite
+
+```
+Run: python -m pytest tests/ -k "eval" -v
+Pass: Overall pass rate > 80%
+Fail: Pass rate ≤ 80%
+```
+
+### 10.4 Guardrails
+
+```
+Run: python -c "from test_validation import test; asyncio.run(test())"
+Pass: All guardrail checks pass (input, output, tool guardrails)
+Fail: Any guardrail violation
+```
+
+### 10.5 Memory Persistence
+
+```
+Run: python -c "from autfin.validation import validate_memory_persistence; ..."
+Pass: Memory records persist across runs (SQLite + ChromaDB)
+Fail: Memory loss detected
+```
+
+### 10.6 Plan Persistence
+
+```
+Run: python -c "from autfin.validation import validate_plan_persistence; ..."
+Pass: Decision records persist across runs (ManagedPrompt versions)
+Fail: Plan history lost
+```
+
+### 10.7 Load Test
+
+```
+Run: python -c "from test_validation import validate_load_test; ..."
+Pass: System handles N concurrent requests without degradation
+Fail: Performance threshold not met
+```
+
+### 10.8 Durable Execution
+
+```
+Run: python -c "from test_validation import validate_durable_execution; ..."
+Pass: Tool retries, error recovery, checkpointing all functional
+Fail: Any durable execution failure
+```
+
+### 10.9 Validation Report
+
+```
+python -m pytest --validation-report
+# Generates HTML report with:
+# - Gate results (pass/fail per gate)
+# - Duration per gate
+# - Detailed error messages on failures
+# - Trend tracking (previous run comparisons)
+```
+
+---
+
+## 11. OBSERVABILITY (Logfire)
+
+### 11.1 Auto-Tracing
+
+```python
+from autfin.observability import configure_logfire, trace_operation, trace_agent_run
+
+configure_logfire()  # Auto-injects from LOGFIRE_TOKEN env var
+
+@trace_operation("daily_morning_routine")
+async def run_morning_routine(ctx: RunContext[AgentDeps]) -> SupervisorOutput:
+    """Trace the full morning routine."""
+    ...
+```
+
+### 11.2 Per-Agent Traces
+
+```python
+@trace_agent_run("market_data")
+async def market_data_trace(ctx: RunContext[AgentDeps]) -> MarketSnapshotOutput:
+    """Trace market data agent specifically."""
+    ...
+
+### 11.3 Prompt Version Tracking
+
+```python
+# View which prompt version is currently served
+prompt_version = logfire.prompt_get_version("supervisor_instructions", version=1)
+# View rollout configuration
+rollout = logfire.variable_get("supervisor_prompt_rollout")
+# View assignment history
+history = logfire.variable_label_history("production", "supervisor_instructions")
+```
+
+### 11.4 RORO (Return on Research Output)
+
+```python
+from autfin.observability import roro
+
+roro_score = roro.calculate(
+    research_output=research_result,
+    trade_outcome=actual_trade_result,
+    conviction=conviction_score,
+)
+```
+
+### 11.5 Metrics Export
+
+```
+# Export to Prometheus / Grafana
+logfire.metrics.export(
+    metrics=["agent_calls", "token_usage", "latency", "error_rate"],
+    labels={"agent": "supervisor", "tier": "deep"},
+)
+```
+
+---
+
+## 12. DATA SOURCE INTEGRATIONS
+
+### 12.1 Kite SDK (Zerodha)
+
+```python
+from autfin.tools.kite_tools import kite_tools
+
+# Get portfolio
+holdings = await kite_tools.get_holdings()
+positions = await kite_tools.get_positions()
+margins = await kite_tools.get_margins()
+
+# Place order
+order_result = await kite_tools.place_order(
+    variety="regular",
+    exchange="NSE",
+    tradingsymbol="RELIANCE",
+    quantity=10,
+    order_type="MARKET",
+    product="CNC",
+    price=None,
+    validity="DAY",
+    trigger_price=None,
+)
+
+# Modify order
+order_result = await kite_tools.modify_order(
+    order_id="OA123456",
+    quantity=15,
+    price=2500.0,
+)
+
+# Cancel order
+result = await kite_tools.cancel_order(order_id="OA123456")
+```
+
+### 12.2 yfinance
+
+```python
+import yfinance as yf
+
+# Get historical data
+ticker = yf.Ticker("RELIANCE.NS")
+data = ticker.history(period="1y", interval="1D")
+
+# Get fundamentals
+info = ticker.info
+ratios = {
+    "pe_ratio": info.get("trailingPE"),
+    "pb_ratio": info.get("priceToBook"),
+    "roe": info.get("returnOnEquity"),
+    "d_e_ratio": info.get("debtToEquity"),
+    "market_cap": info.get("marketCap"),
+}
+
+# Get financial statements
+financials = ticker.financials
+balance_sheet = ticker.balance_sheet
+cash_flow = ticker.cashflow
+```
+
+### 12.3 Marketaux (News Sentiment)
+
+```python
+from autfin.tools.sentiment_tools import HybridSentimentAnalyzer
+
+analyzer = HybridSentimentAnalyzer()
+news = analyzer.get_recent_news(days=1, symbols=["RELIANCE"])
+sentiment = analyzer.analyze_sentiment(news)
+
+# Result: {"compound": -0.2, "positive": 0.1, "negative": 0.7, "neutral": 0.2}
+```
+
+### 12.4 FRED (Macro Economic Data)
+
+```python
+from autfin.tools.market_aux import fetch_fred_data
+
+# Get GDP
+gdp = fetch_fred_data("GDP", start_date="2020-01-01", end_date="2026-08-01")
+
+# Get CPI
+cpi = fetch_fred_data("CPIAUCSL", start_date="2020-01-01", end_date="2026-08-01")
+
+# Get Fed Funds Rate
+fed funds = fetch_fred_data("FEDFUNDS", start_date="2020-01-01", end_date="2026-08-01")
+```
+
+### 12.5 Screener.in (Fundamentals Fallback)
+
+```python
+from autfin.tools.fundamental_tools import fetch_screener_fundamentals
+
+fundamentals = fetch_screener_fundamentals("RELIANCE")
+# Returns: {"roic": 0.15, "fcf_yield": 0.08, "moat": "strong", ...}
+```
+
+---
+
+## 13. ERROR HANDLING & RECOVERY
+
+### 13.1 RetryPolicy
+
+```python
+from pydantic_ai import ToolRetries
+
+# Default: 2 retries with exponential backoff
+tool_retries = ToolRetries(
+    limit=2,
+    backend="fixed",  # or "exponential"
+)
+```
+
+### 13.2 TimeoutPolicy
+
+```python
+from pydantic_ai.settings import ModelSettings
+
+model_settings = ModelSettings(
+    timeout=30.0,  # seconds per agent call
+    max_tokens=8192,
+    temperature=0.0,
+)
+```
+
+### 13.2 Error Recovery Patterns
+
+```python
+# Supervisor error handling with Command-based routing
+try:
+    result = await agent_call(...)
+except Exception as e:
+    return Command(
+        update={"errors": [str(e)]},
+        goto="human_review",  # HITL node
+    )
+
+# Graceful degradation — skip blocked capability
+if not can_use("kite", "historical_data"):
+    # Fall back to yfinance
+    data = yfinance_download(...)
+else:
+    data = kite_historical(...)
+```
+
+### 13.3 Circuit Breaker
+
+```python
+# Mark capability as failed after N consecutive failures
+mark_failed("kite", "historical_data")
+# Agent will skip this capability on next call
+# Manual reset via mark_available()
+```
+
+---
+
+## 14. CL INTERFACE
+
+### 14.1 CLI Commands
+
+```
+autfin status          # Show system status, agent health, capabilities
+autfin analyze <symbol>  # Run full analysis on a ticker
+autfin scan <universe>   # Screen universe using formula criteria
+autfin start           # Start daily morning routine workflow
+autfin backtest        # Run walk-forward backtest
+autfin history         # Show trade history & performance
+autfin config          # Show configuration, API keys status
+autfin config reset    # Reset all API keys to .env.example defaults
+```
+
+### 14.2 main.py Entry Point
+
+```python
+#!/usr/bin/env python3
+"""AutFin CLI — 7 commands for daily operation."""
+
+import sys
+import argparse
+from autfin.cli.main import cli
+
+if __name__ == "__main__":
+    cli()
+```
+
+### 14.2 CLI Command Handlers
+
+```python
+@cli.command()
+@click.pass_context
+def status(ctx):
+    """Show system status."""
+    from autfin.observability import check_logfire_health
+    from autfin.config.capabilities import print_capabilities
+    
+    print("=== AutFin v7.0 Status ===")
+    print_capabilities()
+    check_logfire_health()
+    # Show agent health, memory status, etc.
+
+@cli.command()
+@click.argument("symbol")
+def analyze(ctx, symbol):
+    """Run full analysis on a ticker."""
+    from autfin.agents import supervisor_agent
+    result = supervisor_agent.run(
+        f"analyze {symbol} with full technical + fundamental + sentiment",
+        model_type="medium",
+    )
+    print(result.output)
+
+@cli.command()
+def start():
+    """Start the daily morning routine."""
+    from autfin.agents import run_morning_routine
+    result = run_morning_routine()
+    print(result.output if hasattr(result, 'output') else result)
+```
+
+---
+
+## 15. MIGRATION FROM v6.0 → v7.0
+
+### 15.1 Breaking Changes
+
+| v6.0 Feature | v7.0 Replacement | Migration Effort |
+|---|---|---|
+| LangGraph StateGraph | Pydantic AI SubAgents + DynamicWorkflow | High — rewrite agent orchestration |
+| LangSmith tracing | Logfire observability | Medium — update env vars, API keys |
+| LangGraph Store | SQLite + ChromaDB + ManagedPrompts | Medium — data migration scripts exist |
+| 8 LangGraph sub-agents | 7 Pydantic AI SubAgents | Medium — consolidate 1 agent (conferences subsumed into DynamicWorkflow) |
+| Static prompt files | Logfire ManagedPrompt | Low — prompt content transfers, versioning added |
+| langgraph.json + langgraph dev | pyproject.toml + pip install -e . | Low — dependency changes only |
+| langsmith API key | NVIDIA NIM API key + Marketaux/FRED keys | Medium — new free APIs, no credit card |
+
+### 15.2 Migration Steps
+
+1. **Update dependencies**: Replace `langgraph>=1.0.0` with `pydantic-ai[temporal]>=0.1.0`, `pydantic-ai-harness[codemode,dynamic-workflow]>=0.1.0`
+2. **Update .env**: Replace LangSmith key with NVIDIA_NIM_API_KEY, add Marketaux/FRED keys
+3. **Migrate prompts**: Copy static prompt content into Logfire ManagedPrompt instances
+4. **Migrate data**: Run `python -m autfin.migration.convert_langgraph_store` to migrate LangGraph checkpoints to SQLite
+5. **Update imports**: Replace `from langgraph.graph import ...` with `from pydantic_ai import ...`, `from pydantic_ai_harness import ...`
+6. **Update CLI**: Replace `langgraph dev` with `autfin start` / `autfin analyze`
+7. **Run validation**: Execute all 8 validation gates, fix any failures
+8. **Deploy**: Deploy to production with updated configuration
+
+### 15.3 Post-Migration Checklist
+
+- [ ] All 8 validation gates pass
+- [ ] 7 sub-agents functional (market_data, analyze, research, risk, debate, conference, memory)
+- [ ] Dynamic workflows (morning, quarterly) functional
+- [ ] Model tier selection working per agent
+- [ ] Logfire observability active (traces appearing)
+- [ ] ManagedPrompt versioning operational
+- [ ] Kite SDK integration working (paper trading first)
+- [ ] yfinance, Marketaux, FRED data flows
+- [ ] Backtesting pipeline functional
+- [ ] CLI commands operational
+
+---
+
+## 16. SECURITY & COMPLIANCE
+
+### 16.1 API Key Management
+
+- All API keys stored in `.env` (gitignored)
+- Never commit `.env` to version control
+- Rotate NVIDIA NIM keys quarterly
+- Marketaux: 100 req/day free tier — monitor usage
+- FRED: 120 req/min, no daily limit — cache aggressively
+
+### 16.2 Data Privacy
+
+- User account data (Zerodha) never leaves local environment except via secure SDK
+- Market data (yfinance, NSE public) is publicly available
+- News sentiment (Marketaux) aggregates anonymized headlines only
+- No PII stored in ChromaDB or SQLite (anonymize user_id before storage)
+
+### 16.3 Compliance Notes
+
+- SEBI regulations: No personalized investment advice without disclaimer
+- RBI guidelines: Position sizing respects account margin limits
+- Pattern Day Trader: US accounts >3 day trades/5-day window — monitor and warn
+- Indian tax: Capital gains calculated per Income Tax Act 1961, Section 111/112
+
+---
+
+## 17. VERSION HISTORY
+
+| Version | Date | Orchestration | LLM | Observability | Key Changes |
+|---------|------|--------------|-----|---------------|-------------|
+| v5.0 | Early 2025 | LangGraph StateGraph | Modal vLLM primary | LangSmith | Initial release, 8 sub-agents |
+| v6.0 | Mid 2025 | LangGraph StateGraph + `interrupt()` | Modal vLLM + NVIDIA NIM fallback | LangSmith | HITL, Command routing, alpha decay |
+| v7.0 | Aug 2026 | Pydantic AI SubAgents + DynamicWorkflow | NVIDIA NIM primary, Modal vLLM fallback | Logfire | SubAgents, ManagedPrompts, 8 validation gates, model tiers |
+
+---
+
+## 17. APPENDIX: Quick Reference
+
+### 17.1 Environment Variables (`.env`)
+
+```env
+# === REQUIRED ===
+NVIDIA_NIM_API_KEY=your_nvidia_nim_api_key    # Primary LLM (free tier)
+MARKETAUX_API_KEY=your_marketaux_api_key     # News sentiment (free tier)
+FRED_API_KEY=your_fred_api_key               # Macro data (free tier)
+
+# === BROWSER MCP (Obscura — REQUIRED) ===
+BROWSER_MCP_TRANSPORT=streamable_http
+BROWSER_MCP_HOST=127.0.0.1
+BROWSER_MCP_PORT=9333
+BROWSER_MCP_ENDPOINT=http://127.0.0.1:9333/mcp
+BROWSER_MCP_AUTOSTART=true
+
+# === ZERODHA KITE (Personal Tier — free) ===
 KITE_API_KEY=your_kite_api_key
 KITE_API_SECRET=your_kite_api_secret
 KITE_USER_ID=your_zerodha_user_id
 KITE_PASSWORD=your_zerodha_password
-KITE_TOTP_SECRET=your_totp_secret_from_zerodha_console
+KITE_TOTP_SECRET=your_totp_secret
 
-# ===== OPTIONAL: Social sentiment =====
-REDDIT_CLIENT_ID=...
-REDDIT_CLIENT_SECRET=...
-REDDIT_USER_AGENT=AutFin/1.0
+# === OPTIONAL: LLM FALLBACK ===
+MODAL_VLLM_URL=http://127.0.0.1:8000  # Self-hosted vLLM endpoint (optional)
+# MODAL_API_KEY=your_modal_api_key       # If self-hosted Modal
 
-# ===== LLM Provider (openai SDK direct) =====
-OPENROUTER_API_KEY=sk-or-v1-...
-GROQ_API_KEY=gsk_...
-GEMINI_API_KEY=...
+# === OBSERVABILITY ===
+LOGFIRE_TOKEN=your_logfire_token           # Auto-tracing (free tier)
+
+# === SOCIAL SENTIMENT (optional) ===
+# REDDIT_CLIENT_ID=your_reddit_client_id
+# REDDIT_CLIENT_SECRET=your_reddit_client_secret
+# REDDIT_USER_AGENT=AutFin-SentimentAgent/1.0
+
+# === OPTIONAL NOTIFICATIONS ===
+# PUSHOVER_USER_KEY=your_pushover_user_key
+# PUSHOVER_API_TOKEN=your_pushover_api_token
 ```
 
-### 9.2 Settings (typed config)
+### 17.2 Model Tier Quick Reference
 
-```python
-# config/settings.py
-from pydantic import Field
-from pydantic_settings import BaseSettings
+```
+deep  → deepseek-v4-flash  (1M ctx, complex reasoning)
+      → Used by: supervisor, research, debate
 
-class AutFinSettings(BaseSettings):
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+medium → llama-3.3-70b-instruct  (70B, balanced)
+         → Used by: analysis, risk, conference
 
-    # ── LLM ──────────────────────────────────────────
-    deep_model: str = Field(
-        default="nvidia_nim/minimaxai/minimax-m3",
-        description="Fallback model — MiniMax M3 via NVIDIA NIM (1M context, free)"
-    )
-    fast_model: str = Field(
-        default="nvidia_nim/meta/llama-3.1-8b-instruct",
-        description="Fast model — Llama 3.1 8B via NVIDIA NIM (63 tps, free)"
-    )
-    modal_vllm_url: str = Field(
-        default="",
-        description="Modal vLLM endpoint URL (primary LLM)"
-    )
-    modal_vllm_model: str = Field(
-        default="qwen3.6-35b-a3b",
-        description="Modal vLLM model name"
-    )
-    model_temperature: float = Field(default=0.0)
+fast   → llama-3.1-8b-instruct  (8B, low latency)
+       → Used by: market_data, memory
+```
 
-    # ── Zerodha ──────────────────────────────────────
-    kite_user_id: str = Field(default="", description="Zerodha user ID for programmatic login")
-    kite_password: str = Field(default="", description="Zerodha password for programmatic login")
-    kite_totp_secret: str = Field(default="", description="TOTP secret from Zerodha console for auto-login")
+### 17.3 Validation Gates Summary
 
-    # ── Capital Management ──────────────────────────
-    min_trade_amount: float = Field(default=1000.0)
-    cash_buffer_pct: float = Field(default=0.10)
-    deployment_pacing: str = Field(default="spread")
+| Gate | Tool | Target |
+|------|------|--------|
+| 1 | pyright --strict | Type safety |
+| 2 | pytest -x -v | Unit tests (52 files) |
+| 3 | evals suite | LLM judge quality (>80% pass) |
+| 4 | guardrails | Input/tool/output safety |
+| 5 | memory persistence | SQLite + ChromaDB |
+| 6 | plan persistence | ManagedPrompt versions |
+| 6 | load test | Concurrency without degradation |
+| 8 | durable execution | Retries, timeouts, checkpointing |
 
-    # ── Risk Parameters ─────────────────────────────
-    max_single_position_pct: float = Field(default=0.30)
-    max_sector_exposure_pct: float = Field(default=0.30)
-    default_stop_loss_pct: float = Field(default=0.08)
-    trailing_stop_loss_pct: float = Field(default=0.05)
-    profit_target_pct: float = Field(default=0.15)
-    portfolio_drawdown_halt_pct: float = Field(default=0.10)
-    max_daily_trades: int = Field(default=5)
-    min_market_cap_crore: float = Field(default=500.0)
-    min_avg_volume_lakhs: float = Field(default=5.0)
+### 17.4 Agent Quick Reference
 
-    # ── Execution ───────────────────────────────────
-    auto_execute_max_amount: float = Field(default=5000.0)
-    execution_mode: str = Field(default="recommendation")
+```
+supervisor_agent  → Deep tier, coordinates all 7 sub-agents
+market_data_agent → Fast tier, quotes + portfolio + market status
+analysis_agent    → Medium tier, 7 analysis types (TA, fundamentals, etc.)
+research_agent    → Deep tier, screening + thesis generation
+risk_agent        → Medium tier, position sizing + correlation + VaR
+debate_agent      → Deep tier, mandatory Bull/Bear before trades
+conference_agent  → Medium tier, coordination + rebalancing
+memory_agent      → Fast tier, cross-session patterns + calibration
+```
 
-    # ── Memory ──────────────────────────────────────
-    vector_store_type: str = Field(default="chromadb")
-    trade_history_retention_days: int = Field(default=3650)
-    research_freshness_days: int = Field(default=7)
-    checkpoint_durability: str = Field(default="wal")
+### 17.5 Workflow Quick Reference
 
-    # ── Scheduling ──────────────────────────────────
-    daily_scan_time: str = Field(default="09:00")
-    market_open: str = Field(default="09:15")
-    market_close: str = Field(default="15:30")
-    data_refresh_interval_min: int = Field(default=5)
-
-    # ── API Keys ────────────────────────────────────
-    nvidia_nim_api_key: str = Field(default="")
-    openrouter_api_key: str = Field(default="")
-    gemini_api_key: str = Field(default="")
-    groq_api_key: str = Field(default="")
-    marketaux_api_key: str = Field(default="")
-    fred_api_key: str = Field(default="")
-    langsmith_api_key: str = Field(default="")
+```
+morning_workflow  → Full pipeline: market_data → analyze → research → debate → risk → conference → memory
+quarterly_workflow→ Deep dive: all holdings + DCF + debate + rebalancing + alpha decay check
 ```
 
 ---
 
-## 10. SCHEDULED JOB DEFINITIONS
-
-```python
-# scheduler/jobs.py
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
-
-def register_jobs(scheduler: AsyncIOScheduler, graph, store, settings, checkpointer=None):
-    """Register all scheduled jobs.
-
-    Args:
-        checkpointer: Optional LangGraph checkpointer for crash recovery.
-                     If None, jobs run without persistence.
-    """
-
-    # Daily morning routine (Mon-Fri, 9:00 AM IST)
-    scheduler.add_job(
-        daily_morning_routine,
-        CronTrigger(day_of_week="mon-fri", hour=9, minute=0, timezone="Asia/Kolkata"),
-        args=[graph, store, settings, checkpointer],
-        id="daily_morning",
-        name="Daily Market Scan + Portfolio Guardian",
-    )
-
-    # Mid-day portfolio check (Mon-Fri, 1:00 PM IST)
-    scheduler.add_job(
-        portfolio_guardian_check,
-        CronTrigger(day_of_week="mon-fri", hour=13, minute=0, timezone="Asia/Kolkata"),
-        args=[graph, store, settings, checkpointer],
-        id="midday_guardian",
-        name="Mid-Day Portfolio Health Check",
-    )
-
-    # Weekly review (Sunday, 10:00 AM IST)
-    scheduler.add_job(
-        weekly_portfolio_review,
-        CronTrigger(day_of_week="sun", hour=10, minute=0, timezone="Asia/Kolkata"),
-        args=[graph, store, settings, checkpointer],
-        id="weekly_review",
-        name="Weekly Portfolio Review + Watchlist Refresh",
-    )
-
-    # Monthly deep dive (1st of month, 8:00 AM IST)
-    scheduler.add_job(
-        monthly_deep_dive,
-        CronTrigger(day=1, hour=8, minute=0, timezone="Asia/Kolkata"),
-        args=[graph, store, settings, checkpointer],
-        id="monthly_deep_dive",
-        name="Monthly Strategy Review + Full Fundamental Refresh",
-    )
-
-
-async def daily_morning_routine(graph, store, settings):
-    """The main daily routine."""
-    thread_id = f"morning-{datetime.now().strftime('%Y-%m-%d')}"
-    config = {"configurable": {"thread_id": thread_id}}
-
-    initial_state = {
-        "thread_id": thread_id,
-        "run_mode": "daily_morning",
-        "messages": [HumanMessage(content="Run the daily morning routine")],
-    }
-
-    async for event in graph.astream(initial_state, config, stream_mode="values"):
-        # Log each state update
-        logger.info(f"[{thread_id}] State update: {list(event.keys())}")
-
-    logger.info(f"[{thread_id}] Morning routine complete")
-
-
-async def portfolio_guardian_check(graph, store, settings):
-    """Mid-day position health check — always runs regardless of cash."""
-    thread_id = f"guardian-{datetime.now().strftime('%Y-%m-%d-%H')}"
-    config = {"configurable": {"thread_id": thread_id}}
-
-    initial_state = {
-        "thread_id": thread_id,
-        "run_mode": "adrenaline",
-        "messages": [HumanMessage(content="Run portfolio guardian check")],
-    }
-
-    async for event in graph.astream(initial_state, config, stream_mode="values"):
-        pass
-```
-
----
-
-## 11. ERROR HANDLING MATRIX
-
-| Error Type | Example | Handler | Recovery |
-|-----------|---------|---------|----------|
-| **Transient** | API timeout, rate limit | `RetryPolicy(max_attempts=3, initial_interval=1.0, backoff_factor=2)` | Auto-retry |
-| **LLM Recoverable** | Bad JSON parse, wrong format | Loop back node with error in state, retry with stricter prompt | Auto-fix |
-| **User Fixable** | Auth expired, balance changed | `interrupt()` → notify user → wait for `Command(resume=)` | HITL resume |
-| **Graceful Degradation** | LLM API all down, Kite API down | `error_handler()` → use cached data, mark as stale, alert user | Run degraded |
-| **Critical** | Database corruption, unrecoverable | Bubble up, log, alert user, attempt last-good-checkpoint restore | Manual + auto-checkpoint |
-
----
-
-## 12. COMMAND-LINE INTERFACE
-
-```bash
-# Check status
-autfin status
-# → "Available: ₹48,230 | Positions: ₹1,770 | P&L: +₹1,240 (+2.5%)"
-
-# Analyze a stock
-autfin analyze RELIANCE
-# → Full research report with Bull/Bear debate, scores, recommendation
-
-# Full daily scan (manual trigger)
-autfin scan
-# → Runs the morning routine immediately
-
-# Start as daemon (scheduled autonomous mode)
-autfin start
-# → Starts APScheduler, runs daily at 9:00 AM, runs forever
-
-# Backtest a strategy
-autfin backtest --strategy momentum --period 1y
-# → Tests strategy on historical data, reports win rate, max drawdown, Sharpe
-
-# View trade history
-autfin history --symbol RELIANCE --days 90
-# → Shows all trades, P&L, rationale for RELIANCE
-
-# Set execution mode
-autfin config set execution_mode recommendation  # Human approval needed
-autfin config set execution_mode auto_small       # Auto-execute under ₹5K
-autfin config set execution_mode paper            # Paper trading only
-
-# Set pacing
-autfin config set deployment_pacing aggressive
-```
-
----
-
-## 13. IMPLEMENTATION STATUS
-
-```
-✅ PHASE A-D — v2.x Foundation (COMPLETE)
-  ✅ All 10 agents implemented (market_data through executor)
-  ✅ 3 graphs: daily_morning, adrenaline, quarterly_deep_dive (all retired)
-  ✅ 4 tools: kite, technical, fundamental, sentiment, scraper
-  ✅ 8 prompts, dashboard (7 pages), scheduler, CLI, alerts
-  ✅ 683 tests passing, 0 failures
-
-✅ PHASE E — Research Depth (COMPLETE)
-  ✅ DCF Valuation Agent (3-scenario + Reverse DCF)
-  ✅ Peer Compare Agent (8-metric sector ranking)
-  ✅ Moat Agent (Morningstar 5-source framework)
-  ✅ Catalyst Engine (hard + soft catalyst extraction)
-
-✅ PHASE F — Autonomy (COMPLETE)
-  ✅ LangSmith observability (tracer, handler, metrics, RORO, thesis A/B)
-  ✅ Paper trading engine (order lifecycle, P&L tracking)
-  ✅ Backtest engine (5 strategies, 18+ metrics, Indian market costs)
-  ✅ Learning loop (feedback_loop, calibrator, retriever)
-  ✅ Alerts (Console, Desktop, Pushover, Email backends)
-
-✅ v3.0 Redesign (COMPLETE)
-  ✅ Single supervisor ReAct graph (graph/supervisor.py)
-  ✅ 20 tools in supervisor_tools.py (1700+ lines)
-  ✅ Fan-out research: screen → 20 candidates × 6 agents → converge
-  ✅ Stock pitches (6-element buy-side standard)
-  ✅ HITL gate (graph/hitl.py)
-  ✅ Error handler with retry + circuit breaker
-  ✅ 746+ tests passing
-
-✅ v4.0 Global Markets & Sentiment (COMPLETE)
-  ✅ 16 macro indices (+5: Shanghai, Hang Seng, DAX, CAC 40, Euro Stoxx 50)
-  ✅ India 10Y G-Sec yield via FRED (INDIRLTLT01STM)
-  ✅ Bank Nifty tracked separately from Nifty
-  ✅ 14-sector impact matrix (was 8)
-  ✅ HybridSentimentAnalyzer: FinBERT (news) + VADER (social) + keyword fallback
-  ✅ Reddit PRAW integration (r/IndianStockMarket, r/IndiaInvestments)
-  ✅ Multi-source sentiment: Marketaux (0.4) + MC (0.2) + ET (0.2) + Reddit (0.2)
-  ✅ NSE announcements fix (cookie-based session)
-  ✅ nselib integration (corporate actions + event calendar)
-  ✅ pandas-ta-classic replaces custom numpy indicators + optional TA-Lib
-  ✅ asyncio.get_event_loop() deprecation fix (4 files)
-  ✅ 841+ tests passing
-
-✅ v4.1 Reliability & Test Coverage (COMPLETE)
-  ✅ Wired SqliteSaver checkpointer into scheduler (crash recovery)
-  ✅ Refactored tools/__init__.py to lazy imports (reduces startup time)
-  ✅ Fixed lookback_days unused param in thesis_ab.py and roro.py
-  ✅ Fixed _persist_position bug in paper_trading/engine.py (6→7 placeholders)
-  ✅ Fixed _get_trade_pnl_for_decision → _get_trade_pnl_for_symbol bug in roro.py
-  ✅ Added SQLite connection pool (memory/connection_pool.py)
-  ✅ Added trace persistence to SQLite (observability/tracer.py)
-  ✅ Added 43 paper trading engine tests
-  ✅ Added 21 supervisor graph unit tests
-  ✅ 914+ tests passing
-
-✅ v5.0-5.1 Critical Fixes + Production Polish (COMPLETE)
-  ✅ Stop-loss configurable, MARKET order live price
-  ✅ Parallel screening, catalyst bias, market-hours check
-  ✅ Indian tax engine (STCG/LTCG/FIFO/XIRR), reasonability gate
-  ✅ Correlation check, episodic memory, LLM-as-Judge
-  ✅ Kelly criterion, anomaly detection, paper-live reconciliation
-  ✅ Walk-forward backtesting, regime detection, online learning
-  ✅ Kelly executor integration
-
-✅ v5.2 Modal vLLM + LangSmith (COMPLETE)
-  ✅ Modal vLLM deployment (Qwen 3.6 35B) — zero cost, no rate limits
-  ✅ NVIDIA NIM fallback (MiniMax M3)
-  ✅ LangSmith tracing (replaced Langfuse — auto-tracing via env vars)
-  ✅ Full codebase audit: ~30+ bugs found and fixed
-  ✅ TOOL_PARAM_RULES rewritten for actual function signatures
-  ✅ Async checkpointer/store initialization (memory/setup.py)
-  ✅ Partial dict returns in technical agent (removed {**state, ...})
-  ✅ LangGraph dev server (langgraph.json, agent.py entry point)
-  ✅ 972+ tests passing
-
-✅ v5.5 Subagents Architecture (COMPLETE)
-  ✅ IMPROVEMENT_PLAN_V5_3.md — full restructure plan
-  ✅ Documentation updated (README, PRD, technical_spec)
-  ⬜ agents/tools.py — Agent tool wrappers (fundamentals, technical, etc.)
-  ⬜ agents/schemas.py — Response schemas for structured output
-  ⬜ memory/langgraph_store.py — LangGraph Store wrapper
-  ⬜ graph/supervisor.py — Use agent tools, add store, interrupt() HITL
-  ⬜ graph/builder.py — Add store to compilation
-  ⬜ llm/client.py — Parallel tool execution, structured output
-  ⬜ cli/main.py — Initialize store, pass to graph
-  ⬜ tests/test_graphs/test_v5_3_integration.py — New tests
-  ⬜ pyproject.toml — Add langgraph-store dependency
-
-TEST COVERAGE: 972+ tests, all passing
-COST: $0/month (Modal vLLM self-hosted + NVIDIA NIM free tier)
-```
-
----
-
-*This specification reflects the **v5.5 subagents architecture** of AutFin. The supervisor coordinates specialist tools directly, each running deterministically with full LangSmith visibility. NVIDIA NIM (MiniMax M3) is the primary LLM, Modal vLLM (Qwen 3.6 35B) is the fallback. See `V5_4_IMPLEMENTATION_PLAN.md` for the full restructure plan and `autfin_prd.md` for product requirements.*
+*End of Technical Specification v7.0*
