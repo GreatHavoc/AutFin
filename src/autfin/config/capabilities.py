@@ -48,16 +48,15 @@ CAPABILITIES: dict[str, dict[str, Any]] = {
     "openrouter": {
         "available": True,
         "rate_limited": "often",    # 50 free/day shared across all users
-        "best_model": "google/gemma-4-31b-it:free",
+        "best_model": "meta/muse-glimmer-30b",
         "detail": "Rate-limited often. Use NVIDIA NIM as primary instead.",
     },
     "nvidia_nim": {
         "available": True,
         "rate_limited": False,      # Separately quota per model
         "best_models": [
-            "deepseek-ai/deepseek-v4-flash",     # 284B MoE, 1M context
-            "meta/llama-3.3-70b-instruct",        # 70B, reliable
-            "meta/llama-3.1-8b-instruct",         # 8B, fast
+            "thinkingmachines/inkling",          # reasoning
+            "meta/muse-glimmer-30b",             # general
         ],
         "detail": "NVIDIA-hosted, free tier. Better reliability than OpenRouter.",
     },

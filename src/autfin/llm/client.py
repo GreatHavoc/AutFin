@@ -186,7 +186,7 @@ class LLMClient:
     def __init__(
         self,
         deep_model: str = "thinkingmachines/inkling",
-        fast_model: str = "meta/llama-3.1-8b-instruct",
+        fast_model: str = "meta/muse-glimmer-30b",
         temperature: float = 0.0,
         max_retries: int = 2,
         timeout: float = 180.0,
@@ -495,7 +495,7 @@ def get_llm_client() -> LLMClient:
                 if nvidia_key:
                     _default_client = LLMClient(
                         deep_model="thinkingmachines/inkling",
-                        fast_model="meta/llama-3.1-8b-instruct",
+                        fast_model="meta/muse-glimmer-30b",
                         temperature=settings.model_temperature,
                         base_url="https://integrate.api.nvidia.com/v1",
                         api_key=nvidia_key,

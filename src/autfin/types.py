@@ -20,21 +20,15 @@ from pydantic_ai.messages import ModelMessage as BaseMessage
 # ═══════════════════════════════════════════════════════════════════════════
 
 class ModelConfig(BaseModel):
-    """Model routing configuration for NVIDIA NIM endpoints.
-    
-    Available models on NVIDIA NIM (https://build.nvidia.com/models):
-    - meta/llama-3.1-8b-instruct (fast)
-    - meta/llama-3.1-70b-instruct (deep)
-    - meta/llama-3.3-70b-instruct (deep)
-    - nvidia/nemotron-3-ultra (reasoning)
-    - nvidia/nemotron-3-ultra-253b-v1 (reasoning)
-    - meta/llama-3.1-8b-instruct (fast)
-    - meta/llama-3.1-70b-instruct (code)
+    """Model routing configuration.
+
+    - thinkingmachines/inkling (deep/reasoning)
+    - meta/muse-glimmer-30b (fast/medium/code)
     """
-    deep: str = "meta/llama-3.3-70b-instruct"
-    fast: str = "meta/llama-3.1-8b-instruct"
-    reasoning: str = "nvidia/nemotron-3-ultra"
-    code: str = "meta/llama-3.1-70b-instruct"
+    deep: str = "thinkingmachines/inkling"
+    fast: str = "meta/muse-glimmer-30b"
+    reasoning: str = "thinkingmachines/inkling"
+    code: str = "meta/muse-glimmer-30b"
 
 MODEL_CONFIG = ModelConfig()
 

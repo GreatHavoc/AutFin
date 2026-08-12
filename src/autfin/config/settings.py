@@ -23,16 +23,16 @@ class AutFinSettings(BaseSettings):
         description="Primary — ThinkingMachines Inkling (complex reasoning)"
     )
     fast_model: str = Field(
-        default="nvidia_nim/meta/llama-3.1-8b-instruct",
-        description="Fast model — Llama 3.1 8B via NVIDIA NIM (912ms, 63 tps, free)"
+        default="meta/muse-glimmer-30b",
+        description="Fast model — Meta Muse Glimmer 30B (general tasks)"
     )
     nvidia_model: str = Field(
-        default="nvidia_nim/meta/llama-3.3-70b-instruct",
-        description="NVIDIA NIM — Llama 3.3 70B (free)"
+        default="meta/muse-glimmer-30b",
+        description="NVIDIA NIM — Meta Muse Glimmer 30B"
     )
     nvidia_deep_model: str = Field(
-        default="nvidia_nim/deepseek-ai/deepseek-v4-flash",
-        description="NVIDIA NIM deep — DeepSeek V4 Flash 284B MoE (free, 1M context)"
+        default="thinkingmachines/inkling",
+        description="Deep model — ThinkingMachines Inkling (reasoning)"
     )
     modal_vllm_url: str = Field(
         default="",

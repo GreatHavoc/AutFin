@@ -1,10 +1,9 @@
 """
 Model tier registry -- route tasks to the right model by complexity.
 
-Phase 3.1: Different agents use different models based on task complexity.
 DEEP  = ThinkingMachines Inkling -- complex reasoning (debate, conferences, research synthesis)
-MEDIUM = Llama 3.1 8B -- standard analysis (fundamentals, technical, valuation)
-FAST   = Llama 3.1 8B -- lightweight tasks (market data, memory, macro)
+MEDIUM = Meta Muse Glimmer 30B -- standard analysis (fundamentals, technical, valuation)
+FAST   = Meta Muse Glimmer 30B -- lightweight tasks (market data, memory, macro)
 """
 from __future__ import annotations
 
@@ -21,8 +20,8 @@ class ModelTier(Enum):
 # Maps tier -> model name (resolved at runtime from LLMClient)
 MODEL_REGISTRY: dict[ModelTier, str] = {
     ModelTier.DEEP: "thinkingmachines/inkling",
-    ModelTier.MEDIUM: "meta/llama-3.1-8b-instruct",
-    ModelTier.FAST: "meta/llama-3.1-8b-instruct",
+    ModelTier.MEDIUM: "meta/muse-glimmer-30b",
+    ModelTier.FAST: "meta/muse-glimmer-30b",
 }
 
 # Maps agent/subagent name -> model tier
