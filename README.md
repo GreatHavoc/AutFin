@@ -22,8 +22,8 @@ A personal multi-agentic system built with **Pydantic AI** that runs daily auton
 ## Quick Start
 
 ```bash
-# Install dependencies
-pip install -e .
+# Install dependencies (using uv)
+uv sync
 
 # Run the supervisor agent (interactive)
 python -c "
@@ -96,13 +96,14 @@ asyncio.run(main())
 git clone https://github.com/yourusername/autfin.git
 cd autfin
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# .venv\Scripts\activate   # Windows
+# Install dependencies with uv (creates virtual environment automatically)
+uv sync
 
-# Install dependencies
-pip install -e .
+# Or manually:
+# uv venv
+# source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate     # Windows
+# uv pip install -e .
 ```
 
 ## Configuration
@@ -186,24 +187,24 @@ autfin/
 
 ```bash
 # Run all tests
-python -m pytest tests/ -v
+uv run pytest tests/ -v
 
 # Run specific test module
-python -m pytest tests/test_agents/ -v
-python -m pytest tests/test_tools/ -v
-python -m pytest tests/test_learning/ -v
+uv run pytest tests/test_agents/ -v
+uv run pytest tests/test_tools/ -v
+uv run pytest tests/test_learning/ -v
 
 # Run with coverage
-python -m pytest tests/ --cov=autfin --cov-report=term-missing
+uv run pytest tests/ --cov=autfin --cov-report=term-missing
 
 # Run validation gates
-python test_validation.py
+uv run python test_validation.py
 ```
 
 ## Validation Gates (Phase 6)
 
-Run `python test_validation.py` to execute all 6 gates:
-1. **Type Checking** — `pyright --strict`
+Run `uv run python test_validation.py` to execute all 6 gates:
+1. **Type Checking** — `uv run pyright --strict`
 2. **Unit Tests** — Full pytest suite
 3. **Evaluation Suite** — >80% pass rate on agent evals
 4. **Guardrails** — Input/output/tool validation tests
