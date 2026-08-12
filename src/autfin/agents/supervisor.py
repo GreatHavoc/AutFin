@@ -12,7 +12,7 @@ from pydantic_ai_harness.subagents import SubAgents, SubAgent
 from pydantic_ai_harness.dynamic_workflow import DynamicWorkflow, WorkflowAgent
 from pydantic_ai_harness.planning import Planning
 from pydantic_ai_harness.memory import Memory
-from pydantic_ai_harness.system_reminders import SystemReminders
+from pydantic_ai_harness.system_reminders import Reminder, SystemReminders
 from pydantic_ai_harness.memory import FileStore
 from pydantic_ai.usage import UsageLimits
 from pydantic_ai.settings import ModelSettings
@@ -181,11 +181,11 @@ memory_capability = Memory(
 # ─── System Reminders ──────────────────────────────────────────────────
 system_reminders_capability = SystemReminders(
     reminders=[
-        "Stay focused on risk management. Check risk/reward >= 2:1 before any trade.",
-        "Verify conviction >= 0.5 before any trade execution.",
-        "ALWAYS run debate before any trade decision. No exceptions.",
-        "Batch sub-agent calls in a single response for speed.",
-        "Use dynamic workflow for complex multi-step orchestration.",
+        Reminder("Stay focused on risk management. Check risk/reward >= 2:1 before any trade."),
+        Reminder("Verify conviction >= 0.5 before any trade execution."),
+        Reminder("ALWAYS run debate before any trade decision. No exceptions."),
+        Reminder("Batch sub-agent calls in a single response for speed."),
+        Reminder("Use dynamic workflow for complex multi-step orchestration."),
     ],
     dynamic_reminders=[],
     cache_ttl="5m",
