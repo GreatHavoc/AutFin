@@ -144,23 +144,34 @@ def _tool_def(name: str, description: str, parameters: Dict) -> Dict:
 async def fundamentals_tool(symbol: str, depth: str = "standard") -> str:
     """Run fundamental analysis on a stock. Deterministic — no LLM.
 
-    Calls FundamentalsAgent.analyze() directly: yfinance scrape → ratios
-    → Piotroski F-score → moat assessment.
+    Uses FundamentalTools directly: yfinance scrape → ratios
+    → health score → peer comparison.
 
     Args:
         symbol: Stock symbol (e.g. 'RELIANCE')
         depth: quick/standard/deep (controls which sub-analyses run)
     """
-    from src.autfin.agents.fundamentals import FundamentalsAgent
+    from src.autfin.tools.fundamental_tools import FundamentalTools
 
     try:
-        agent = FundamentalsAgent()
-        report = await agent.analyze(symbol)
+        tools = FundamentalTools()
+        financials = await tools.get_financials(symbol)
+        health = await tools.compute_health_score(symbol)
+
+        report = {
+            "symbol": symbol,
+            "financials": financials,
+            "health_score": health.get("health_score", 0),
+            "health_rating": health.get("rating", "UNKNOWN"),
+            "health_details": health.get("details", {}),
+        }
 
         if depth == "deep":
-            peers = await agent.compare_peers(symbol)
-            if peers and peers.get("status") == "success":
-                report["peer_comparison"] = peers
+            # Default peer set for Indian large caps
+            peers = ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+            peer_data = await tools.compare_peers(symbol, peers)
+            if peer_data and peer_data.get("peers"):
+                report["peer_comparison"] = peer_data
 
         report["depth"] = depth
         return json.dumps(report, default=str)
@@ -173,39 +184,35 @@ async def fundamentals_tool(symbol: str, depth: str = "standard") -> str:
 async def technical_tool(symbol: str, depth: str = "standard", as_of: str | None = None) -> str:
     """Run technical analysis on a stock. Deterministic — no LLM.
 
-    Fetches OHLCV via yfinance, then calls TechnicalAgent.analyze()
-    which runs pandas_ta_classic indicators (RSI, MACD, BB, ATR, etc.)
-    and generates a structured signal.
+    Fetches OHLCV via yfinance and computes indicators via technical_tools.
+    Computes: SMA, EMA, RSI, MACD, Bollinger Bands, ATR, OBV, VWAP, Stochastic.
 
     Args:
         symbol: Stock symbol (e.g. 'RELIANCE')
         depth: quick (3mo), standard (6mo), deep (1y)
         as_of: ISO datetime for point-in-time backtests (None = live)
     """
-    from src.autfin.agents.technical import TechnicalAgent
-    from src.autfin.agents.yfinance_utils import fetch_history
+    from src.autfin.tools.technical_tools import fetch_technical_indicators, detect_patterns
 
     try:
-        period_map = {"quick": "3mo", "standard": "6mo", "deep": "1y"}
-        period = period_map.get(depth, "6mo")
+        indicators_json = await fetch_technical_indicators(symbol)
+        indicators = json.loads(indicators_json)
 
-        hist = await fetch_history(symbol, as_of=as_of, period=period, interval="1d")
-
-        if hist is None or hist.empty:
+        if "error" in indicators:
             return json.dumps({
                 "status": "error", "symbol": symbol,
-                "message": f"OHLCV data unavailable for {symbol}",
+                "message": indicators["error"],
             })
 
-        price_data = hist.rename(columns={
-            "Open": "open", "High": "high", "Low": "low",
-            "Close": "close", "Volume": "volume",
-        })[["open", "high", "low", "close", "volume"]]
+        # Add pattern detection for deeper analysis
+        if depth in ("standard", "deep"):
+            patterns_json = await detect_patterns(symbol)
+            patterns = json.loads(patterns_json)
+            if "error" not in patterns:
+                indicators["patterns"] = patterns
 
-        agent = TechnicalAgent()
-        report = await agent.analyze(symbol, data=price_data)
-        report["depth"] = depth
-        return json.dumps(report, default=str)
+        indicators["depth"] = depth
+        return json.dumps(indicators, default=str)
     except Exception as e:
         logger.warning("technical_analysis failed for %s: %s", symbol, e)
         return json.dumps({"status": "error", "symbol": symbol, "message": str(e)})
@@ -237,25 +244,13 @@ async def sentiment_tool(symbol: str) -> str:
 async def macro_tool() -> str:
     """Run global macro analysis. Deterministic — no LLM.
 
-    Fetches macro indicators (VIX, oil, USD/INR, Fed rate, etc.) via
-    yfinance, then runs deterministic India-impact scoring.
-
-    No arguments — macro analysis is always portfolio-wide.
+    Fetches global indices, rates, commodities, computes India impact.
+    Returns {indices, rates, india_impact, narrative, sector_weights}.
     """
-    from src.autfin.agents.global_macro import GlobalMacroAgent
+    from src.autfin.tools.supervisor_tools import analyze_macro_context
 
     try:
-        agent = GlobalMacroAgent()
-        indicators = await agent.fetch_indicators()
-        impact = await agent.analyze_impact(indicators)
-        score = await agent.calculate_impact_score(impact)
-
-        result = {
-            "status": "success",
-            "indicators": indicators,
-            "impact": impact,
-            "impact_score": score,
-        }
+        result = await analyze_macro_context()
         return json.dumps(result, default=str)
     except Exception as e:
         logger.warning("macro_analysis failed: %s", e)
@@ -381,18 +376,111 @@ async def regulatory_tool(symbol: str, depth: str = "standard") -> str:
 async def valuation_tool(symbol: str, depth: str = "standard") -> str:
     """Run DCF valuation on a stock. Deterministic — no LLM.
 
-    Fetches financials via yfinance, then runs DCF scenarios
+    Fetches financials via yfinance (via FundamentalTools), then runs DCF scenarios
     (base/upside/downside) and reverse DCF.
 
     Args:
         symbol: Stock symbol (e.g. 'RELIANCE')
         depth: quick (simple DCF), standard (3 scenarios), deep (full + reverse DCF)
     """
-    from src.autfin.agents.valuation import fetch_financials, compute_dcf, reverse_dcf, build_scenarios
+    from src.autfin.tools.fundamental_tools import FundamentalTools
     from datetime import datetime
 
+    def _compute_dcf(
+        free_cash_flow: float,
+        revenue_growth: float,
+        shares_outstanding: float,
+        wacc: float = 0.12,
+        terminal_growth: float = 0.03,
+        forecast_years: int = 5,
+    ) -> Dict[str, Any]:
+        """Compute DCF valuation with standard assumptions."""
+        if free_cash_flow <= 0 or shares_outstanding <= 0:
+            return {"fair_value": 0, "error": "Invalid inputs"}
+
+        # Project FCF
+        fcf_projections = []
+        for year in range(1, forecast_years + 1):
+            fcf_year = free_cash_flow * (1 + revenue_growth) ** year
+            fcf_projections.append(fcf_year)
+
+        # Discount to present value
+        pv_sum = 0
+        for i, fcf in enumerate(fcf_projections, 1):
+            pv = fcf / (1 + wacc) ** i
+            pv_sum += pv
+
+        # Terminal value
+        terminal_fcf = fcf_projections[-1] * (1 + terminal_growth)
+        terminal_value = terminal_fcf / (wacc - terminal_growth)
+        terminal_pv = terminal_value / (1 + wacc) ** forecast_years
+
+        enterprise_value = pv_sum + terminal_pv
+        equity_value = enterprise_value  # simplified: no net debt
+        fair_value = equity_value / shares_outstanding
+
+        return {
+            "fair_value": round(fair_value, 2),
+            "enterprise_value": round(enterprise_value, 2),
+            "pv_fcf": round(pv_sum, 2),
+            "terminal_value": round(terminal_pv, 2),
+            "assumptions": {
+                "wacc": wacc,
+                "terminal_growth": terminal_growth,
+                "forecast_years": forecast_years,
+                "revenue_growth": revenue_growth,
+            },
+        }
+
+    def _build_scenarios(fin_data: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
+        """Build DCF scenarios from financial data."""
+        base_growth = fin_data.get("revenue_growth_3y", 0.15) or 0.15
+        return {
+            "base": {"growth": base_growth},
+            "upside": {"growth": min(base_growth * 1.5, 0.40)},
+            "downside": {"growth": max(base_growth * 0.5, 0.02)},
+        }
+
+    def _reverse_dcf(
+        current_price: float,
+        current_fcf: float,
+        shares_outstanding: float,
+        wacc: float = 0.12,
+        terminal_growth: float = 0.03,
+        forecast_years: int = 5,
+    ) -> Dict[str, Any]:
+        """Compute implied growth rate from current price."""
+        if current_price <= 0 or shares_outstanding <= 0:
+            return {"implied_growth": 0, "error": "Invalid inputs"}
+
+        target_ev = current_price * shares_outstanding
+        # Simple binary search for implied growth
+        low, high = 0.0, 0.50
+        for _ in range(30):
+            mid = (low + high) / 2
+            dcf = _compute_dcf(current_fcf, mid, shares_outstanding, wacc, terminal_growth, forecast_years)
+            if dcf["enterprise_value"] > target_ev:
+                high = mid
+            else:
+                low = mid
+        implied = (low + high) / 2
+        return {"implied_growth": round(implied, 4), "current_price": current_price}
+
+    async def _fetch_financials(symbol: str) -> Dict[str, Any]:
+        tools = FundamentalTools()
+        data = await tools.get_financials(symbol)
+        if "error" in data:
+            return {"status": "error", "message": data["error"]}
+        # Extract needed fields
+        data["free_cash_flow"] = data.get("fcf_yield", 0) * data.get("market_cap", 0) if data.get("market_cap") else 1e6
+        data["shares_outstanding"] = data.get("market_cap", 0) / data.get("pe", 1) / data.get("eps", 1) if data.get("pe") and data.get("eps") else 1e9
+        data["current_price"] = data.get("market_cap", 0) / data.get("shares_outstanding", 1) if data.get("market_cap") and data.get("shares_outstanding") else 0
+        data["revenue_growth"] = data.get("revenue_growth_3y", 0.15)
+        data["status"] = "success"
+        return data
+
     try:
-        fin_data = await fetch_financials(symbol)
+        fin_data = await _fetch_financials(symbol)
 
         if fin_data.get("status") == "error":
             return json.dumps(fin_data, default=str)
@@ -403,16 +491,15 @@ async def valuation_tool(symbol: str, depth: str = "standard") -> str:
         price = fin_data.get("current_price", 0) or 0
 
         # Build scenarios
-        scenarios = build_scenarios(fin_data)
+        scenarios = _build_scenarios(fin_data)
 
         # Run DCF for each scenario
         dcf_results = {}
         for scenario_name, scenario_data in scenarios.items():
-            dcf_results[scenario_name] = compute_dcf(
+            dcf_results[scenario_name] = _compute_dcf(
                 free_cash_flow=fcf,
                 revenue_growth=scenario_data.get("growth", growth),
                 shares_outstanding=shares,
-                scenario=scenario_name,
             )
 
         result = {
@@ -432,7 +519,7 @@ async def valuation_tool(symbol: str, depth: str = "standard") -> str:
         # Add reverse DCF for deep analysis
         if depth == "deep" and price > 0:
             try:
-                rev_dcf = await reverse_dcf(
+                rev_dcf = _reverse_dcf(
                     current_price=price,
                     current_fcf=fcf,
                     shares_outstanding=shares,

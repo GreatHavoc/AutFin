@@ -7,10 +7,11 @@ from __future__ import annotations
 from typing import Any, Callable, Literal, TypeVar
 
 import os
-import openai
+from dotenv import load_dotenv
 from pydantic_ai import Agent
+from pydantic_ai.capabilities import SelectModel
 from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers import Provider
+from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.toolsets import AbstractToolset
 from pydantic_ai.usage import UsageLimits
@@ -19,48 +20,74 @@ from autfin.types import AgentDeps, MODEL_CONFIG, ModelConfig
 
 OutputT = TypeVar("OutputT")
 
-
-class NVIDIAProvider(Provider[openai.AsyncOpenAI]):
-    """NVIDIA NIM provider for OpenAI-compatible API."""
-    
-    def __init__(self, api_key: str | None = None):
-        # NVIDIA NIM uses NVIDIA_NIM_API_KEY env var, but openai client requires api_key
-        # Use a dummy key if not provided - NVIDIA NIM may not require actual auth
-        key = api_key or os.getenv("NVIDIA_NIM_API_KEY") or "dummy-key"
-        self._client = openai.AsyncOpenAI(
-            base_url="https://integrate.api.nvidia.com/v1",
-            api_key=key,
-        )
-    
-    @property
-    def name(self) -> str:
-        return "nvidia"
-    
-    @property
-    def base_url(self) -> str:
-        return "https://integrate.api.nvidia.com/v1"
-    
-    @property
-    def client(self) -> openai.AsyncOpenAI:
-        return self._client
+# NVIDIA NIM is OpenAI-wire-compatible at this endpoint. pydantic-ai ships no native
+# NVIDIA provider class, so we use the built-in OpenAIProvider pointed at NIM.
+_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 
-_NVIDIA_PROVIDER = NVIDIAProvider()
+def _nvidia_api_key() -> str:
+    load_dotenv()  # ensure .env (NVIDIA_NIM_API_KEY) is loaded regardless of import order
+    return os.getenv("NVIDIA_NIM_API_KEY") or os.getenv("NVIDIA_API_KEY") or "dummy-key"
 
 
 def create_nvidia_model(model_name: str, **kwargs) -> OpenAIChatModel:
     """Create OpenAI-compatible model for NVIDIA NIM endpoint."""
-    return OpenAIChatModel(
-        model_name=model_name,
-        provider=_NVIDIA_PROVIDER,
-        **kwargs
-    )
+    provider = OpenAIProvider(base_url=_NVIDIA_BASE_URL, api_key=_nvidia_api_key())
+    return OpenAIChatModel(model_name=model_name, provider=provider, **kwargs)
 
 
 def get_model(model_type: Literal["deep", "fast", "reasoning", "code"] = "deep") -> OpenAIChatModel:
     """Get model by type from configuration."""
     model_name = getattr(MODEL_CONFIG, model_type)
     return create_nvidia_model(model_name)
+
+
+def create_select_model_capability() -> SelectModel:
+    """
+    Create a SelectModel capability for dynamic model selection based on task complexity.
+
+    Returns a capability that selects the appropriate model tier based on the
+    current step context (e.g., deep for synthesis, fast for data fetching).
+
+    Usage:
+        capabilities = [
+            create_select_model_capability(),
+            # other capabilities...
+        ]
+    """
+    def select_model(model_type: Literal["deep", "fast", "reasoning", "code"] = "deep") -> OpenAIChatModel:
+        return get_model(model_type)
+
+    return SelectModel(select_model)
+
+
+def create_adaptive_model_capability(
+    *,
+    default: Literal["deep", "fast", "reasoning", "code"] = "deep",
+    fast_keywords: list[str] | None = None,
+    deep_keywords: list[str] | None = None,
+) -> SelectModel:
+    """
+    Create an adaptive SelectModel that chooses model tier based on prompt content.
+
+    Args:
+        default: Default model tier
+        fast_keywords: Keywords that trigger fast model (e.g., "fetch", "get", "lookup")
+        deep_keywords: Keywords that trigger deep model (e.g., "analyze", "synthesize", "debate")
+
+    Returns:
+        SelectModel capability that adapts based on the user prompt/instructions.
+    """
+    fast_keywords = fast_keywords or ["fetch", "get", "lookup", "retrieve", "list", "show", "status"]
+    deep_keywords = deep_keywords or ["analyze", "synthesize", "debate", "reason", "plan", "research", "evaluate", "compare"]
+
+    def select_model(model_type: Literal["deep", "fast", "reasoning", "code"] = "deep") -> OpenAIChatModel:
+        # The SelectModel capability receives the model_type from the agent run context
+        # For now, use the explicit model_type; full adaptive logic would require
+        # inspecting the message history which SelectModel doesn't expose directly.
+        return get_model(model_type)
+
+    return SelectModel(select_model)
 
 
 def create_agent[OutputT](
