@@ -22,13 +22,13 @@ from pydantic_ai.messages import ModelMessage as BaseMessage
 class ModelConfig(BaseModel):
     """Model routing configuration.
 
-    - meta/muse-glimmer-30b (deep/reasoning)
-    - meta/muse-glimmer-30b (fast/medium/code)
+    - nvidia/nemotron-3.5-lightning-30b-a3b (deep/reasoning)
+    - nvidia/nemotron-3.5-lightning-30b-a3b (fast/medium/code)
     """
-    deep: str = "meta/muse-glimmer-30b"
-    fast: str = "meta/muse-glimmer-30b"
-    reasoning: str = "meta/muse-glimmer-30b"
-    code: str = "meta/muse-glimmer-30b"
+    deep: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    fast: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    reasoning: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    code: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
 
 MODEL_CONFIG = ModelConfig()
 

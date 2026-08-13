@@ -19,9 +19,9 @@ class ModelTier(Enum):
 
 # Maps tier -> model name (resolved at runtime from LLMClient)
 MODEL_REGISTRY: dict[ModelTier, str] = {
-    ModelTier.DEEP: "meta/muse-glimmer-30b",
-    ModelTier.MEDIUM: "meta/muse-glimmer-30b",
-    ModelTier.FAST: "meta/muse-glimmer-30b",
+    ModelTier.DEEP: "nvidia/nemotron-3.5-lightning-30b-a3b",
+    ModelTier.MEDIUM: "nvidia/nemotron-3.5-lightning-30b-a3b",
+    ModelTier.FAST: "nvidia/nemotron-3.5-lightning-30b-a3b",
 }
 
 # Maps agent/subagent name -> model tier

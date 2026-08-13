@@ -48,15 +48,15 @@ CAPABILITIES: dict[str, dict[str, Any]] = {
     "openrouter": {
         "available": True,
         "rate_limited": "often",    # 50 free/day shared across all users
-        "best_model": "meta/muse-glimmer-30b",
+        "best_model": "nvidia/nemotron-3.5-lightning-30b-a3b",
         "detail": "Rate-limited often. Use NVIDIA NIM as primary instead.",
     },
     "nvidia_nim": {
         "available": True,
         "rate_limited": False,      # Separately quota per model
         "best_models": [
-            "meta/muse-glimmer-30b",          # reasoning
-            "meta/muse-glimmer-30b",             # general
+            "nvidia/nemotron-3.5-lightning-30b-a3b",          # reasoning
+            "nvidia/nemotron-3.5-lightning-30b-a3b",             # general
         ],
         "detail": "NVIDIA-hosted, free tier. Better reliability than OpenRouter.",
     },

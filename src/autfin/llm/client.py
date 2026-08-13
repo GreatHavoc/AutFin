@@ -185,8 +185,8 @@ class LLMClient:
 
     def __init__(
         self,
-        deep_model: str = "meta/muse-glimmer-30b",
-        fast_model: str = "meta/muse-glimmer-30b",
+        deep_model: str = "nvidia/nemotron-3.5-lightning-30b-a3b",
+        fast_model: str = "nvidia/nemotron-3.5-lightning-30b-a3b",
         temperature: float = 0.0,
         max_retries: int = 2,
         timeout: float = 180.0,
@@ -494,13 +494,13 @@ def get_llm_client() -> LLMClient:
                 nvidia_key = os.environ.get("NVIDIA_NIM_API_KEY", "")
                 if nvidia_key:
                     _default_client = LLMClient(
-                        deep_model="meta/muse-glimmer-30b",
-                        fast_model="meta/muse-glimmer-30b",
+                        deep_model="nvidia/nemotron-3.5-lightning-30b-a3b",
+                        fast_model="nvidia/nemotron-3.5-lightning-30b-a3b",
                         temperature=settings.model_temperature,
                         base_url="https://integrate.api.nvidia.com/v1",
                         api_key=nvidia_key,
                     )
-                    logger.info("LLM client configured: NVIDIA NIM (meta/muse-glimmer-30b)")
+                    logger.info("LLM client configured: NVIDIA NIM (nvidia/nemotron-3.5-lightning-30b-a3b)")
                 else:
                     # No provider configured â€” disabled
                     _default_client = LLMClient()

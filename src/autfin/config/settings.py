@@ -19,19 +19,19 @@ class AutFinSettings(BaseSettings):
         description="Store mode: 'in-memory' or 'persistent' (SQLite)"
     )
     deep_model: str = Field(
-        default="meta/muse-glimmer-30b",
+        default="nvidia/nemotron-3.5-lightning-30b-a3b",
         description="Primary — ThinkingMachines Inkling (complex reasoning)"
     )
     fast_model: str = Field(
-        default="meta/muse-glimmer-30b",
+        default="nvidia/nemotron-3.5-lightning-30b-a3b",
         description="Fast model — Meta Muse Glimmer 30B (general tasks)"
     )
     nvidia_model: str = Field(
-        default="meta/muse-glimmer-30b",
+        default="nvidia/nemotron-3.5-lightning-30b-a3b",
         description="NVIDIA NIM — Meta Muse Glimmer 30B"
     )
     nvidia_deep_model: str = Field(
-        default="meta/muse-glimmer-30b",
+        default="nvidia/nemotron-3.5-lightning-30b-a3b",
         description="Deep model — ThinkingMachines Inkling (reasoning)"
     )
     modal_vllm_url: str = Field(
