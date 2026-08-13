@@ -55,7 +55,7 @@ CAPABILITIES: dict[str, dict[str, Any]] = {
         "available": True,
         "rate_limited": False,      # Separately quota per model
         "best_models": [
-            "thinkingmachines/inkling",          # reasoning
+            "meta/muse-glimmer-30b",          # reasoning
             "meta/muse-glimmer-30b",             # general
         ],
         "detail": "NVIDIA-hosted, free tier. Better reliability than OpenRouter.",

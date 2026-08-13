@@ -22,12 +22,12 @@ from pydantic_ai.messages import ModelMessage as BaseMessage
 class ModelConfig(BaseModel):
     """Model routing configuration.
 
-    - thinkingmachines/inkling (deep/reasoning)
+    - meta/muse-glimmer-30b (deep/reasoning)
     - meta/muse-glimmer-30b (fast/medium/code)
     """
-    deep: str = "thinkingmachines/inkling"
+    deep: str = "meta/muse-glimmer-30b"
     fast: str = "meta/muse-glimmer-30b"
-    reasoning: str = "thinkingmachines/inkling"
+    reasoning: str = "meta/muse-glimmer-30b"
     code: str = "meta/muse-glimmer-30b"
 
 MODEL_CONFIG = ModelConfig()

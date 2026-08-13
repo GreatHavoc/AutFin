@@ -19,7 +19,7 @@ class AutFinSettings(BaseSettings):
         description="Store mode: 'in-memory' or 'persistent' (SQLite)"
     )
     deep_model: str = Field(
-        default="thinkingmachines/inkling",
+        default="meta/muse-glimmer-30b",
         description="Primary — ThinkingMachines Inkling (complex reasoning)"
     )
     fast_model: str = Field(
@@ -31,7 +31,7 @@ class AutFinSettings(BaseSettings):
         description="NVIDIA NIM — Meta Muse Glimmer 30B"
     )
     nvidia_deep_model: str = Field(
-        default="thinkingmachines/inkling",
+        default="meta/muse-glimmer-30b",
         description="Deep model — ThinkingMachines Inkling (reasoning)"
     )
     modal_vllm_url: str = Field(

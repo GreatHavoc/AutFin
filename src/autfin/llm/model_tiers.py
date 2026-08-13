@@ -19,7 +19,7 @@ class ModelTier(Enum):
 
 # Maps tier -> model name (resolved at runtime from LLMClient)
 MODEL_REGISTRY: dict[ModelTier, str] = {
-    ModelTier.DEEP: "thinkingmachines/inkling",
+    ModelTier.DEEP: "meta/muse-glimmer-30b",
     ModelTier.MEDIUM: "meta/muse-glimmer-30b",
     ModelTier.FAST: "meta/muse-glimmer-30b",
 }
