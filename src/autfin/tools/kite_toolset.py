@@ -18,11 +18,12 @@ def create_kite_toolset() -> FunctionToolset[AgentDeps]:
     """Create a FunctionToolset with all Kite tools."""
     toolset = FunctionToolset[AgentDeps]()
     
-    # Get KiteTools instance from deps (set by runtime)
+    # Get KiteTools instance from deps or singleton
     def _get_kite(ctx: RunContext[AgentDeps]) -> KiteTools:
         kite = ctx.deps.kite_client
         if not kite:
-            raise RuntimeError("Kite client not available in deps")
+            from autfin.tools.kite_wrapper import get_kite_instance
+            kite = get_kite_instance()
         return kite
     
     @toolset.tool
