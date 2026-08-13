@@ -67,7 +67,7 @@ quant_agent = create_agent(
     instructions=quant_instructions.default,
     capabilities=[
         Thinking(effort="high"),
-        CodeMode(tools=['all']),  # Sandbox all eligible tools
+        CodeMode(),  # Sandbox all tools (default)
         create_debug_instrumentation(),
     ],
     toolsets=[risk_toolset, technical_toolset],

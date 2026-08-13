@@ -60,9 +60,13 @@ async def record_market_event(
         "regime": metadata.get("regime", "unknown") if metadata else "unknown",
     }
 
-    # Write to memory
+    # Write to memory using the Memory capability
     from pydantic_ai_harness.memory import MemoryToolset
-    toolset = MemoryToolset(store=FileStore("./data/memory"), namespace=ctx.deps.user_id)
+    mem_capability = Memory(
+        FileStore("./data/memory"),
+        namespace=ctx.deps.user_id,
+    )
+    toolset = MemoryToolset(mem_capability)
     result = await toolset.write_memory(ctx, content=str(entry), file="MARKET_EVENTS.md")
 
     return MemoryResult(
@@ -106,7 +110,11 @@ async def record_trade_outcome(
 
     # Write to memory
     from pydantic_ai_harness.memory import MemoryToolset
-    toolset = MemoryToolset(store=FileStore("./data/memory"), namespace=ctx.deps.user_id)
+    mem_capability = Memory(
+        FileStore("./data/memory"),
+        namespace=ctx.deps.user_id,
+    )
+    toolset = MemoryToolset(mem_capability)
     result = await toolset.write_memory(ctx, content=str(entry), file="TRADE_OUTCOMES.md")
 
     return MemoryResult(
@@ -141,7 +149,11 @@ async def record_pattern(
     }
 
     from pydantic_ai_harness.memory import MemoryToolset
-    toolset = MemoryToolset(store=FileStore("./data/memory"), namespace=ctx.deps.user_id)
+    mem_capability = Memory(
+        FileStore("./data/memory"),
+        namespace=ctx.deps.user_id,
+    )
+    toolset = MemoryToolset(mem_capability)
     result = await toolset.write_memory(ctx, content=str(entry), file="PATTERNS.md")
 
     return MemoryResult(
@@ -159,8 +171,11 @@ async def get_context_for_symbol(
 ) -> MemoryResult:
     """Retrieve relevant memories for a symbol."""
     from pydantic_ai_harness.memory import MemoryToolset
-
-    toolset = MemoryToolset(store=FileStore("./data/memory"), namespace=ctx.deps.user_id)
+    mem_capability = Memory(
+        FileStore("./data/memory"),
+        namespace=ctx.deps.user_id,
+    )
+    toolset = MemoryToolset(mem_capability)
 
     result = {}
     if context_type in ("market", "all"):
@@ -190,8 +205,11 @@ async def get_calibration(
 ) -> MemoryResult:
     """Get conviction calibration stats (accuracy of confidence estimates)."""
     from pydantic_ai_harness.memory import MemoryToolset
-
-    toolset = MemoryToolset(store=FileStore("./data/memory"), namespace=ctx.deps.user_id)
+    mem_capability = Memory(
+        FileStore("./data/memory"),
+        namespace=ctx.deps.user_id,
+    )
+    toolset = MemoryToolset(mem_capability)
 
     query_parts = ["calibration"]
     if agent_name:
@@ -222,8 +240,11 @@ async def get_calibration(
 async def get_memory_stats(ctx: RunContext[AgentDeps]) -> MemoryResult:
     """Get memory system statistics."""
     from pydantic_ai_harness.memory import MemoryToolset
-
-    toolset = MemoryToolset(store=FileStore("./data/memory"), namespace=ctx.deps.user_id)
+    mem_capability = Memory(
+        FileStore("./data/memory"),
+        namespace=ctx.deps.user_id,
+    )
+    toolset = MemoryToolset(mem_capability)
 
     # Read all memory files
     files = ["MEMORY.md", "MARKET_EVENTS.md", "TRADE_OUTCOMES.md", "PATTERNS.md"]
