@@ -1,7 +1,7 @@
 """
 AutFin v7.0 — Pydantic AI Agent Implementations
 
-New agents built with Pydantic AI capabilities (SubAgents, DynamicWorkflow, Planning, Memory, CodeMode, Guardrails, etc.)
+New agents built with Pydantic AI capabilities (SubAgents, Planning, Memory, CodeMode, Guardrails, etc.)
 """
 from __future__ import annotations
 
@@ -35,8 +35,6 @@ from .managed_prompts import (
 from .supervisor import (
     supervisor_agent,
     subagents_capability,
-    morning_workflow,
-    quarterly_workflow,
     planning_capability,
     memory_capability,
     system_reminders_capability,
@@ -104,8 +102,6 @@ __all__ = [
     # Supervisor & capabilities
     "supervisor_agent",
     "subagents_capability",
-    "morning_workflow",
-    "quarterly_workflow",
     "planning_capability",
     "memory_capability",
     "system_reminders_capability",

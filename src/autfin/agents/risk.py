@@ -4,7 +4,7 @@ Position sizing, stop-loss, correlation checks, risk budgeting.
 """
 from __future__ import annotations
 
-from decimal import Decimal
+# ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
 from typing import Any
 
 from pydantic_ai import Agent, RunContext
@@ -77,7 +77,7 @@ async def assess_trade(
     assessment = await assess_risk(
         symbol=symbol,
         action=action,
-        entry_price=Decimal(str(entry_price)),
+        entry_price=float(entry_price),
         conviction=conviction,
         capital=capital,
         portfolio=portfolio_holdings,
@@ -225,20 +225,20 @@ async def check_portfolio_heat(
     new_trade: TradeOrder | None = None,
 ) -> dict:
     """Check total portfolio risk (heat)."""
-    total_risk = Decimal("0")
+    total_risk = 0.0
     total_value = sum(h.market_value for h in portfolio_holdings)
 
     for h in portfolio_holdings:
         # Estimate risk per holding (8% stop loss)
-        risk = h.market_value * Decimal("0.08")
+        risk = h.market_value * 0.08
         total_risk += risk
 
     if new_trade:
-        new_risk = Decimal(str(new_trade.quantity)) * Decimal(str(new_trade.price or 0)) * Decimal("0.08")
+        new_risk = float(new_trade.quantity) * float(new_trade.price or 0) * 0.08
         total_risk += new_risk
         total_value += new_risk
 
-    heat_pct = float(total_risk / total_value) if total_value > 0 else 0
+    heat_pct = total_risk / total_value if total_value > 0 else 0
 
     return {
         "total_risk": total_risk,

@@ -4,7 +4,7 @@ Multi-agent coordination conferences for capital allocation.
 """
 from __future__ import annotations
 
-from decimal import Decimal
+# ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
 from typing import Any
 
 from pydantic_ai import Agent, RunContext
@@ -50,8 +50,8 @@ async def run_morning_conference(
 
     decisions = []
     capital_allocation = {}
-    remaining_capital = capital * Decimal("0.1")  # Keep 10% cash
-    risk_budget = capital * Decimal(str(deps.max_drawdown_pct))
+    remaining_capital = capital * 0.1  # Keep 10% cash
+    risk_budget = capital * deps.max_drawdown_pct
 
     # Process each candidate through debate + risk
     for symbol in candidates[:10]:  # Max 10 candidates
@@ -92,7 +92,7 @@ async def run_morning_conference(
 
         # Approved - allocate capital
         position_size = risk_result.position_size
-        position_value = position_size * Decimal(str(risk_result.stop_loss))  # Approximate
+        position_value = position_size * risk_result.stop_loss  # Approximate
 
         if position_value > remaining_capital:
             # Scale down
@@ -112,7 +112,7 @@ async def run_morning_conference(
 
         capital_allocation[symbol] = position_value
         remaining_capital -= position_value
-        risk_budget -= position_value * Decimal("0.08")  # 8% risk per position
+        risk_budget -= position_value * 0.08  # 8% risk per position
 
     # Determine regime
     regime = determine_regime(market_snapshot)

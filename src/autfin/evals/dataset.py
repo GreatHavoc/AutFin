@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from decimal import Decimal
+# ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
 from typing import Any
 
 import logfire
@@ -815,7 +815,7 @@ async def run_evaluations(
             # Create test deps
             deps = AgentDeps(
                 user_id=f"eval_{agent_name}",
-                capital=Decimal("1000000"),
+                capital=1_000_000.0,
                 mode="paper",
             )
             
@@ -855,7 +855,7 @@ def create_test_deps(agent_name: str = "eval") -> AgentDeps:
     """Create test dependencies for evaluation."""
     return AgentDeps(
         user_id=f"eval_{agent_name}",
-        capital=Decimal("1000000"),
+        capital=1_000_000.0,
         mode="paper",
     )
 

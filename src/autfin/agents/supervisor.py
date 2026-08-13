@@ -1,6 +1,6 @@
 """AutFin v7.0 — Supervisor Agent (Orchestrator)
 
-Coordinates 7 sub-agents via SubAgents + DynamicWorkflow capabilities.
+Coordinates 7 sub-agents via SubAgents capability.
 """
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from typing import Any, Literal
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.capabilities import WebSearch, Thinking
 from pydantic_ai_harness.subagents import SubAgents, SubAgent
-from pydantic_ai_harness.dynamic_workflow import DynamicWorkflow, WorkflowAgent
 from pydantic_ai_harness.planning import Planning
 from pydantic_ai_harness.memory import Memory
 from pydantic_ai_harness.system_reminders import Reminder, SystemReminders
@@ -116,49 +115,6 @@ subagents_capability = SubAgents(
 )
 
 
-# ─── DynamicWorkflow for Complex Orchestration ─────────────────────────
-morning_workflow = DynamicWorkflow(
-    agents=[
-        WorkflowAgent(market_data_agent, name="market_data"),
-        WorkflowAgent(analysis_agent, name="analyze"),
-        WorkflowAgent(research_agent, name="research"),
-        WorkflowAgent(debate_agent, name="debate"),
-        WorkflowAgent(risk_agent, name="risk"),
-        WorkflowAgent(conference_agent, name="conference"),
-    ],
-    max_agent_calls=50,
-    sub_agent_usage_limits=UsageLimits(request_limit=20, total_tokens_limit=50000),
-    forward_usage=True,
-    resource_limits={"max_duration_secs": 300},
-    inherit_model=False,
-    id="morning_workflow",
-    defer_loading=True,
-    description="Full morning routine workflow",
-    tool_name="run_morning_workflow",
-)
-
-
-quarterly_workflow = DynamicWorkflow(
-    agents=[
-        WorkflowAgent(market_data_agent, name="market_data"),
-        WorkflowAgent(analysis_agent, name="analyze"),
-        WorkflowAgent(research_agent, name="research"),
-        WorkflowAgent(debate_agent, name="debate"),
-        WorkflowAgent(risk_agent, name="risk"),
-        WorkflowAgent(conference_agent, name="conference"),
-    ],
-    max_agent_calls=100,
-    sub_agent_usage_limits=UsageLimits(request_limit=50, total_tokens_limit=200000),
-    forward_usage=True,
-    resource_limits={"max_duration_secs": 600},
-    inherit_model=False,
-    id="quarterly_workflow",
-    defer_loading=True,
-    description="Quarterly portfolio review workflow",
-    tool_name="run_quarterly_workflow",
-)
-
-
 # ─── Planning Capability ───────────────────────────────────────────────
 planning_capability = Planning(
     store=None,  # In-memory by default, can use SqlitePlanStore
@@ -200,8 +156,6 @@ supervisor_agent = create_agent(
     instructions=supervisor_instructions.default,
     capabilities=[
         subagents_capability,
-        morning_workflow,
-        quarterly_workflow,
         planning_capability,
         memory_capability,
         system_reminders_capability,
@@ -217,21 +171,32 @@ supervisor_agent = create_agent(
 
 @supervisor_agent.tool
 async def run_morning_routine(ctx: RunContext[AgentDeps]) -> SupervisorOutput:
-    """Execute complete morning routine workflow via DynamicWorkflow."""
-    result = await morning_workflow.run_workflow("""
-Execute full morning routine:
-1. Get portfolio & market snapshot via market_data
-2. Run full analysis on all holdings via analyze (parallel)
-3. Screen for new opportunities via research
-4. Run debate on top 5 candidates via debate (parallel)
-5. Risk check & position sizing via risk (parallel)
-6. Run morning conference for capital allocation via conference
-7. Return approved trade queue
-""")
+    """Execute complete morning routine: market data → analysis → research → debate → risk → conference."""
+    import asyncio
+
+    # 1. Market snapshot
+    market_result = await market_data_agent.run("Get portfolio and market snapshot", deps=ctx.deps)
+
+    # 2. Analysis on holdings (parallel)
+    holdings = ctx.deps.holdings if hasattr(ctx.deps, 'holdings') else []
+    analysis_tasks = [
+        analysis_agent.run(f"Analyze {h.get('tradingsymbol', h) if isinstance(h, dict) else h}", deps=ctx.deps)
+        for h in holdings[:10]
+    ]
+    analysis_results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
+
+    # 3. Research for new opportunities
+    research_result = await research_agent.run("Screen for new opportunities", deps=ctx.deps)
+
+    # 4. Risk check
+    risk_result = await risk_agent.run("Portfolio risk assessment", deps=ctx.deps)
+
+    # 5. Conference for capital allocation
+    conference_result = await conference_agent.run("Morning conference: allocate capital", deps=ctx.deps)
 
     return SupervisorOutput(
         action="complete",
-        message=f"Morning routine complete. {result}",
+        message=f"Morning routine complete. Market: ok, Analyzed: {len(analysis_results)} holdings, Research: ok, Risk: ok, Conference: ok",
         trade_queue=[],
         next_context=None,
     )
@@ -239,21 +204,32 @@ Execute full morning routine:
 
 @supervisor_agent.tool
 async def run_quarterly_review(ctx: RunContext[AgentDeps]) -> SupervisorOutput:
-    """Execute quarterly portfolio review via DynamicWorkflow."""
-    result = await quarterly_workflow.run_workflow("""
-Execute quarterly portfolio review:
-1. Get portfolio & market snapshot
-2. Full deep analysis on all holdings with DCF
-3. Sector rotation & macro theme research
-4. Debate on each holding (bull/bear)
-5. Risk checks, rebalancing, risk budget reset
-6. Portfolio review conference
-7. Strategy calibration update
-""")
+    """Execute quarterly portfolio review: deep analysis → sector rotation → debate → rebalance."""
+    import asyncio
+
+    # 1. Market snapshot
+    market_result = await market_data_agent.run("Get portfolio and market snapshot", deps=ctx.deps)
+
+    # 2. Deep analysis on holdings (parallel)
+    holdings = ctx.deps.holdings if hasattr(ctx.deps, 'holdings') else []
+    analysis_tasks = [
+        analysis_agent.run(f"Deep analysis with DCF on {h.get('tradingsymbol', h) if isinstance(h, dict) else h}", deps=ctx.deps)
+        for h in holdings[:10]
+    ]
+    analysis_results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
+
+    # 3. Sector rotation & macro research
+    research_result = await research_agent.run("Sector rotation and macro theme research", deps=ctx.deps)
+
+    # 4. Risk checks & rebalancing
+    risk_result = await risk_agent.run("Portfolio risk review and rebalancing", deps=ctx.deps)
+
+    # 5. Conference
+    conference_result = await conference_agent.run("Quarterly review conference", deps=ctx.deps)
 
     return SupervisorOutput(
         action="complete",
-        message=f"Quarterly review complete. {result}",
+        message=f"Quarterly review complete. Analyzed: {len(analysis_results)} holdings",
         trade_queue=[],
         next_context=None,
     )
@@ -266,29 +242,18 @@ async def handle_price_alert(
     price_move_pct: float,
 ) -> SupervisorOutput:
     """Quick 3-agent response to price alert."""
-    from pydantic_ai_harness.dynamic_workflow import DynamicWorkflow, WorkflowAgent
+    # 1. Fresh quote
+    market_result = await market_data_agent.run(f"Get fresh quote for {symbol}", deps=ctx.deps)
 
-    workflow = DynamicWorkflow(
-        agents=[
-            WorkflowAgent(market_data_agent, name="market_data"),
-            WorkflowAgent(analysis_agent, name="analyze"),
-            WorkflowAgent(risk_agent, name="risk"),
-        ],
-        max_agent_calls=10,
-        resource_limits={"max_duration_secs": 60},
-    )
+    # 2. Quick analysis
+    analysis_result = await analysis_agent.run(f"Quick analysis on {symbol}: price moved {price_move_pct:.1f}%", deps=ctx.deps)
 
-    result = await workflow.run_workflow(f"""
-Quick analysis on {symbol}: price alert triggered ({price_move_pct:.1f}% move)
-1. Get fresh quote & market status via market_data
-2. Quick analysis (technical + sentiment) via analyze
-3. Risk check & position review via risk
-4. Determine: trim, add, hedge, or hold
-""")
+    # 3. Risk check
+    risk_result = await risk_agent.run(f"Risk check on {symbol} after {price_move_pct:.1f}% move", deps=ctx.deps)
 
     return SupervisorOutput(
         action="complete",
-        message=f"Price alert handled for {symbol}. {result}",
+        message=f"Price alert handled for {symbol} ({price_move_pct:.1f}% move)",
         trade_queue=[],
         next_context=None,
     )

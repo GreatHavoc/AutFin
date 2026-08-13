@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
+# ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
 from typing import Annotated, Any, Literal, NotRequired, TypedDict
 from uuid import uuid4
 
@@ -43,9 +43,9 @@ class Holding(BaseModel):
 
     tradingsymbol: str
     qty: int
-    avg_price: Decimal
-    ltp: Decimal
-    pnl: Decimal
+    avg_price: float
+    ltp: float
+    pnl: float
     sector: str = ""
     exchange: str = "NSE"
 
@@ -56,11 +56,11 @@ class Holding(BaseModel):
         return float((self.ltp - self.avg_price) / self.avg_price * 100)
 
     @property
-    def market_value(self) -> Decimal:
+    def market_value(self) -> float:
         return self.ltp * self.qty
 
     @property
-    def invested_value(self) -> Decimal:
+    def invested_value(self) -> float:
         return self.avg_price * self.qty
 
 
@@ -69,17 +69,17 @@ class Quote(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
     symbol: str
-    ltp: Decimal
-    change: Decimal
+    ltp: float
+    change: float
     change_pct: float
     volume: int
     oi: int = 0
-    bid: Decimal | None = None
-    ask: Decimal | None = None
-    high: Decimal | None = None
-    low: Decimal | None = None
-    open: Decimal | None = None
-    prev_close: Decimal | None = None
+    bid: float | None = None
+    ask: float | None = None
+    high: float | None = None
+    low: float | None = None
+    open: float | None = None
+    prev_close: float | None = None
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
@@ -106,15 +106,15 @@ class MarketSnapshot(BaseModel):
     next_refresh: str = ""  # ISO format
 
     @property
-    def total_portfolio_value(self) -> Decimal:
+    def total_portfolio_value(self) -> float:
         return sum(h.market_value for h in self.portfolio)
 
     @property
-    def total_pnl(self) -> Decimal:
+    def total_pnl(self) -> float:
         return sum(h.pnl for h in self.portfolio)
 
     @property
-    def total_invested(self) -> Decimal:
+    def total_invested(self) -> float:
         return sum(h.invested_value for h in self.portfolio)
 
 
@@ -133,7 +133,7 @@ class AgentDeps(BaseModel):
 
     # Risk profile
     risk_profile: Literal["conservative", "moderate", "aggressive"] = "moderate"
-    capital: Decimal = Decimal("1000000")
+    capital: float = 1_000_000.0
     max_position_pct: float = 0.3
     sector_limit_pct: float = 0.3
     max_drawdown_pct: float = 0.15
@@ -150,12 +150,12 @@ class AgentDeps(BaseModel):
     as_of: datetime | None = None
 
     @property
-    def max_position_size(self) -> Decimal:
-        return self.capital * Decimal(str(self.max_position_pct))
+    def max_position_size(self) -> float:
+        return self.capital * self.max_position_pct
 
     @property
-    def max_sector_exposure(self) -> Decimal:
-        return self.capital * Decimal(str(self.sector_limit_pct))
+    def max_sector_exposure(self) -> float:
+        return self.capital * self.sector_limit_pct
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -233,12 +233,12 @@ class SentimentReport(BaseModel):
 class ValuationReport(BaseModel):
     """Valuation report for a single symbol."""
     symbol: str
-    dcf_base: Decimal | None = None
-    dcf_bull: Decimal | None = None
-    dcf_bear: Decimal | None = None
-    reverse_dcf: Decimal | None = None
-    fair_value_range: tuple[Decimal, Decimal] | None = None
-    current_price: Decimal | None = None
+    dcf_base: float | None = None
+    dcf_bull: float | None = None
+    dcf_bear: float | None = None
+    reverse_dcf: float | None = None
+    fair_value_range: tuple[float, float] | None = None
+    current_price: float | None = None
     upside_pct: float | None = None
     key_assumptions: dict[str, Any] = Field(default_factory=dict)
     summary: str = ""
@@ -286,10 +286,10 @@ class ResearchReport(BaseModel):
     bear_case: str = ""
     catalysts: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
-    valuation_range: tuple[Decimal, Decimal] | None = None
+    valuation_range: tuple[float, float] | None = None
     peer_comparison: dict[str, dict] = Field(default_factory=dict)
     conviction: float = Field(ge=0, le=1, default=0.5)
-    target_price: Decimal | None = None
+    target_price: float | None = None
     rating: Literal["strong_buy", "buy", "hold", "sell", "strong_sell"] = "hold"
     portfolio_impact: str = ""
     timestamp: datetime = Field(default_factory=datetime.now)
@@ -299,14 +299,14 @@ class RiskAssessment(BaseModel):
     """Risk assessment for a potential trade."""
     symbol: str
     position_size: int = 0
-    max_loss: Decimal = Decimal("0")
+    max_loss: float = 0.0
     risk_reward: float = 0.0
     sector_exposure: float = 0.0
     portfolio_heat: float = 0.0
     verdict: Literal["approve", "reduce", "reject", "conditional"] = "conditional"
     conditions: list[str] = Field(default_factory=list)
-    stop_loss: Decimal = Decimal("0")
-    target: Decimal = Decimal("0")
+    stop_loss: float = 0.0
+    target: float = 0.0
     max_position_pct: float = 0.0
     correlation_risk: float = 0.0
     rationale: str = ""
@@ -341,7 +341,7 @@ class ConferenceResult(BaseModel):
     conference_type: Literal["morning", "trade_review", "emergency", "experience"]
     regime: Literal["normal", "high_volatility", "crash", "rally", "low_liquidity"]
     decisions: list[dict] = Field(default_factory=list)
-    capital_allocation: dict[str, Decimal] = Field(default_factory=dict)
+    capital_allocation: dict[str, float] = Field(default_factory=dict)
     risk_alerts: list[str] = Field(default_factory=list)
     next_meeting: datetime | None = None
     timestamp: datetime = Field(default_factory=datetime.now)
@@ -366,7 +366,7 @@ class ScreeningCandidate(BaseModel):
     sentiment_score: float = 0.0
     valuation_score: float = 0.0
     sector: str = ""
-    market_cap: Decimal = Decimal("0")
+    market_cap: float = 0.0
     recommendation: Literal["strong_buy", "buy", "hold", "sell", "strong_sell"] = "hold"
 
 
@@ -384,8 +384,8 @@ class TradeOrder(BaseModel):
     action: Literal["buy", "sell"]
     quantity: int
     order_type: Literal["market", "limit", "sl", "slm"] = "market"
-    price: Decimal | None = None
-    trigger_price: Decimal | None = None
+    price: float | None = None
+    trigger_price: float | None = None
     product: Literal["CNC", "MIS", "NRML"] = "CNC"
     tag: str = ""
     risk_reward: float | None = None
@@ -398,7 +398,7 @@ class ExecutionReport(BaseModel):
     status: Literal["complete", "rejected", "partial", "pending"] = "pending"
     order_id: str | None = None
     filled_qty: int = 0
-    avg_price: Decimal | None = None
+    avg_price: float | None = None
     message: str = ""
     timestamp: datetime = Field(default_factory=datetime.now)
 
@@ -448,9 +448,9 @@ class AgentState(BaseModel):
     price_move_pct: float | None = None
 
     # ── Capital (from Kite SDK — balance IS budget) ──
-    available_cash: Decimal = Decimal("0")
-    utilized_margin: Decimal = Decimal("0")
-    available_margin: Decimal = Decimal("0")
+    available_cash: float = 0.0
+    utilized_margin: float = 0.0
+    available_margin: float = 0.0
 
     # ── Portfolio snapshot ──
     holdings: list[Holding] = Field(default_factory=list)
@@ -618,7 +618,7 @@ SupervisorOutputT = SupervisorOutput
 def create_agent_deps(
     user_id: str = "default",
     mode: Literal["paper", "live", "backtest"] = "paper",
-    capital: Decimal = Decimal("1000000"),
+    capital: float = 1_000_000.0,
     risk_profile: Literal["conservative", "moderate", "aggressive"] = "moderate",
     **kwargs
 ) -> AgentDeps:

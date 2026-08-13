@@ -19,17 +19,17 @@ from autfin.types import AgentDeps
 
 # Define quant output types
 from pydantic import BaseModel, ConfigDict, Field
-from decimal import Decimal
+# ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
 
 
 class PortfolioMetrics(BaseModel):
     """Portfolio risk/return metrics."""
     model_config = ConfigDict(validate_assignment=True)
-    
-    total_value: Decimal
-    var_95: Decimal  # Value at Risk 95%
-    var_99: Decimal  # Value at Risk 99%
-    cvar_95: Decimal  # Conditional VaR (Expected Shortfall)
+
+    total_value: float
+    var_95: float  # Value at Risk 95%
+    var_99: float  # Value at Risk 99%
+    cvar_95: float  # Conditional VaR (Expected Shortfall)
     sharpe_ratio: float
     sortino_ratio: float
     max_drawdown: float
