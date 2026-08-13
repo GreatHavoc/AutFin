@@ -1,6 +1,6 @@
 """AutFin v7.0 — Supervisor Agent (Orchestrator)
 
-Coordinates 7 sub-agents via SubAgents capability.
+Coordinates 7 sub-agents via SubAgents + DynamicWorkflow capabilities.
 """
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any, Literal
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.capabilities import WebSearch, Thinking
 from pydantic_ai_harness.subagents import SubAgents, SubAgent
+from pydantic_ai_harness.dynamic_workflow import DynamicWorkflow, WorkflowAgent
 from pydantic_ai_harness.planning import Planning
 from pydantic_ai_harness.memory import Memory
 from pydantic_ai_harness.system_reminders import Reminder, SystemReminders
@@ -115,6 +116,31 @@ subagents_capability = SubAgents(
 )
 
 
+# ─── DynamicWorkflow for Complex Orchestration ─────────────────────────
+# The MODEL writes the orchestration script via run_workflow tool.
+# Sub-agents become async functions: await market_data_agent(task="...")
+workflow_capability = DynamicWorkflow(
+    agents=[
+        WorkflowAgent(market_data_agent, name="market_data"),
+        WorkflowAgent(analysis_agent, name="analysis"),
+        WorkflowAgent(research_agent, name="research"),
+        WorkflowAgent(debate_agent, name="debate"),
+        WorkflowAgent(risk_agent, name="risk"),
+        WorkflowAgent(conference_agent, name="conference"),
+        WorkflowAgent(memory_agent, name="memory"),
+    ],
+    max_agent_calls=50,
+    sub_agent_usage_limits=UsageLimits(request_limit=20, total_tokens_limit=50000),
+    forward_usage=True,
+    resource_limits={"max_duration_secs": 300},
+    inherit_model=False,
+    id="supervisor_workflow",
+    defer_loading=True,
+    description="Multi-agent orchestration: market data, analysis, research, debate, risk, conference",
+    tool_name="run_workflow",
+)
+
+
 # ─── Planning Capability ───────────────────────────────────────────────
 planning_capability = Planning(
     store=None,  # In-memory by default, can use SqlitePlanStore
@@ -156,6 +182,7 @@ supervisor_agent = create_agent(
     instructions=supervisor_instructions.default,
     capabilities=[
         subagents_capability,
+        workflow_capability,
         planning_capability,
         memory_capability,
         system_reminders_capability,

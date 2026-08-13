@@ -35,6 +35,7 @@ from .managed_prompts import (
 from .supervisor import (
     supervisor_agent,
     subagents_capability,
+    workflow_capability,
     planning_capability,
     memory_capability,
     system_reminders_capability,
@@ -102,6 +103,7 @@ __all__ = [
     # Supervisor & capabilities
     "supervisor_agent",
     "subagents_capability",
+    "workflow_capability",
     "planning_capability",
     "memory_capability",
     "system_reminders_capability",
