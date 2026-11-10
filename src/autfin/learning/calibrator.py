@@ -15,9 +15,9 @@ class CalibrationTracker:
 
     async def get_calibration(self) -> dict:
         """Get current calibration state using learning_retriever."""
-        from src.autfin.learning.retriever import _compute_calibration
+        from autfin.learning.retriever import _compute_calibration
         try:
-            from src.autfin.memory.database import get_connection
+            from autfin.memory.database import get_connection
             db = get_connection()
             return _compute_calibration(db)
         except Exception as e:
@@ -66,7 +66,7 @@ async def calibrate_conviction(
 async def detect_patterns(min_samples: int = 10) -> list[dict]:
     """Detect recurring patterns in trade outcomes."""
     try:
-        from src.autfin.memory.database import get_connection
+        from autfin.memory.database import get_connection
         db = get_connection()
 
         patterns: list[dict] = []
@@ -131,7 +131,7 @@ async def record_learning(
 ) -> bool:
     """Record a trade outcome in the learning journal and update online calibration."""
     try:
-        from src.autfin.memory.database import get_connection
+        from autfin.memory.database import get_connection
         db = get_connection()
         db.execute(
             "INSERT INTO learning_journal "
@@ -150,7 +150,7 @@ async def record_learning(
 
         # Update online learner with this trade outcome
         try:
-            from src.autfin.learning.online import get_online_learner
+            from autfin.learning.online import get_online_learner
             learner = get_online_learner()
             # Convert PnL to binary outcome: 1.0 = win, 0.0 = loss
             binary_outcome = 1.0 if pnl_pct > 0 else 0.0

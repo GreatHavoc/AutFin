@@ -35,7 +35,7 @@ async def retrieve_learnings(
         }
     """
     try:
-        from src.autfin.memory.database import get_connection
+        from autfin.memory.database import get_connection
         db = get_connection()
 
         where = "WHERE 1=1"
@@ -59,7 +59,7 @@ async def retrieve_learnings(
         ).fetchall()
 
         # Try semantic embeddings first, fall back to keyword overlap
-        from src.autfin.memory.embeddings import cosine_similarity, generate_embedding
+        from autfin.memory.embeddings import cosine_similarity, generate_embedding
 
         query_embedding = None
         try:

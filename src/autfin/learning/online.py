@@ -48,7 +48,11 @@ class BucketStats:
         """Brier score: mean squared difference between predicted and actual."""
         if self.n == 0:
             return 0.0
-        return self.sum_conv_outcome / self.n - 2 * self.mean_conviction * self.mean_outcome + self.mean_outcome ** 2
+        return (
+            self.sum_conv_sq / self.n
+            - 2 * (self.sum_conv_outcome / self.n)
+            + self.mean_outcome ** 2
+        )
 
     @property
     def variance(self) -> float:

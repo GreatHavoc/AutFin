@@ -1,8 +1,12 @@
 """
 Database schema and CRUD operations for AutFin
 """
+import logging
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 DB_PATH = Path(__file__).parent.parent.parent.parent / "data" / "autfin.db"
 
@@ -175,10 +179,53 @@ def _migrate_learning_journal(cursor):
         pass
 
 
+def _is_healthy(conn) -> bool:
+    """True if the SQLite file opens and passes a structural check."""
+    try:
+        return conn.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+    except sqlite3.DatabaseError:
+        return False
+
+
+def _quarantine_corrupt_db() -> None:
+    """Move an unreadable database aside instead of deleting it.
+
+    Trade history is local-only and gitignored, so the corrupt file is the only
+    copy: rename with a timestamp and re-init rather than dropping it.
+    """
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    broken = DB_PATH.with_name(f"{DB_PATH.name}.malformed-{stamp}")
+    try:
+        DB_PATH.rename(broken)
+        logger.error(
+            "Database %s was unreadable — quarantined as %s and re-initialized "
+            "empty. Restore from that file once it has been repaired.",
+            DB_PATH, broken,
+        )
+    except OSError as exc:
+        raise RuntimeError(
+            f"Cannot quarantine corrupt database {DB_PATH}: {exc}. "
+            "Move or delete it manually, then re-run."
+        ) from exc
+
+
 def get_connection():
-    """Get a database connection."""
+    """Get a connection, recovering from a corrupt database file.
+
+    A corrupt file used to be handed straight to callers, and every learning
+    function wraps its DB work in `except Exception` — so the whole learning
+    engine returned empty results with only a debug log.
+    """
     if not DB_PATH.exists():
         init_database()
+
+    conn = sqlite3.connect(DB_PATH, isolation_level=None)
+    if _is_healthy(conn):
+        return conn
+
+    conn.close()
+    _quarantine_corrupt_db()
+    init_database()
     return sqlite3.connect(DB_PATH, isolation_level=None)
 
 

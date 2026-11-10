@@ -96,7 +96,7 @@ async def judge_answer(
 
     # Try LLM judge first
     try:
-        from src.autfin.llm.client import get_llm_client
+        from autfin.llm.client import get_llm_client
         llm = get_llm_client()
         if llm.is_available and model is None:
             return await _llm_judge(answer, context_chunks, llm)

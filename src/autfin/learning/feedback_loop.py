@@ -26,8 +26,8 @@ async def pre_trade_context(
         }
     """
     try:
-        from src.autfin.learning.calibrator import CalibrationTracker
-        from src.autfin.learning.retriever import retrieve_learnings, search_similar_setups
+        from autfin.learning.calibrator import CalibrationTracker
+        from autfin.learning.retriever import retrieve_learnings, search_similar_setups
 
         query = f"{action} {symbol}"
         if sector:
@@ -86,7 +86,7 @@ async def post_trade_learn(
     Returns: {recorded: bool, updated_calibration: {...}, new_patterns: [...]}
     """
     try:
-        from src.autfin.learning.calibrator import (
+        from autfin.learning.calibrator import (
             CalibrationTracker,
             detect_patterns,
             record_learning,
@@ -122,8 +122,8 @@ async def get_learning_summary() -> dict:
     Returns calibration, patterns, and recent trade history.
     """
     try:
-        from src.autfin.learning.calibrator import CalibrationTracker, detect_patterns
-        from src.autfin.learning.retriever import retrieve_learnings
+        from autfin.learning.calibrator import CalibrationTracker, detect_patterns
+        from autfin.learning.retriever import retrieve_learnings
 
         tracker = CalibrationTracker()
         calibration_task = tracker.get_calibration()

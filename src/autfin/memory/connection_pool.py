@@ -4,7 +4,7 @@ Provides a centralized connection pool to avoid creating new connections
 for every database operation. Uses context manager pattern for safe handling.
 
 Usage:
-    from src.autfin.memory.connection_pool import get_db_pool
+    from autfin.memory.connection_pool import get_db_pool
 
     pool = get_db_pool()
     with pool.connection() as conn:
