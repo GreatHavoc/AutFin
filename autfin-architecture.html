@@ -147,7 +147,9 @@
         <span class="file">capability Memory(FileStore("./data/memory"))</span></div>
       <p>Markdown memory files namespaced per <code>user_id</code>, injected back into the next run's context
          (<code>max_tokens=5000</code>, <code>max_lines=500</code>). Path is <b>CWD-relative</b> — run from the repo root.
-         The SQLite/ChromaDB layer in <code>src/autfin/memory/</code> is legacy and unused by this graph.</p>
+         Separately, when an agent calls <code>record_trade_outcome</code> the closed trade lands in the SQLite
+         <code>learning_journal</code> (<code>data/autfin.db</code>, gitignored) — calibration is computed from that table.
+         Only it is live in <code>src/autfin/memory/</code>; the rest is legacy.</p>
       <div class="chips"><span class="chip a">tests mutate the tracked data/memory/.memory-store.sqlite3</span></div>
     </div>
 
@@ -266,7 +268,7 @@
     <code>config/settings.py</code> still names a third, older model — it is read only by legacy modules.
   </p>
 
-  <h2>5 · Live vs. legacy (the part that wastes the most time)</h2>
+  <h2>6 · Live vs. legacy (the part that wastes the most time)</h2>
   <table>
     <thead><tr><th>Path</th><th>State</th><th>Why it matters</th></tr></thead>
     <tbody>
@@ -291,12 +293,12 @@
     </tbody>
   </table>
 
-  <h2>6 · Verification surface</h2>
+  <h2>7 · Verification surface</h2>
   <table>
     <thead><tr><th>Command</th><th>Today's truth</th></tr></thead>
     <tbody>
-      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">77 passed — 30 s warm</td></tr>
-      <tr><td><code>uv run pytest tests/test_learning tests/test_tools/test_walk_forward.py</code></td><td class="ok">the two suites repaired this session</td></tr>
+      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">86 passed — 42 s warm, ~4.5 min cold</td></tr>
+      <tr><td><code>uv run pytest tests/test_learning tests/test_tools/test_walk_forward.py tests/test_tools/test_learning_toolset.py</code></td><td class="ok">the three suites repaired this session</td></tr>
       <tr><td><code>uv run pytest</code> (bare)</td><td class="no">collection error — root script files are ad-hoc, not tests</td></tr>
       <tr><td><code>uv run ruff check .</code></td><td class="no">119 errors (was 184 before the cleanup)</td></tr>
       <tr><td><code>uv run pyright</code></td><td class="no">~400 errors (no pyrightconfig.json exists)</td></tr>
@@ -306,6 +308,8 @@
   <footer>
     Generated from the repository at v7.0 — every path, port, limit and number above was read from source on disk.
     Where the README disagrees with the code (test counts, model ids, guardrails, Temporal), this page follows the code.
+    Repaired this session: walk-forward backtesting (44% of history silently unused), the learning journal
+    (a corrupt SQLite file made calibration a no-op), and the brier score. Tests: 86.
   </footer>
 
 </div>
