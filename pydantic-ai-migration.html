@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AutFin × Pydantic AI — migration checklist</title>
+<style>
+  :root{
+    --bg:#0a0e13; --panel:#111a22; --panel2:#0d151c; --line:#22303c;
+    --ink:#dbe6ef; --dim:#8ba0b3; --teal:#2dd4bf; --blue:#60a5fa;
+    --amber:#f5b544; --red:#f87171; --green:#4ade80; --violet:#a78bfa;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 var(--mono);
+       background-image:radial-gradient(circle at 15% -10%,#12313a 0,transparent 55%),
+                        radial-gradient(circle at 85% 0%,#1b2440 0,transparent 45%)}
+  .wrap{max-width:1280px;margin:0 auto;padding:34px 22px 70px}
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:-.3px}
+  h1 span{color:var(--teal)}
+  .sub{color:var(--dim);font-size:12.5px;margin:0 0 22px}
+  h2{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+     margin:38px 0 14px;padding-bottom:7px;border-bottom:1px solid var(--line);font-weight:600}
+
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 18px}
+  .bar button{background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    border-radius:6px;padding:5px 11px;font:11px var(--mono);cursor:pointer}
+  .bar button:hover{border-color:var(--teal);color:var(--teal)}
+  .progress{flex:1;min-width:180px;height:8px;background:var(--panel);border:1px solid var(--line);
+    border-radius:20px;overflow:hidden}
+  .progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--blue));
+    transition:width .2s}
+  .count{font-size:11px;color:var(--dim);white-space:nowrap}
+
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  th,td{text-align:left;padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+     position:sticky;top:0;background:var(--bg);z-index:1}
+  tr:last-child td{border-bottom:none}
+  td code{color:var(--blue);font-size:11px;word-break:break-word}
+  td a{color:var(--teal);text-decoration:none;border-bottom:1px dotted #2dd4bf66}
+  td a:hover{color:var(--ink)}
+
+  .chk{width:26px;text-align:center;cursor:pointer;user-select:none}
+  .chk input{accent-color:var(--teal);cursor:pointer;width:14px;height:14px}
+  tr.done td{opacity:.5}
+  tr.done td:first-child{opacity:1}
+  tr.done .task{text-decoration:line-through}
+
+  .tag{display:inline-block;font-size:9.5px;padding:1px 7px;border-radius:20px;white-space:nowrap;
+       border:1px solid;letter-spacing:.04em}
+  .t-now{color:var(--green);border-color:#4ade8055;background:#4ade800d}
+  .t-up{color:var(--amber);border-color:#f5b54455;background:#f5b5440d}
+  .t-del{color:var(--red);border-color:#f8717144;background:#f871710d}
+  .t-keep{color:var(--dim);border-color:var(--line)}
+  .prio{font-size:9.5px;color:var(--dim)}
+
+  .replace{color:var(--dim);font-size:10.5px}
+  .replace b{color:var(--violet);font-weight:600}
+  .src{font-size:10px;color:var(--dim);word-break:break-all}
+
+  .note{border-left:2px solid var(--amber);background:#f5b5440d;padding:10px 14px;
+        font-size:11.5px;color:var(--dim);border-radius:0 6px 6px 0;margin:16px 0}
+  .note b{color:var(--amber)}
+  .kpi{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 20px}
+  .kpi div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+  .kpi b{display:block;font-size:19px;color:var(--teal)}
+  .kpi span{font-size:10px;color:var(--dim)}
+  footer{margin-top:44px;color:#5d7285;font-size:10.5px;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>AutFin <span>×</span> Pydantic AI — migration checklist</h1>
+  <p class="sub">
+    Every feature Pydantic AI provides that AutFin hand-rolled, plus everything worth adding.
+    Sourced from the live docs (ai.pydantic.dev, 300+ pages mapped) and verified against
+    <code>pydantic-ai 2.37.0</code> / <code>pydantic-ai-harness 0.28.0</code> / <code>pydantic-evals 2.37.0</code>.
+  </p>
+
+  <div class="kpi">
+    <div><b id="k-total">0</b><span>total items</span></div>
+    <div><b id="k-now">0</b><span>usable in the current pin</span></div>
+    <div><b id="k-up">0</b><span>need a version upgrade</span></div>
+    <div><b id="k-del">0</b><span>delete outright</span></div>
+    <div><b id="k-done">0</b><span>done</span></div>
+  </div>
+
+  <div class="bar">
+    <div class="progress"><i id="pbar"></i></div>
+    <span class="count" id="plabel">0 / 0</span>
+    <button onclick="setAll(true)">check all</button>
+    <button onclick="setAll(false)">clear all</button>
+    <button onclick="localStorage.removeItem(KEY);location.reload()">reset saved</button>
+  </div>
+
+  <div class="note">
+    <b>How to read the tags:</b>
+    <span class="tag t-now">now</span> importable and usable with the pinned versions ·
+    <span class="tag t-up">upgrade</span> documented but absent from <code>2.37.0</code>/<code>0.28.0</code> ·
+    <span class="tag t-del">delete</span> remove the hand-rolled thing outright ·
+    <span class="tag t-keep">keep</span> legitimate domain code, leave it.
+    <br><b>Replace</b> names the exact file/function in this repo that goes away.
+    Progress is saved in <code>localStorage</code> per browser.
+  </div>
+
+  <h2>A · Hand-rolled duplicates — replace with the framework feature</h2>
+  <table>
+    <thead><tr><th class="chk">✓</th><th>Task</th><th>Replace (this repo)</th><th>Tag</th><th>Source</th></tr></thead>
+    <tbody>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Delete <code>create_select_model_capability()</code> and <code>create_adaptive_model_capability()</code> from <code>agents/base.py</code>; route tier choice through <code>SelectModel</code> with a real <code>ModelSelectionContext</code> (deps, prompt, history, usage, step).</td>
+        <td class="replace">→ <b>agents/base.py:45-90</b> (both functions, dead)</td>
+        <td><span class="tag t-del">delete</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/select-model">capabilities/select-model</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Collapse the three tier→model tables into one resolver. Keep <code>types.ModelConfig</code> as the source of truth, drop the duplicate tables.</td>
+        <td class="replace">→ <b>llm/model_tiers.py</b> <code>MODEL_REGISTRY</code> + <b>config/settings.py</b> <code>deep_model/fast_model/nvidia_model/nvidia_deep_model</b> (already forced to agree once; now remove the need)</td>
+        <td><span class="tag t-del">delete</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/resolve-model-id">capabilities/resolve-model-id</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Replace the hand-rolled eval runner with <code>pydantic-evals</code>' own API — <code>Dataset.evaluate_sync()</code>, concurrency limits, retry strategies. Keep <code>create_autfin_dataset()</code> as the dataset builder only.</td>
+        <td class="replace">→ <b>evals/dataset.py</b> <code>run_evaluations()</code> (the runner loop)</td>
+        <td><span class="tag t-now">now</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evals">evals/evals</a> · <a href="https://pydantic.dev/docs/ai/evals/how-to/concurrency">how-to/concurrency</a> · <a href="https://pydantic.dev/docs/ai/evals/how-to/retry-strategies">how-to/retry-strategies</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Stop hand-writing evaluator classes where a judge fits. Add <code>LLMJudge</code> (rubrics) and <code>GEval</code> (integer + chain-of-thought) to the dataset; keep deterministic ones as custom <code>Evaluator</code>s.</td>
+        <td class="replace">→ <b>evals/dataset.py</b> <code>TradeQualityEvaluator</code>, <code>RiskVetoEvaluator</code>, <code>DebateQualityEvaluator</code>, <code>AnalysisCompletenessEvaluator</code>, <code>PositionSizingEvaluator</code>, <code>AgentBehaviorEvaluator</code></td>
+        <td><span class="tag t-now">now</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evaluators/llm-judge">evaluators/llm-judge</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/custom">evaluators/custom</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/standard-quality-metrics">evaluators/standard-quality-metrics</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Use <code>InMemoryConversationStore</code>/a real store instead of hand-rolled JSON save/load; evaluate a run's trajectory with span-based + agentic evaluators rather than SQL.</td>
+        <td class="replace">→ <b>evals/dataset.py</b> <code>save_dataset()</code>/<code>load_dataset()</code> · <b>observability/roro.py</b> <code>compute_roro()</code> (SQL over the <code>trades</code> table)</td>
+        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/how-to/dataset-serialization">how-to/dataset-serialization</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/span-based">evaluators/span-based</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/agentic">evaluators/agentic</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Delete the hand-rolled metrics recorder; read <code>RunUsage</code> (cost, tokens, requests, tool_calls) off every result and let <code>Instrumentation</code> emit the spans.</td>
+        <td class="replace">→ <b>observability/metrics.py</b> <code>AgentMetrics</code>, <code>TradingMetrics</code>, <code>ObservabilityMetrics</code>, <code>record_agent()</code>, <code>record_llm()</code>, <code>record_trade()</code></td>
+        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">capabilities/instrumentation</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/usage">api/pydantic-ai/usage</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Drop the SQLite trace store. Logfire (already wired in <code>run.py</code>) stores the OTel spans; <code>run_id</code>/<code>conversation_id</code> correlation comes free from core.</td>
+        <td class="replace">→ <b>observability/tracer.py</b> <code>AutFinTracer</code>, <code>TraceContext</code>, <code>_persist_trace()</code>, <code>_load_recent_traces_from_db()</code></td>
+        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">capabilities/instrumentation</a> · <a href="https://pydantic.dev/docs/ai/integrations/logfire">integrations/logfire</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/message-history">core-concepts/message-history</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Replace the 8 hand-rolled gates with framework output: evals for behavioural gates, Instrumentation/Logfire for observability, StepPersistence for persistence.</td>
+        <td class="replace">→ <b>validation.py</b> <code>validate_type_checking/unit_tests/eval_suite/guardrails/memory_persistence/plan_persistence/load_test/durable_execution</code> + <b>test_validation.py</b> (already broken — imports a deleted function)</td>
+        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evals">evals/evals</a> · <a href="https://pydantic.dev/docs/ai/harness/step-persistence">harness/step-persistence</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Let the model write its own orchestration. <code>DynamicWorkflow</code> is already attached with <code>defer_loading=True</code>; the supervisor's Python fan-out duplicates it.</td>
+        <td class="replace">→ <b>agents/supervisor.py</b> <code>run_morning_routine()</code>, <code>run_quarterly_review()</code>, <code>handle_price_alert()</code> (the imperative phase sequences)</td>
+        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/dynamic-workflow">harness/dynamic-workflow</a> · <a href="https://pydantic.dev/docs/ai/harness/subagents">harness/subagents</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Delete the per-tool argument rule table. Core validates tool args with the Pydantic schema and returns <code>ModelRetry</code> to the model.</td>
+        <td class="replace">→ <b>llm/validation.py</b> <code>TOOL_PARAM_RULES</code></td>
+        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/tools-toolsets/tools-advanced">tools-toolsets/tools-advanced</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/exceptions">api/pydantic-ai/exceptions</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Delete the hand-rolled retry/circuit-breaker/timeout knobs from settings; use <code>Agent(retries=...)</code>, <code>UsageLimits</code>, and per-run timeouts.</td>
+        <td class="replace">→ <b>config/settings.py</b> <code>retry_max_attempts</code>, <code>retry_initial_interval</code>, <code>retry_backoff_factor</code>, <code>node_timeout_seconds</code>, <code>circuit_breaker_threshold</code>, <code>circuit_breaker_reset_seconds</code></td>
+        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/retries">core-concepts/retries</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/timeouts">core-concepts/timeouts</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/agent">core-concepts/agent</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Replace the hand-rolled scraping agent with the framework's web capabilities; keep <code>get_browser_toolset()</code> (Obscura MCP) only for JS-rendered pages.</td>
+        <td class="replace">→ <b>tools/browser_agent.py</b> <code>get_browser_agent()</code> (hardcoded <code>openai:gpt-4.1-mini</code>, needs an <code>OPENAI_API_KEY</code> that <code>.env.example</code> never lists)</td>
+        <td><span class="tag t-now">now</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/web-fetch">capabilities/web-fetch</a> · <a href="https://pydantic.dev/docs/ai/capabilities/web-search">capabilities/web-search</a> · <a href="https://pydantic.dev/docs/ai/harness/researcher">harness/researcher</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Stop using sha256 "hash embeddings" as semantic search. Retrieve over real stored history instead.</td>
+        <td class="replace">→ <b>memory/embeddings.py</b> <code>generate_embedding()</code> fallback (silently used because <code>sentence-transformers</code> is not a dependency) + <b>learning/retriever.py</b> <code>retrieve_learnings()</code> similarity scoring</td>
+        <td><span class="tag t-now">now</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/conversation-search">harness/conversation-search</a> · <a href="https://pydantic.dev/docs/ai/harness/memory">harness/memory</a> · <a href="https://pydantic.dev/docs/ai/guides/embeddings">guides/embeddings</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Score the fuzzy qualitative dimensions (moat, distortion, regulatory impact) with a judge instead of hand-built heuristics.</td>
+        <td class="replace">→ <b>agents/moat.py</b> <code>_assess_*</code> scoring functions · <b>agents/distortion.py</b> <code>check_distortion()</code> · <b>agents/regulatory.py</b> <code>classify_regulatory_event()</code> keyword tables</td>
+        <td><span class="tag t-now">now</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evaluators/llm-judge">evaluators/llm-judge</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/standard-quality-metrics">evaluators/standard-quality-metrics</a></td>
+      </tr>
+
+    </tbody>
+  </table>
+
+  <h2>B · Missing features to add — usable with the pinned versions</h2>
+  <table>
+    <thead><tr><th class="chk">✓</th><th>Task</th><th>Attach to / replaces</th><th>Tag</th><th>Source</th></tr></thead>
+    <tbody>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Human approval before a live order.</b> Wrap the order tools in <code>ApprovalRequiredToolset</code> and handle the deferred run with <code>HandleDeferredToolCalls</code>. Today guardrails validate <em>arguments</em> but nothing gates <em>execution</em>.</td>
+        <td class="replace">→ attach to <b>agents/risk.py</b> + <b>agents/supervisor.py</b> <code>execute_trade()</code>/<code>place_order</code></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 1</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/tools-toolsets/deferred-tools">tools-toolsets/deferred-tools</a> · <a href="https://pydantic.dev/docs/ai/tools-toolsets/toolsets">tools-toolsets/toolsets</a> · <a href="https://pydantic.dev/docs/ai/capabilities/handle-deferred-tool-calls">capabilities/handle-deferred-tool-calls</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Cost ceilings.</b> Attach <code>Spend</code> with USD/token budgets per model and per tenant (user_id).</td>
+        <td class="replace">→ attach to <b>agents/supervisor.py</b>; replaces the unused <code>UsageLimits</code> idea behind <code>config/settings.py</code></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 1</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/spend">harness/spend</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Tool catalogue discipline.</b> Mark the large toolsets <code>defer_loading=True</code> (or wrap in <code>DeferredLoadingToolset</code>) so the model discovers tools by search instead of carrying every schema.</td>
+        <td class="replace">→ attach to <b>tools/__init__.py</b> toolset singletons (kite, fundamental, technical, sentiment, screening, learning, browser)</td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 1</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/tool-search">capabilities/tool-search</a> · <a href="https://pydantic.dev/docs/ai/tools-toolsets/toolsets">tools-toolsets/toolsets</a> · <a href="https://pydantic.dev/docs/ai/capabilities/on-demand">capabilities/on-demand</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Bound the history.</b> Add <code>TieredCompaction</code> (cheap tiers first, summarize only if needed) with <code>max_fraction</code> so one config is right on every model, including unknown NIM windows.</td>
+        <td class="replace">→ attach to <b>agents/supervisor.py</b> (and the long-running sub-agents)</td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 1</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/compaction">harness/compaction</a> · <a href="https://pydantic.dev/docs/ai/capabilities/compaction">capabilities/compaction</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Cap oversized tool returns.</b> <code>ToolOutputLimits</code> to truncate or spill the yfinance payloads that currently flood the context.</td>
+        <td class="replace">→ attach to <b>tools/universe.py</b> <code>fetch_universe_data()</code> (200 symbols × full financials) and <b>tools/fundamental_tools.py</b> <code>get_financials()</code></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 1</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/tool-output-limits">harness/tool-output-limits</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Crash recovery for the routine.</b> <code>StepPersistence</code> (SQLite store) to snapshot each settled step; <code>continue_run</code>/<code>fork_run</code> replace the hand-rolled <code>runs</code> table.</td>
+        <td class="replace">→ attach to <b>agents/supervisor.py</b>; replaces <b>memory/database.py</b> <code>runs</code> table + <code>record_run_start()</code>/<code>record_run_end()</code></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 2</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/step-persistence">harness/step-persistence</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/persistence">core-concepts/persistence</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>OTel spans everywhere.</b> Add the <code>Instrumentation</code> capability per agent so tests and any entrypoint (not just <code>run.py</code>) emit traces.</td>
+        <td class="replace">→ attach in <b>agents/base.py</b> <code>create_agent()</code>; complements the <code>logfire.instrument_pydantic_ai()</code> calls in <b>run.py</b>/<code>__main__.py</b></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 2</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">capabilities/instrumentation</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Real history recall.</b> <code>ConversationSearch</code> (BM25 over StepPersistence's log) so earlier turns — including ones compaction dropped — come back on demand.</td>
+        <td class="replace">→ attach to <b>agents/memory.py</b>; replaces the sha256 similarity path in <b>learning/retriever.py</b></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 2</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/conversation-search">harness/conversation-search</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Mid-run escalation.</b> <code>Advisor</code> lets the bear case consult a stronger model instead of routing the whole debate to the deep tier.</td>
+        <td class="replace">→ attach to <b>agents/debate.py</b> and <b>agents/conference.py</b></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 2</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/advisor">harness/advisor</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Repo context at run start.</b> <code>RepoContext</code> loads <code>AGENTS.md</code>/<code>CLAUDE.md</code> plus repository structure before the first request.</td>
+        <td class="replace">→ attach to <b>agents/supervisor.py</b>; feeds the <b>AGENTS.md</b> we already maintain (nothing reads it today)</td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 2</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/repo-context">harness/repo-context</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Trim and filter tools per step.</b> <code>ProcessHistory</code> for history shaping; <code>PrefixTools</code>/<code>PrepareTools</code>/<code>SetToolMetadata</code> for name collisions and capability-driven filtering.</td>
+        <td class="replace">→ attach in <b>agents/base.py</b>; resolves collisions across the six toolsets in <b>tools/__init__.py</b></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/process-history">capabilities/process-history</a> · <a href="https://pydantic.dev/docs/ai/capabilities/prefix-tools">capabilities/prefix-tools</a> · <a href="https://pydantic.dev/docs/ai/capabilities/prepare-tools">capabilities/prepare-tools</a> · <a href="https://pydantic.dev/docs/ai/capabilities/set-tool-metadata">capabilities/set-tool-metadata</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Read documents, not just HTML.</b> <code>FileUnderstanding</code> for SEBI filings/PDFs; <code>ImageGeneration</code> for charts in the printed backtest stats.</td>
+        <td class="replace">→ attach to <b>agents/research.py</b>; extends the HTML-only scraping in <b>tools/browser_agent.py</b></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/file-understanding">capabilities/file-understanding</a> · <a href="https://pydantic.dev/docs/ai/capabilities/image-generation">capabilities/image-generation</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Cheaper evals.</b> Add <code>BatchModelRequests</code> so concurrent cases share provider batches.</td>
+        <td class="replace">→ attach to the agents run by <b>evals/dataset.py</b> <code>run_evaluations()</code></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/batch">core-concepts/batch</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>On-demand procedures.</b> <code>Skills</code> for progressive <code>SKILL.md</code> disclosure, complementing ManagedPrompt's version control.</td>
+        <td class="replace">→ attach to <b>agents/supervisor.py</b>; complements <b>agents/managed_prompts.py</b></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/skills">harness/skills</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Cache-collapse detection.</b> <code>WarnOnCacheBusts</code> reports prefix collapses from the provider's own numbers (note: importing <code>cache_stability</code> emits a deprecation warning).</td>
+        <td class="replace">→ attach to <b>agents/supervisor.py</b> once caching is configured</td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/warn-on-cache-busts">harness/warn-on-cache-busts</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Cache the stable prefix.</b> On <code>2.37.0</code> configure prompt caching through model settings (the <code>Caching</code> capability is not in this pin — see section C).</td>
+        <td class="replace">→ <b>agents/base.py</b> <code>ModelSettings</code> construction; relevant because the supervisor resends all instructions + tool schemas every step</td>
+        <td><span class="tag t-up">upgrade</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/caching">capabilities/caching</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>X/Twitter sentiment.</b> <code>XSearch</code> (native on xAI, sub-agent fallback elsewhere) for the social half of <code>get_sentiment_data</code>.</td>
+        <td class="replace">→ attach to <b>agents/analysis.py</b>; complements <b>tools/sentiment_tools.py</b></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/x-search">capabilities/x-search</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Persist conversations properly.</b> Store <code>result.conversation</code> (messages + usage + conversation_id + deferred requests) instead of only messages.</td>
+        <td class="replace">→ new: no conversation store exists today; each <code>supervisor_agent.run()</code> is a fresh run</td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/persistence">core-concepts/persistence</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/conversation">api/pydantic-ai/conversation</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Declarative agent definitions.</b> Move the hand-built agent factory toward <code>AgentSpec</code> so agents are data, not Python.</td>
+        <td class="replace">→ <b>agents/base.py</b> <code>create_agent()</code> (the hand-rolled factory)</td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/agent-spec">core-concepts/agent-spec</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><b>Live grading.</b> Online evaluation attaches evaluators to production traffic so every call (or a sample) is graded in the background.</td>
+        <td class="replace">→ extends <b>evals/dataset.py</b>; the natural home for the calibration question in <b>learning/calibrator.py</b></td>
+        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/online-evaluation">evals/online-evaluation</a></td>
+      </tr>
+
+    </tbody>
+  </table>
+
+  <h2>C · Needs a version upgrade — still high value</h2>
+  <table>
+    <thead><tr><th class="chk">✓</th><th>Task</th><th>Why it matters here</th><th>Tag</th><th>Source</th></tr></thead>
+    <tbody>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Bump <code>pydantic-ai</code> past 2.37.0, then attach <code>ModelFallback</code>.</td>
+        <td class="replace">→ replaces the OpenRouter fallback the README promises and <b>config/capabilities.py</b> documents but nothing implements. NIM per-model quota is this system's single point of failure</td>
+        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 1</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/model-fallback">capabilities/model-fallback</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Upgrade, then take the <code>Caching</code> capability (currently absent from <code>pydantic_ai.capabilities</code>).</td>
+        <td class="replace">→ the cost lever for long supervisor runs that resend all instructions + tool schemas every step</td>
+        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 2</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/caching">capabilities/caching</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Upgrade the harness, then add <code>DetectLoops</code>.</td>
+        <td class="replace">→ the system reminders in <b>agents/supervisor.py</b> tell the model to batch calls; nothing detects when it loops anyway</td>
+        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 2</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/detect-loops">harness/detect-loops</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Upgrade the harness, then add <code>PromptInjectionDefender</code> and <code>ArtifactScanning</code>.</td>
+        <td class="replace">→ scraped Reddit/Moneycontrol/ET text from <b>tools/sentiment_tools.py</b> and <b>tools/browser_agent.py</b> enters the model with no untrusted-input classification. Highest unmitigated risk in the repo</td>
+        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 1</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/prompt-injection-defender">harness/prompt-injection-defender</a> · <a href="https://pydantic.dev/docs/ai/harness/artifact-scanning">harness/artifact-scanning</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Upgrade the harness for the human-in-the-loop layer: <code>AskUser</code>, <code>Permissions</code>, <code>ApprovalReviewer</code>, <code>ToolCallJudge</code>, <code>TrajectoryJudge</code>.</td>
+        <td class="replace">→ a second model reviews each call / the whole trajectory and steers mid-run; the paper-trading → live-trading safety ladder</td>
+        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 2</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/ask-user">harness/ask-user</a> · <a href="https://pydantic.dev/docs/ai/harness/permissions">harness/permissions</a> · <a href="https://pydantic.dev/docs/ai/harness/tool-call-judge">harness/tool-call-judge</a> · <a href="https://pydantic.dev/docs/ai/harness/trajectory-judge">harness/trajectory-judge</a> · <a href="https://pydantic.dev/docs/ai/harness/approval-reviewer">harness/approval-reviewer</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Upgrade the harness for the research stack: <code>BrowserUse</code>, <code>Playwright</code>, <code>Exa</code>, <code>You.com</code>, <code>SmartSearch</code>.</td>
+        <td class="replace">→ replaces parts of the hand-built Obscura + yfinance research path in <b>agents/research.py</b> and <b>tools/universe.py</b></td>
+        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/browser-use">harness/browser-use</a> · <a href="https://pydantic.dev/docs/ai/harness/playwright">harness/playwright</a> · <a href="https://pydantic.dev/docs/ai/harness/exa-search">harness/exa-search</a> · <a href="https://pydantic.dev/docs/ai/harness/youdotcom">harness/youdotcom</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Upgrade for <code>conversation_store</code>, <code>workspaces</code>, <code>graph</code>, <code>durable_exec</code> backends (Temporal/DBOS/Prefect/Restate/Airflow) and <code>LocalWorkspace</code>.</td>
+        <td class="replace">→ restores the Temporal crash recovery the README documents; <strong>agents/durable.py</strong> was deleted in this session's cleanup and never replaced</td>
+        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 2</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/durable_execution/overview">capabilities/durable_execution/overview</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/workspace">core-concepts/workspace</a> · <a href="https://pydantic.dev/docs/ai/graph/builder">graph/builder</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Upgrade for <code>IPythonCodeMode</code> (stateful sandbox) and <code>CapabilityCreation</code> (the agent authors its own capabilities).</td>
+        <td class="replace">→ <strong>agents/quant.py</strong> uses stateless <code>CodeMode()</code>; <code>capability_creation</code> is importable in 0.28.0 but the authored-capability flow needs the newer API</td>
+        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/ipython-code-mode">harness/ipython-code-mode</a> · <a href="https://pydantic.dev/docs/ai/harness/capability-creation">harness/capability-creation</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Upgrade for <code>ACP</code> (serve the supervisor to Zed over the Agent Client Protocol) and the <code>CLI</code> integration.</td>
+        <td class="replace">→ new capability; nothing equivalent today. Dev-ergonomics, not correctness</td>
+        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 3</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/acp">harness/acp</a> · <a href="https://pydantic.dev/docs/ai/integrations/cli">integrations/cli</a></td>
+      </tr>
+
+    </tbody>
+  </table>
+
+  <h2>D · Verified as legitimate — leave alone</h2>
+  <table>
+    <thead><tr><th class="chk">✓</th><th>Item</th><th>Why it stays</th><th>Tag</th><th>Source</th></tr></thead>
+    <tbody>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">Domain engines with no framework equivalent</td>
+        <td class="replace"><code>backtesting/</code> (walk-forward, alpha decay), <code>backtest/</code> (vectorbt suite), <code>portfolio/tax_engine.py</code> (FY 2026-27 STCG/LTCG rules), <code>risk/kelly.py</code>, <code>risk/vol_targeting.py</code>, <code>universe/curator.py</code></td>
+        <td><span class="tag t-keep">keep</span></td>
+        <td class="src">deterministic arithmetic — Pydantic AI has no opinion on these</td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">The capability set already in use</td>
+        <td class="replace"><code>SubAgents</code>, <code>DynamicWorkflow</code>, <code>Planning</code>, <code>Memory</code>, <code>SystemReminders</code>, <code>Thinking</code>, <code>WebSearch</code>, <code>Guardrails</code> (attached this session), <code>ManagedPrompt</code>, <code>CodeMode</code> (quant), <code>FileSystem</code> (market_data)</td>
+        <td><span class="tag t-keep">keep</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/overview">capabilities/overview</a> · <a href="https://pydantic.dev/docs/ai/harness">harness</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task"><code>learning/calibrator.py</code> + <code>learning/online.py</code></td>
+        <td class="replace">conviction-tier calibration with a per-tier delta is domain logic; the <em>measurement</em> half (how well calibrated are the agents) belongs to online evaluation — do that, keep this</td>
+        <td><span class="tag t-keep">keep</span> <span class="prio">+ section B</span></td>
+        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/online-evaluation">evals/online-evaluation</a></td>
+      </tr>
+
+      <tr>
+        <td class="chk"><input type="checkbox"></td>
+        <td class="task">The six deterministic pre-work modules repaired this session</td>
+        <td class="replace"><code>agents/moat.py</code>, <code>agents/regulatory.py</code>, <code>risk/anomaly.py</code>, <code>risk/regime.py</code>, <code>evals/</code>, <code>tools/browser_agent.py</code> — all fixed, tested, and still uninvoked</td>
+        <td><span class="tag t-keep">keep</span></td>
+        <td class="src">session commits <code>82ed38b</code>, <code>8089c91</code>, <code>99536e6</code></td>
+      </tr>
+
+    </tbody>
+  </table>
+
+  <footer>
+    Sources: <a href="https://pydantic.dev/docs/ai/capabilities/overview">capabilities index</a> (80+ capabilities, Pydantic AI + Harness),
+    <a href="https://pydantic.dev/docs/ai/harness">Pydantic AI Harness</a>,
+    <a href="https://pydantic.dev/docs/ai/evals/evals">Pydantic Evals</a>,
+    <a href="https://pydantic.dev/docs/ai/core-concepts/message-history">messages &amp; history</a>,
+    <a href="https://pydantic.dev/docs/ai/tools-toolsets/toolsets">toolsets</a>,
+    <a href="https://pydantic.dev/docs/ai/core-concepts/output">output</a>,
+    <a href="https://pydantic.dev/docs/ai/core-concepts/persistence">persistence</a> —
+    all read in full during research, plus the 300-URL sitemap at <a href="https://ai.pydantic.dev/sitemap.xml">ai.pydantic.dev/sitemap.xml</a>.
+    Version claims verified against the installed <code>.venv</code>, not the docs' latest release.
+  </footer>
+
+</div>
+
+<script>
+const KEY = 'autfin-pai-checklist-v1';
+const boxes = [...document.querySelectorAll('tbody input[type=checkbox]')];
+const rows = boxes.map(b => b.closest('tr'));
+const saved = JSON.parse(localStorage.getItem(KEY) || '[]');
+boxes.forEach((b, i) => { b.checked = !!saved[i]; b.closest('tr').classList.toggle('done', b.checked); });
+function counts() {
+  const done = boxes.filter(b => b.checked).length;
+  const tag = f => document.querySelectorAll('.tag.' + f).length;
+  return {
+    done, total: boxes.length,
+    now: tag('t-now'), up: tag('t-up'), del: tag('t-del'), keep: tag('t-keep'),
+  };
+}
+function paint() {
+  rows.forEach((r, i) => r.classList.toggle('done', boxes[i].checked));
+  const c = counts();
+  document.getElementById('pbar').style.width = (c.done / c.total * 100) + '%';
+  document.getElementById('plabel').textContent = `${c.done} / ${c.total}`;
+  document.getElementById('k-total').textContent = c.total;
+  document.getElementById('k-now').textContent = c.now;
+  document.getElementById('k-up').textContent = c.up;
+  document.getElementById('k-del').textContent = c.del;
+  document.getElementById('k-done').textContent = c.done;
+}
+function persist() { localStorage.setItem(KEY, JSON.stringify(boxes.map(b => b.checked))); paint(); }
+boxes.forEach(b => b.addEventListener('change', persist));
+function setAll(v) { boxes.forEach(b => b.checked = v); persist(); }
+paint();
+</script>
+</body>
+</html>

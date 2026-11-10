@@ -8,35 +8,11 @@ load_dotenv()  # Load .env into os.environ before model reads it
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
-from autfin.types import MODEL_CONFIG
-
-
 class AutFinSettings(BaseSettings):
     """All configurable parameters for AutFin."""
     
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
     
-    # ── LLM ──────────────────────────────────────────
-    store_mode: str = Field(
-        default="persistent",
-        description="Store mode: 'in-memory' or 'persistent' (SQLite)"
-    )
-    deep_model: str = Field(
-        default=MODEL_CONFIG.deep,
-        description="Primary — see types.MODEL_CONFIG"
-    )
-    fast_model: str = Field(
-        default=MODEL_CONFIG.fast,
-        description="Fast model — see types.MODEL_CONFIG"
-    )
-    nvidia_model: str = Field(
-        default=MODEL_CONFIG.fast,
-        description="NVIDIA NIM — Meta see types.MODEL_CONFIG"
-    )
-    nvidia_deep_model: str = Field(
-        default=MODEL_CONFIG.deep,
-        description="Deep model — see types.MODEL_CONFIG"
-    )
     modal_vllm_url: str = Field(
         default="",
         description="Modal vLLM endpoint URL for self-hosted models"
@@ -93,32 +69,6 @@ class AutFinSettings(BaseSettings):
     market_close: str = Field(default="15:30")
     data_refresh_interval_min: int = Field(default=5)
     
-    # ── Error Recovery ───────────────────────────────
-    retry_max_attempts: int = Field(
-        default=3,
-        description="Max retries for transient errors (API timeouts)"
-    )
-    retry_initial_interval: float = Field(
-        default=1.0,
-        description="Initial retry interval in seconds (exponential backoff)"
-    )
-    retry_backoff_factor: float = Field(
-        default=2.0,
-        description="Multiplier applied to interval after each retry"
-    )
-    node_timeout_seconds: float = Field(
-        default=300.0,
-        description="Max time in seconds for a single node to complete (5 min)"
-    )
-    circuit_breaker_threshold: int = Field(
-        default=3,
-        description="Consecutive failures before opening circuit for a service"
-    )
-    circuit_breaker_reset_seconds: float = Field(
-        default=300.0,
-        description="Seconds to wait before retrying an opened circuit"
-    )
-
     # ── API Keys (loaded from .env, not set here) ───
     # These are loaded automatically via model_config
 

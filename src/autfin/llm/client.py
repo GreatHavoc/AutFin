@@ -385,14 +385,12 @@ class LLMClient:
     ) -> dict | None:
         """Record LLM metrics and return state updates if state provided."""
         try:
-            from src.autfin.observability.metrics import record_llm
-
+    
             record_llm(prompt_tokens + completion_tokens)
         except Exception:
             pass
         try:
-            from src.autfin.observability.tracer import get_tracer
-
+    
             tracer = get_tracer()
             tid = tracer.start_trace(f"llm-{model}", {"model": model})
             tracer.log_llm_call(tid, model, prompt_tokens, completion_tokens, elapsed_ms)

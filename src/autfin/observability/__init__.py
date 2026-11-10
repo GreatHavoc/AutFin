@@ -1,31 +1,18 @@
-"""Observability module for AutFin — LangSmith tracing, metrics aggregation."""
+"""Observability for AutFin.
+
+The hand-rolled metrics recorder, SQLite trace store and RORO SQL derivation
+were removed: `RunUsage` on every AgentRunResult already carries cost, tokens,
+requests and tool_calls, and the `Instrumentation` capability emits the OTel
+spans Logfire stores. What is left is the LangSmith callback configuration.
+"""
+from __future__ import annotations
 
 from autfin.observability.handler import (
     get_callback_handler,
     is_langsmith_configured,
 )
-from autfin.observability.metrics import (
-    ObservabilityMetrics,
-    get_metrics_snapshot,
-)
-from autfin.observability.tracer import (
-    AutFinTracer,
-    TraceContext,
-    get_tracer,
-    reset_tracer,
-    trace_agent_node,
-    trace_llm_call,
-)
 
 __all__ = [
-    "AutFinTracer",
-    "get_tracer",
-    "reset_tracer",
-    "trace_llm_call",
-    "trace_agent_node",
-    "TraceContext",
     "get_callback_handler",
     "is_langsmith_configured",
-    "ObservabilityMetrics",
-    "get_metrics_snapshot",
 ]

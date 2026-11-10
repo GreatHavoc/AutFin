@@ -12,23 +12,30 @@ from datetime import datetime
 from typing import Any, Literal, NotRequired, TypedDict
 from uuid import uuid4
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai.messages import ModelMessage as BaseMessage
+from pydantic_settings import BaseSettings
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Model Configuration
 # ═══════════════════════════════════════════════════════════════════════════
 
-class ModelConfig(BaseModel):
-    """Model routing configuration.
+class ModelConfig(BaseSettings):
+    """Model routing configuration — the single source of truth for tiers.
 
-    - nvidia/minimax-m3 (deep/reasoning — 456B MoE, stronger reasoning)
-    - nvidia/nemotron-3.5-lightning-30b-a3b (fast/code — lightweight, quick)
+    Was a plain BaseModel duplicated by config/settings.py's four model fields
+    and llm/model_tiers.py's registry; those three tables disagreed twice and
+    both duplicates are now gone. BaseSettings keeps the `.env` override that
+    callers relied on (DEEP_MODEL=..., FAST_MODEL=...).
     """
-    deep: str = "nvidia/minimax-m3"
-    fast: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
-    reasoning: str = "nvidia/minimax-m3"
-    code: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    deep: str = Field(default="nvidia/minimax-m3", validation_alias="DEEP_MODEL")
+    fast: str = Field(default="nvidia/nemotron-3.5-lightning-30b-a3b", validation_alias="FAST_MODEL")
+    reasoning: str = Field(default="nvidia/minimax-m3", validation_alias="REASONING_MODEL")
+    code: str = Field(default="nvidia/nemotron-3.5-lightning-30b-a3b", validation_alias="CODE_MODEL")
+
+
+load_dotenv()  # .env must be in os.environ before the settings model reads it
 
 MODEL_CONFIG = ModelConfig()
 

@@ -19,14 +19,14 @@ class ModelTier(Enum):
     MEDIUM = "medium"
     FAST = "fast"
 
-# Maps tier -> model name (resolved at runtime from LLMClient)
-# Maps tier -> model name. Read from types.MODEL_CONFIG so the legacy tier table
-# cannot disagree with the agent graph about which model a tier means.
+# Tier -> model id, resolved from the single source of truth in
+# autfin.types.ModelConfig. This registry used to hardcode its own copy.
 MODEL_REGISTRY: dict[ModelTier, str] = {
     ModelTier.DEEP: MODEL_CONFIG.reasoning,
     ModelTier.MEDIUM: MODEL_CONFIG.deep,
     ModelTier.FAST: MODEL_CONFIG.fast,
 }
+
 
 # Maps agent/subagent name -> model tier
 AGENT_TIERS: dict[str, ModelTier] = {

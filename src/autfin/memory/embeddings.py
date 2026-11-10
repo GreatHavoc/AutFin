@@ -6,7 +6,6 @@ uses the same model instance and cosine similarity logic.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 from typing import List
@@ -47,15 +46,22 @@ def _get_model():
 
 
 def generate_embedding(text: str) -> List[float]:
-    """Generate semantic embedding for text.
+    """Generate a semantic embedding for text.
 
-    Uses sentence-transformers (all-MiniLM-L6-v2, 384-dim) if available.
-    Falls back to hash-based embedding for backward compatibility.
+    Uses sentence-transformers (all-MiniLM-L6-v2, 384-dim). When the model is not
+    installed this raises instead of returning a sha256 vector: two unrelated
+    sentences hash to uncorrelated vectors, so every similarity score built on
+    the fallback is noise that looks like signal. Callers that want ranking
+    without a model should use ConversationSearch over stored history instead.
     """
     model = _get_model()
     if model is None:
-        h = hashlib.sha256(text.encode()).digest()
-        return [float(b) / 255.0 for b in h] + [0.0] * (384 - len(h))
+        raise RuntimeError(
+            "No embedding model available. sentence-transformers is not a "
+            "dependency, and the previous sha256 fallback produced meaningless "
+            "similarity scores. Install sentence-transformers, or rank with "
+            "pydantic_ai_harness.conversation_search over stored history."
+        )
 
     embedding = model.encode(text, normalize_embeddings=True)
     return embedding.tolist()
