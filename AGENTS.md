@@ -14,22 +14,22 @@ uv run python run.py --once                          # daemon; --mode paper|live
 ```
 
 - **Always pass `tests/`.** Bare `uv run pytest` fails collection: root `test_validation.py` imports `validate_durable_execution`, deleted along with `agents/durable.py`. Root `test_*.py` / `demo_sentiment.py` are ad-hoc scripts that hit live network at import.
-- Full-suite time is dominated by sentiment tests loading FinBERT (transformers → HF cache).
+- Full-suite time is dominated by sentiment tests loading FinBERT (transformers → HF cache). ~1.5 min warm, ~4.5 min cold.
 
 ## The lint/type baseline is already red — do not "fix" it repo-wide
 
-`ruff check .` = 184 errors, `pyright` = 421 errors / 114 files. Fix only files you touch. Two of those are genuine bugs, not style:
-- `agents/base.py` uses PEP 695 generics (`def create_agent[OutputT]`), i.e. needs ≥3.12 even though `requires-python = ">=3.11"` and `ruff target-version = "py311"`. Ruff reads it as invalid syntax; don't "fix" by de-genericizing.
-- `tools/supervisor_tools.py:1588` has a broken `for` block (genuine `SyntaxError` at import).
+`ruff check .` = 119 errors, `pyright` = ~400 errors. Fix only files you touch. One of those is a genuine bug, not style: `agents/base.py` uses PEP 695 generics (`def create_agent[OutputT]`), i.e. needs ≥3.12 even though `requires-python = ">=3.11"` and `ruff target-version = "py311"`. Ruff reads it as invalid syntax; don't "fix" by de-genericizing.
 
 ## What is actually wired
 
 Entry graph: `agents/supervisor.py` → `create_agent()` in `agents/base.py` → sub-agents `market_data, analysis, research, risk, debate, conference, memory` (+ `quant`). Only market_data/analysis/research/risk/quant get a toolset (from `tools/__init__.py`); debate/conference/memory are tool-less. Shared state is `types.AgentDeps` (deps), structured outputs and model IDs are in `types.py`. Live backtesting is `src/autfin/backtest/`; `src/autfin/risk/` (kelly, vol_targeting) is imported lazily from `agents/risk.py`.
 
-Dead / legacy — read-only, do not extend, do not assume it runs:
-- Packages imported by nothing: `backtesting/`, `portfolio/`, `state/`, `universe/`, `learning/`, `llm/`, `observability/`, `memory/`, `mcp/`, `evals/`.
-- `agents/agent_tools.py` + `tools/supervisor_tools.py`, `agents/conferences.py` (vs live `conference.py`), `agents/tools.py`, `agents/memory_system.py`. `config/settings.py` is only read by these legacy modules — the agent graph gets models from `types.ModelConfig`.
+Dead / legacy — read-only, do not extend, do not assume it runs. These are kept only because they are the **sole implementation** of a feature (walk-forward backtests, conviction calibration, tax lots), not because they work:
+- `backtesting/` (walk-forward + alpha decay — `backtest/` has **no** walk-forward), `learning/` (calibration, online learning, A/B tests), `portfolio/` (tax engine), `universe/` + `tools/universe.py` (sector map + bulk fetcher that `tools/screening.py` lacks).
+- `memory/` (SQLite trade history + Chroma vectors), `llm/`, `observability/`, `config/settings.py` — all kept only because `learning/` and `memory/` import them. Nothing in the agent graph reads `config/settings.py`; models come from `types.ModelConfig`.
+- `agents/moat.py`, `agents/regulatory.py` (SEBI checks), `risk/anomaly.py`, `risk/regime.py`, `evals/`, `validation.py`, `mcp/browser_client.py` — unwired, no live replacement.
 - `agents/guardrails.py` is exported but attached to **no** agent; guardrails are not enforced despite what the README says.
+- Removed in the cleanup commit: `agents/{agent_tools,tools,conferences,memory_system,schemas,peer_compare}.py`, `tools/{supervisor_tools,fundamental_wrapper,technical_wrapper,memory_tools}.py`, `state/`. If you see a stale import of one, it was already dead.
 
 ## Traps
 

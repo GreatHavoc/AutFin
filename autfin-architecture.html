@@ -84,6 +84,7 @@
   <div class="legend">
     <span><i class="dot live"></i>live — imported and reachable</span>
     <span><i class="dot dead"></i>legacy — present on disk, imported by nothing</span>
+    <span><i class="dot" style="background:var(--amber)"></i>unwired but unique — kept, no replacement exists</span>
   </div>
 
   <h2>1 · Runtime flow (one morning run)</h2>
@@ -251,21 +252,24 @@
   <table>
     <thead><tr><th>Path</th><th>State</th><th>Why it matters</th></tr></thead>
     <tbody>
-      <tr><td><code>agents/</code>, <code>tools/</code>, <code>backtest/</code>, <code>risk/</code>, <code>types.py</code></td>
+      <tr><td><code>agents/</code>, <code>tools/</code>, <code>backtest/</code>, <code>risk/kelly.py</code>, <code>risk/vol_targeting.py</code>, <code>types.py</code></td>
           <td class="ok">live</td><td>editing here changes behaviour</td></tr>
-      <tr><td><code>backtesting/</code> (walk-forward, alpha decay)</td><td class="no">legacy</td>
-          <td>the working backtester is <code>backtest/</code>; two near-identical names</td></tr>
-      <tr><td><code>portfolio/</code>, <code>state/</code>, <code>universe/</code>, <code>learning/</code>, <code>llm/</code>,
-              <code>observability/</code>, <code>memory/</code>, <code>mcp/</code>, <code>evals/</code></td>
-          <td class="no">legacy</td><td>imported by nothing in the agent graph</td></tr>
-      <tr><td><code>agents/agent_tools.py</code> + <code>tools/supervisor_tools.py</code></td>
-          <td class="no">broken</td><td>unreachable, and <code>supervisor_tools.py:1588</code> is a genuine <code>SyntaxError</code></td></tr>
-      <tr><td><code>agents/conferences.py</code> vs <code>conference.py</code></td><td class="no">legacy</td>
-          <td>the plural one is dead; <code>agents/__init__.py</code> imports the singular</td></tr>
+      <tr><td><code>backtesting/</code> (walk-forward, alpha decay)</td><td class="part">unwired, but unique</td>
+          <td>kept: <code>backtest/</code> has <b>no</b> walk-forward or decay tracking, so deleting it would lose the feature</td></tr>
+      <tr><td><code>learning/</code> (calibration, online, A/B, judge)</td><td class="part">unwired, but unique</td>
+          <td>prompts say “use get_calibration”, no live tool implements it</td></tr>
+      <tr><td><code>portfolio/</code> (tax engine), <code>universe/</code> + <code>tools/universe.py</code></td>
+          <td class="part">unwired, but unique</td><td>sector map + bulk fetcher that <code>screening.py</code> lacks</td></tr>
+      <tr><td><code>memory/</code>, <code>llm/</code>, <code>observability/</code>, <code>config/settings.py</code></td>
+          <td class="part">unwired</td><td>kept only because <code>learning/</code> imports them; models actually come from <code>types.ModelConfig</code></td></tr>
+      <tr><td><code>agents/moat.py</code>, <code>agents/regulatory.py</code>, <code>risk/anomaly.py</code>, <code>risk/regime.py</code>, <code>evals/</code>, <code>mcp/</code></td>
+          <td class="part">unwired</td><td>no live replacement — real features, never called</td></tr>
       <tr><td><code>agents/guardrails.py</code></td><td class="part">defined, unenforced</td>
           <td>exported from <code>agents/__init__.py</code> but attached to no agent</td></tr>
       <tr><td><code>agents/durable.py</code> (Temporal)</td><td class="no">deleted</td>
           <td>README and <code>test_validation.py</code> still reference it; that file now breaks bare <code>pytest</code></td></tr>
+      <tr><td><code>agent_tools.py</code>, <code>tools.py</code>, <code>conferences.py</code>, <code>memory_system.py</code>, <code>schemas.py</code>, <code>peer_compare.py</code>, <code>supervisor_tools.py</code>, <code>*_wrapper.py</code>, <code>memory_tools.py</code>, <code>state/</code></td>
+          <td class="no">removed</td><td>duplicated a live implementation (toolsets, <code>types.py</code> models, <code>conference.py</code>, Memory capability) — 12 files, −184→119 ruff errors</td></tr>
     </tbody>
   </table>
 
@@ -273,10 +277,10 @@
   <table>
     <thead><tr><th>Command</th><th>Today's truth</th></tr></thead>
     <tbody>
-      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">58 passed in 4m31s</td></tr>
+      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">58 passed — 96 s warm, ~4.5 min cold</td></tr>
       <tr><td><code>uv run pytest</code> (bare)</td><td class="no">collection error — root script files are ad-hoc, not tests</td></tr>
-      <tr><td><code>uv run ruff check .</code></td><td class="no">184 errors (baseline is red; fix only your files)</td></tr>
-      <tr><td><code>uv run pyright</code></td><td class="no">421 errors / 114 files (no pyrightconfig.json exists)</td></tr>
+      <tr><td><code>uv run ruff check .</code></td><td class="no">119 errors (was 184 before the cleanup)</td></tr>
+      <tr><td><code>uv run pyright</code></td><td class="no">~400 errors (no pyrightconfig.json exists)</td></tr>
     </tbody>
   </table>
 

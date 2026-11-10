@@ -1,3 +1,0 @@
-"""
-AutFin State Types
-"""
