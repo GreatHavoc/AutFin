@@ -120,7 +120,7 @@ class AutFinTracer:
     def _ensure_table(self):
         """Create trace_history table if it doesn't exist."""
         try:
-            from src.autfin.memory.connection_pool import get_db_pool
+            from autfin.memory.connection_pool import get_db_pool
             pool = get_db_pool(_DB_PATH)
             with pool.connection() as conn:
                 conn.execute(
@@ -151,7 +151,7 @@ class AutFinTracer:
         if not self._persist_to_db:
             return
         try:
-            from src.autfin.memory.connection_pool import get_db_pool
+            from autfin.memory.connection_pool import get_db_pool
             pool = get_db_pool(_DB_PATH)
             with pool.connection() as conn:
                 conn.execute(
@@ -177,7 +177,7 @@ class AutFinTracer:
         if not self._persist_to_db:
             return []
         try:
-            from src.autfin.memory.connection_pool import get_db_pool
+            from autfin.memory.connection_pool import get_db_pool
             pool = get_db_pool(_DB_PATH)
             with pool.connection() as conn:
                 rows = conn.execute(

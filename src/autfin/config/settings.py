@@ -8,6 +8,8 @@ load_dotenv()  # Load .env into os.environ before model reads it
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+from autfin.types import MODEL_CONFIG
+
 
 class AutFinSettings(BaseSettings):
     """All configurable parameters for AutFin."""
@@ -20,20 +22,20 @@ class AutFinSettings(BaseSettings):
         description="Store mode: 'in-memory' or 'persistent' (SQLite)"
     )
     deep_model: str = Field(
-        default="nvidia/nemotron-3.5-lightning-30b-a3b",
-        description="Primary — ThinkingMachines Inkling (complex reasoning)"
+        default=MODEL_CONFIG.deep,
+        description="Primary — see types.MODEL_CONFIG"
     )
     fast_model: str = Field(
-        default="nvidia/nemotron-3.5-lightning-30b-a3b",
-        description="Fast model — Meta Muse Glimmer 30B (general tasks)"
+        default=MODEL_CONFIG.fast,
+        description="Fast model — see types.MODEL_CONFIG"
     )
     nvidia_model: str = Field(
-        default="nvidia/nemotron-3.5-lightning-30b-a3b",
-        description="NVIDIA NIM — Meta Muse Glimmer 30B"
+        default=MODEL_CONFIG.fast,
+        description="NVIDIA NIM — Meta see types.MODEL_CONFIG"
     )
     nvidia_deep_model: str = Field(
-        default="nvidia/nemotron-3.5-lightning-30b-a3b",
-        description="Deep model — ThinkingMachines Inkling (reasoning)"
+        default=MODEL_CONFIG.deep,
+        description="Deep model — see types.MODEL_CONFIG"
     )
     modal_vllm_url: str = Field(
         default="",

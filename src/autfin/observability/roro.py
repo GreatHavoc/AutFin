@@ -26,9 +26,31 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# Shared between the write and read paths so a database that has never recorded
+# research does not raise "no such table" on compute_roro().
+_RESEARCH_OUTPUT_DDL = '''CREATE TABLE IF NOT EXISTS research_output (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    depth TEXT NOT NULL,
+    research_weight INTEGER NOT NULL,
+    fundamentals_score REAL,
+    technical_score REAL,
+    sentiment_score REAL,
+    macro_score REAL,
+    valuation_score REAL,
+    research_duration_ms REAL,
+    created_at TEXT DEFAULT (datetime('now'))
+)'''
+
+
+def _ensure_research_output_table(conn) -> None:
+    conn.execute(_RESEARCH_OUTPUT_DDL)
+
+
 def get_db():
     """Get a database connection from the pool."""
-    from src.autfin.memory.connection_pool import get_db_pool
+    from autfin.memory.connection_pool import get_db_pool
     pool = get_db_pool(DB_PATH)
     return pool.connection()
 
@@ -42,25 +64,10 @@ def record_research_output(
 ):
     weight = WEIGHT_MAP.get(depth, 1)
     try:
-        from src.autfin.memory.connection_pool import get_db_pool
+        from autfin.memory.connection_pool import get_db_pool
         pool = get_db_pool(DB_PATH)
         with pool.connection() as conn:
-            conn.execute(
-                """CREATE TABLE IF NOT EXISTS research_output (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    decision_id TEXT NOT NULL,
-                    symbol TEXT NOT NULL,
-                    depth TEXT NOT NULL,
-                    research_weight INTEGER NOT NULL,
-                    fundamentals_score REAL,
-                    technical_score REAL,
-                    sentiment_score REAL,
-                    macro_score REAL,
-                    valuation_score REAL,
-                    research_duration_ms REAL,
-                    created_at TEXT DEFAULT (datetime('now'))
-                )""",
-            )
+            _ensure_research_output_table(conn)
             conn.execute(
                 """INSERT INTO research_output
                 (decision_id, symbol, depth, research_weight, fundamentals_score,
@@ -97,9 +104,10 @@ def compute_roro(lookback_days: int = 90) -> Dict[str, Any]:
         "interpretation": "Insufficient data",
     }
     try:
-        from src.autfin.memory.connection_pool import get_db_pool
+        from autfin.memory.connection_pool import get_db_pool
         pool = get_db_pool(DB_PATH)
         with pool.connection() as conn:
+            _ensure_research_output_table(conn)
             rows = conn.execute(
                 """SELECT r.decision_id, r.symbol, r.depth, r.research_weight, r.created_at
                 FROM research_output r
@@ -155,7 +163,7 @@ def compute_roro(lookback_days: int = 90) -> Dict[str, Any]:
 
 def _get_trade_pnl_for_symbol(symbol: str) -> float:
     try:
-        from src.autfin.memory.connection_pool import get_db_pool
+        from autfin.memory.connection_pool import get_db_pool
         pool = get_db_pool(DB_PATH)
         with pool.connection() as conn:
             row = conn.execute(
@@ -169,7 +177,7 @@ def _get_trade_pnl_for_symbol(symbol: str) -> float:
 
 def get_research_efficiency() -> Dict[str, Any]:
     try:
-        from src.autfin.memory.connection_pool import get_db_pool
+        from autfin.memory.connection_pool import get_db_pool
         pool = get_db_pool(DB_PATH)
         with pool.connection() as conn:
             total = conn.execute("SELECT COUNT(*) FROM research_output").fetchone()[0]

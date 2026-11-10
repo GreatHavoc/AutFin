@@ -282,8 +282,8 @@
           <td>FY 2026-27 rules — 20% STCG &lt;12m, 12.5% LTCG after the ₹1.25L exemption, FIFO lot matching, tax-loss and LTCG gain-harvest order generation. Still not exposed to agents</td></tr>
       <tr><td><code>universe/</code> + <code>tools/universe.py</code></td><td class="ok">fixed</td>
           <td>133-symbol Nifty 500 + 10-sector map, consistent with each other; <code>WatchlistCurator</code> no longer dies on numeric macro signals, and pre-earnings receives its arguments</td></tr>
-      <tr><td><code>memory/</code>, <code>llm/</code>, <code>observability/</code>, <code>config/settings.py</code></td>
-          <td class="part">legacy</td><td>nothing reads them any more; models come from <code>types.ModelConfig</code>. Only <code>memory/database.py</code> survives — it owns the <code>trades</code> and <code>learning_journal</code> tables</td></tr>
+      <tr><td><code>memory/</code> (performance, embeddings, pool, chroma), <code>observability/</code> (metrics, roro, tracer), <code>llm/</code>, <code>config/settings.py</code></td>
+          <td class="ok">fixed</td><td>still unwired, but they run: the pool commits on exit, win/loss comes from pnl, settings agree with <code>types.ModelConfig</code>. <code>memory/{retrieval,consolidation}.py</code> deleted — remnants of a removed store, zero importers</td></tr>
       <tr><td><code>agents/moat.py</code>, <code>agents/regulatory.py</code>, <code>risk/anomaly.py</code>, <code>risk/regime.py</code>, <code>evals/</code>, <code>mcp/</code></td>
           <td class="part">unwired</td><td>no live replacement — real features, never called</td></tr>
       <tr><td><code>agents/guardrails.py</code></td><td class="part">defined, unenforced</td>
@@ -299,7 +299,7 @@
   <table>
     <thead><tr><th>Command</th><th>Today's truth</th></tr></thead>
     <tbody>
-      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">108 passed — 80 s warm, ~2.5 min cold</td></tr>
+      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">119 passed — 45 s warm, ~2.5 min cold</td></tr>
       <tr><td><code>uv run pytest tests/test_learning tests/test_tools/test_walk_forward.py tests/test_tools/test_learning_toolset.py tests/test_portfolio tests/test_universe</code></td><td class="ok">the five suites repaired this session</td></tr>
       <tr><td><code>uv run pytest</code> (bare)</td><td class="no">collection error — root script files are ad-hoc, not tests</td></tr>
       <tr><td><code>uv run ruff check .</code></td><td class="no">119 errors (was 184 before the cleanup)</td></tr>
@@ -312,7 +312,8 @@
     Where the README disagrees with the code (test counts, model ids, guardrails, Temporal), this page follows the code.
     Repaired this session: walk-forward backtesting (44% of history silently unused), the learning journal
     (a corrupt SQLite file made calibration a no-op), the tax engine (it read a column that does not exist,
-    so every summary was zero), and the watchlist curator (it raised on numeric macro signals). Tests: 108.
+    so every summary was zero), and the watchlist curator (it raised on numeric macro signals). and the memory layer (the connection pool never committed, so every pooled write
+    vanished). Tests: 119.
   </footer>
 
 </div>

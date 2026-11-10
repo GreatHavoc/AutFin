@@ -12,16 +12,20 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+from autfin.types import MODEL_CONFIG
+
 class ModelTier(Enum):
     DEEP = "deep"
     MEDIUM = "medium"
     FAST = "fast"
 
 # Maps tier -> model name (resolved at runtime from LLMClient)
+# Maps tier -> model name. Read from types.MODEL_CONFIG so the legacy tier table
+# cannot disagree with the agent graph about which model a tier means.
 MODEL_REGISTRY: dict[ModelTier, str] = {
-    ModelTier.DEEP: "nvidia/nemotron-3.5-lightning-30b-a3b",
-    ModelTier.MEDIUM: "nvidia/nemotron-3.5-lightning-30b-a3b",
-    ModelTier.FAST: "nvidia/nemotron-3.5-lightning-30b-a3b",
+    ModelTier.DEEP: MODEL_CONFIG.reasoning,
+    ModelTier.MEDIUM: MODEL_CONFIG.deep,
+    ModelTier.FAST: MODEL_CONFIG.fast,
 }
 
 # Maps agent/subagent name -> model tier

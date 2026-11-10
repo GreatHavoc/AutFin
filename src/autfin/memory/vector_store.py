@@ -6,8 +6,6 @@ from typing import Any, Dict, List, Optional
 import chromadb
 from chromadb import Documents, EmbeddingFunction, Embeddings
 
-from ..config.settings import AutFinSettings
-
 
 class AutFinEmbeddingFunction(EmbeddingFunction):
     """ChromaDB embedding function that uses our sentence-transformers model."""
@@ -27,15 +25,12 @@ REQUIRED_COLLECTIONS = [
 
 
 def get_chroma_path() -> Path:
-    """Get the ChromaDB persistence path from config or default."""
-    project_root = Path(__file__).parent.parent.parent.parent
-    data_dir = project_root / "data"
-    
-    try:
-        settings = AutFinSettings()
-        return data_dir / "chroma"
-    except Exception:
-        return data_dir / "chroma"
+    """ChromaDB persistence path.
+
+    shortcut: both branches returned the same path and AutFinSettings has no
+    chroma field, so this is simply the repo's data/chroma directory.
+    """
+    return Path(__file__).parent.parent.parent.parent / "data" / "chroma"
 
 
 def create_chroma_client(

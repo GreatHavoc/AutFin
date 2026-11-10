@@ -59,8 +59,11 @@ class SQLiteConnectionPool:
     def connection(self):
         """Get a database connection from the pool.
 
-        Yields a sqlite3.Connection that is automatically returned
-        to the pool when the context exits.
+        Yields a sqlite3.Connection that is automatically returned to the pool
+        when the context exits, and commits the write on successful exit: sqlite3
+        opens a transaction on DML, so without that commit every write made
+        through the pool (research output, traces) is rolled back on close.
+
 
         Usage:
             with pool.connection() as conn:
@@ -90,6 +93,7 @@ class SQLiteConnectionPool:
 
         try:
             yield conn
+            conn.commit()
         except Exception:
             # On error, remove connection from pool (it may be in bad state)
             with self._lock:

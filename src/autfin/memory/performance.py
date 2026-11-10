@@ -174,12 +174,16 @@ def get_win_rate(days: Optional[int] = None) -> Dict[str, Any]:
             }
 
         total = len(rows)
-        wins = sum(1 for _, o in rows if o == "completed")
-        losses = total - wins
+        # "completed" means a closed trade, not a winning one; deciding wins by
+        # outcome counted every completed trade as a win regardless of pnl.
+        # Wins/losses now come from realised pnl, matching learning/calibrator.py
+        # and portfolio/tax_engine.py.
+        wins = sum(1 for pnl, _ in rows if pnl is not None and pnl > 0)
+        losses = sum(1 for pnl, _ in rows if pnl is not None and pnl <= 0)
         pnls = [pnl for pnl, _ in rows if pnl is not None]
         total_pnl = sum(pnls)
-        win_pnls = [pnl for pnl, o in rows if o == "completed" and pnl is not None]
-        loss_pnls = [pnl for pnl, o in rows if o == "loss" and pnl is not None]
+        win_pnls = [pnl for pnl, _ in rows if pnl is not None and pnl > 0]
+        loss_pnls = [pnl for pnl, _ in rows if pnl is not None and pnl <= 0]
 
         return {
             "total_trades": total,
