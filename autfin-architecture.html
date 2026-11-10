@@ -254,14 +254,14 @@
     <tbody>
       <tr><td><code>agents/</code>, <code>tools/</code>, <code>backtest/</code>, <code>risk/kelly.py</code>, <code>risk/vol_targeting.py</code>, <code>types.py</code></td>
           <td class="ok">live</td><td>editing here changes behaviour</td></tr>
-      <tr><td><code>backtesting/</code> (walk-forward, alpha decay)</td><td class="part">unwired, but unique</td>
-          <td>kept: <code>backtest/</code> has <b>no</b> walk-forward or decay tracking, so deleting it would lose the feature</td></tr>
-      <tr><td><code>learning/</code> (calibration, online, A/B, judge)</td><td class="part">unwired, but unique</td>
-          <td>prompts say “use get_calibration”, no live tool implements it</td></tr>
+      <tr><td><code>backtesting/</code> (walk-forward, alpha decay)</td><td class="ok">fixed</td>
+          <td>walk-forward now tiles the whole series, closes open positions, and reports <b>INSUFFICIENT_DATA</b> instead of a false OVERFIT</td></tr>
+      <tr><td><code>learning/</code> (calibration, online, A/B, judge), <code>memory/</code> (SQLite journal)</td>
+          <td class="ok">fixed</td><td>works and is tested (<code>tests/test_learning/</code>) but nothing in the agent graph calls it yet</td></tr>
       <tr><td><code>portfolio/</code> (tax engine), <code>universe/</code> + <code>tools/universe.py</code></td>
           <td class="part">unwired, but unique</td><td>sector map + bulk fetcher that <code>screening.py</code> lacks</td></tr>
       <tr><td><code>memory/</code>, <code>llm/</code>, <code>observability/</code>, <code>config/settings.py</code></td>
-          <td class="part">unwired</td><td>kept only because <code>learning/</code> imports them; models actually come from <code>types.ModelConfig</code></td></tr>
+          <td class="part">legacy</td><td>nothing reads them any more; models come from <code>types.ModelConfig</code>. Only <code>memory/database.py</code> survives as the learning journal store</td></tr>
       <tr><td><code>agents/moat.py</code>, <code>agents/regulatory.py</code>, <code>risk/anomaly.py</code>, <code>risk/regime.py</code>, <code>evals/</code>, <code>mcp/</code></td>
           <td class="part">unwired</td><td>no live replacement — real features, never called</td></tr>
       <tr><td><code>agents/guardrails.py</code></td><td class="part">defined, unenforced</td>
@@ -277,7 +277,8 @@
   <table>
     <thead><tr><th>Command</th><th>Today's truth</th></tr></thead>
     <tbody>
-      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">58 passed — 96 s warm, ~4.5 min cold</td></tr>
+      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">77 passed — 30 s warm</td></tr>
+      <tr><td><code>uv run pytest tests/test_learning tests/test_tools/test_walk_forward.py</code></td><td class="ok">the two suites repaired this session</td></tr>
       <tr><td><code>uv run pytest</code> (bare)</td><td class="no">collection error — root script files are ad-hoc, not tests</td></tr>
       <tr><td><code>uv run ruff check .</code></td><td class="no">119 errors (was 184 before the cleanup)</td></tr>
       <tr><td><code>uv run pyright</code></td><td class="no">~400 errors (no pyrightconfig.json exists)</td></tr>

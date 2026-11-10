@@ -22,14 +22,21 @@ uv run python run.py --once                          # daemon; --mode paper|live
 
 ## What is actually wired
 
-Entry graph: `agents/supervisor.py` → `create_agent()` in `agents/base.py` → sub-agents `market_data, analysis, research, risk, debate, conference, memory` (+ `quant`). Only market_data/analysis/research/risk/quant get a toolset (from `tools/__init__.py`); debate/conference/memory are tool-less. Shared state is `types.AgentDeps` (deps), structured outputs and model IDs are in `types.py`. Live backtesting is `src/autfin/backtest/`; `src/autfin/risk/` (kelly, vol_targeting) is imported lazily from `agents/risk.py`.
+Entry graph: `agents/supervisor.py` → `create_agent()` in `agents/base.py` → sub-agents `market_data, analysis, research, risk, debate, conference, memory` (+ `quant`). Only market_data/analysis/research/risk/quant get a toolset (from `tools/__init__.py`); debate/conference/memory are tool-less. Shared state is `types.AgentDeps` (deps), structured outputs and model IDs are in `types.py`. Both backtest suites work now: `src/autfin/backtest/` (vectorbt) and `src/autfin/backtesting/` (walk-forward + alpha decay), exported together from `autfin.backtest`. `src/autfin/risk/` (kelly, vol_targeting) is imported lazily from `agents/risk.py`. `autfin/learning/` (calibration, retrieval, online learner) is fixed and covered by `tests/test_learning/` — but **nothing in the agent graph calls it yet**.
 
-Dead / legacy — read-only, do not extend, do not assume it runs. These are kept only because they are the **sole implementation** of a feature (walk-forward backtests, conviction calibration, tax lots), not because they work:
-- `backtesting/` (walk-forward + alpha decay — `backtest/` has **no** walk-forward), `learning/` (calibration, online learning, A/B tests), `portfolio/` (tax engine), `universe/` + `tools/universe.py` (sector map + bulk fetcher that `tools/screening.py` lacks).
-- `memory/` (SQLite trade history + Chroma vectors), `llm/`, `observability/`, `config/settings.py` — all kept only because `learning/` and `memory/` import them. Nothing in the agent graph reads `config/settings.py`; models come from `types.ModelConfig`.
-- `agents/moat.py`, `agents/regulatory.py` (SEBI checks), `risk/anomaly.py`, `risk/regime.py`, `evals/`, `validation.py`, `mcp/browser_client.py` — unwired, no live replacement.
+Dead / legacy — unwired because no live replacement exists, do not extend, do not assume it runs:
+- `portfolio/` (tax engine), `universe/` + `tools/universe.py` (sector map + bulk fetcher that `tools/screening.py` lacks), `agents/moat.py`, `agents/regulatory.py` (SEBI), `risk/anomaly.py`, `risk/regime.py`.
+- `llm/`, `observability/`, `config/settings.py` — nothing reads them any more; models come from `types.ModelConfig`.
+- `evals/`, `validation.py`, `mcp/browser_client.py` — unwired, no live replacement.
 - `agents/guardrails.py` is exported but attached to **no** agent; guardrails are not enforced despite what the README says.
 - Removed in the cleanup commit: `agents/{agent_tools,tools,conferences,memory_system,schemas,peer_compare}.py`, `tools/{supervisor_tools,fundamental_wrapper,technical_wrapper,memory_tools}.py`, `state/`. If you see a stale import of one, it was already dead.
+
+## The learning journal and its database
+
+- `memory/database.py` owns `data/autfin.db` (gitignored, local-only). `get_connection()` runs `PRAGMA quick_check` and **quarantines a corrupt file as `data/autfin.db.malformed-<ts>`** instead of handing it out — every learning function swallows `Exception`, so without that check the engine silently returns empty.
+- If a `.malformed-*` file exists, that trade history needs `sqlite3 .recover`; the journal restarted empty.
+- `pre_trade_context()` / `post_trade_learn()` in `autfin/learning/feedback_loop.py` are the entry points for trading context (similar setups, calibration, patterns, conviction adjustment). Exported, but not called by any agent.
+- `retrieve_learnings()` claims semantic search but `sentence-transformers` is not a dependency, so it silently uses sha256 "hash embeddings" — similarity scores are noise, not meaning.
 
 ## Traps
 
