@@ -26,7 +26,7 @@ NIFTY_500: list[str] = sorted(set([
     "LT", "AXISBANK", "BAJFINANCE", "ASIANPAINT", "MARUTI",
     "TITAN", "SUNPHARMA", "HCLTECH", "WIPRO", "NTPC",
     "POWERGRID", "ONGC", "ADANIENT", "ADANIPORTS", "JSWSTEEL",
-    "TATASTEEL", "TECHM", "ULTRACEMCO", "BAJAJFINSV", "NESTLEIND",
+    "TATASTEEL", "HINDALCO", "SAIL", "JINDALSTEL", "TECHM", "ULTRACEMCO", "BAJAJFINSV", "NESTLEIND",
     "DRREDDY", "CIPLA", "DIVISLAB", "APOLLOHOSP", "BRITANNIA",
     "EICHERMOT", "INDUSINDBK", "PNB", "BANKBARODA", "COALINDIA",
     "GRASIM", "HDFCLIFE", "SBILIFE", "HEROMOTOCO", "BAJAJ-AUTO",
@@ -43,8 +43,8 @@ NIFTY_500: list[str] = sorted(set([
     "MANAPPURAM", "CANFINHOME", "LICHSGFIN",
     "FEDERALBNK", "BANDHANBNK", "IDFCFIRSTB", "AUBANK", "BANKINDIA",
     "CANBK", "UNIONBANK", "INDIANB", "CENTRALBK", "MAHABANK",
-    "TATAMOTORS", "M&M", "TVSMOTOR", "EXIDEIND", "AMARARAJA",
-    "BOSCHLALL", "SONACOMS", "SCHAEFFLER", "SKFINDIA", "TIMKEN",
+    "TATAMOTORS", "M&M", "TVSMOTOR", "EXIDEIND",
+    "BOSCHLTD", "SONACOMS", "SCHAEFFLER", "SKFINDIA", "TIMKEN",
     "DIXON", "CLEAN", "ZOMATO", "PAYTM", "POLICYBZR",
     "NYKAA", "DELHIVERY", "MAPMYINDIA", "KPITTECH", "PERSISTENT",
     "COFORGE", "MPHASIS", "LTIM", "LTTS", "CYIENT",
@@ -64,8 +64,8 @@ SECTOR_MAP: dict[str, list[str]] = {
                "BIOCON", "AUROPHARMA", "ALKEM", "TORNTPHARM", "IPCALAB",
                "APOLLOHOSP"],
     "AUTO": ["MARUTI", "TATAMOTORS", "M&M", "EICHERMOT", "HEROMOTOCO",
-             "ASHOKLEY", "BAJAJ-AUTO", "TVSMOTOR", "AMARARAJA",
-             "EXIDEIND", "BOSCHLTD", "SONACOMS", "BHARATFORG"],
+             "ASHOKLEY", "BAJAJ-AUTO", "TVSMOTOR", "EXIDEIND",
+             "BOSCHLTD", "SONACOMS", "BHARATFORG"],
     "METALS": ["TATASTEEL", "JSWSTEEL", "HINDALCO", "VEDL", "HINDZINC",
                "COALINDIA", "SAIL", "JINDALSTEL", "HEIDELBERG"],
     "FMCG": ["HINDUNILVR", "ITC", "NESTLEIND", "BRITANNIA", "DABUR",
@@ -151,7 +151,7 @@ async def fetch_universe_data(
         try:
             import yfinance as yf
 
-            from src.autfin.agents.yfinance_utils import normalize_symbol
+            from autfin.agents.yfinance_utils import normalize_symbol
 
             async with semaphore:
                 ticker = yf.Ticker(normalize_symbol(sym))

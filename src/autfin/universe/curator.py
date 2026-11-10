@@ -53,7 +53,7 @@ class WatchlistCurator:
 
         # 4. Pre-earnings — stocks with earnings in next 14 days
         try:
-            pre_earnings = await self._find_pre_earnings(list(watchlist))
+            pre_earnings = await self._find_pre_earnings(sorted(watchlist))
             watchlist.update(pre_earnings)
         except Exception as e:
             logger.debug("Pre-earnings scan skipped: %s", e)
@@ -67,7 +67,9 @@ class WatchlistCurator:
 
         # 6. Macro shock — if macro is bearish, include all holdings
         macro = state.get("macro_signals") or {}
-        if macro.get("impact_score", "").startswith("high_negative"):
+        # Coerce: impact_score is numeric in live payloads, and calling
+        # .startswith() on a float killed the whole curation.
+        if str(macro.get("impact_score") or "").startswith("high_negative"):
             # Already included all holdings in step 1
             logger.info("Macro shock detected — all holdings already in watchlist")
 
@@ -77,14 +79,14 @@ class WatchlistCurator:
         logger.info("Watchlist curated: %d symbols", len(result))
         return result
 
-    async def _find_pre_earnings(self) -> List[str]:
-        """Find stocks with earnings in the next 14 days.
+    async def _find_pre_earnings(self, watchlist: List[str]) -> List[str]:
+        """Return watchlist entries with earnings in the next 14 days.
 
-        Uses a static list of known quarterly result dates.
-        In production, this would query NSE/BSE corporate calendar.
+        shortcut: no earnings calendar is wired — no NSE/BSE corporate calendar
+        and no MoneyControl scrape exists in this repo, so this returns [].
+        Upgrade by calling the per-symbol catalyst tool (fundamental_toolset's
+        get_upcoming_catalysts) per symbol, or an NSE calendar source.
         """
-        # This is a placeholder — in production, integrate with
-        # NSE corporate calendar or MoneyControl earnings calendar
         return []
 
     async def _find_top_movers(self, threshold_pct: float = 3.0) -> List[str]:
@@ -95,7 +97,7 @@ class WatchlistCurator:
         try:
             import yfinance as yf
 
-            from src.autfin.tools.universe import NIFTY_500
+            from autfin.tools.universe import NIFTY_500
 
             # Check a subset of the universe (top 50 by market cap)
             # to avoid rate limits
