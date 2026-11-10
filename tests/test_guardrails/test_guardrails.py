@@ -156,18 +156,18 @@ def test_browser_toolset_defaults_to_the_documented_settings(monkeypatch):
     monkeypatch.delenv("OBSCURA_MCP_URL", raising=False)
     monkeypatch.setenv("BROWSER_MCP_PORT", "9333")
 
-    from autfin.tools.browser_agent import _obscura_endpoint
+    from autfin.tools.browser_agent import obscura_endpoint
 
-    assert _obscura_endpoint() == "http://127.0.0.1:9333/mcp"
+    assert obscura_endpoint() == "http://127.0.0.1:9333/mcp"
 
 
 def test_named_url_beats_the_settings_module(monkeypatch):
     monkeypatch.setenv("OBSCURA_MCP_URL", "http://localhost:7777/mcp")
     monkeypatch.setenv("BROWSER_MCP_PORT", "9333")
 
-    from autfin.tools.browser_agent import _obscura_endpoint
+    from autfin.tools.browser_agent import obscura_endpoint
 
-    assert _obscura_endpoint() == "http://localhost:7777/mcp"
+    assert obscura_endpoint() == "http://localhost:7777/mcp"
 
 
 def test_daemon_binds_the_port_the_client_dials(monkeypatch):
@@ -182,6 +182,6 @@ def test_daemon_binds_the_port_the_client_dials(monkeypatch):
     # the module-level line the daemon runs, executed with the test's env
     monkeypatch.setenv("BROWSER_MCP_PORT", str(run.OBSCURA_PORT))
 
-    from autfin.mcp.browser_client import BrowserMCPSettings
+    from autfin.tools.browser_agent import BrowserMCPSettings
 
     assert BrowserMCPSettings.from_env().port == 9222

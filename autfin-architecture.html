@@ -227,9 +227,8 @@
   </table>
 
   <div class="note">
-    <b>Ports reconciled:</b> <code>tools/browser_agent.py</code> resolves its endpoint through
-    <code>mcp/browser_client.BrowserMCPSettings</code> (a named <code>OBSCURA_MCP_URL</code> still wins),
-    and <code>run.py</code> writes the port it starts Obscura on into <code>BROWSER_MCP_PORT</code> &#8212;
+    <b>Ports reconciled:</b> <code>tools/browser_agent.py</code> owns the settings, and
+    <code>run.py</code> writes the port it starts Obscura on into <code>BROWSER_MCP_PORT</code> &#8212;
     one variable drives both sides instead of three competing defaults. <code>get_browser_agent()</code> still hardcodes <code>openai:gpt-4.1-mini</code>, which needs an
     <code>OPENAI_API_KEY</code> that <code>.env.example</code> does not mention.
     The sentiment-scraping path additionally hardcodes <code>openai:gpt-4.1-mini</code>, which needs an
@@ -296,8 +295,8 @@
           <td>classifier now reads <code>title/subject/headline</code> + <code>body/details/description</code>; a SEBI order sent as <code>headline</code> used to classify as "low"</td></tr>
       <tr><td><code>evals/</code> (pydantic-evals dataset + evaluators)</td><td class="ok">fixed</td>
           <td>19 cases, round-trips through save/load; <code>evals/__init__.py</code> now exports the API</td></tr>
-      <tr><td><code>mcp/browser_client.py</code></td><td class="part">unwired</td>
-          <td>settings and lifecycle work, but nothing connects it — the live path is <code>tools/browser_agent.py</code></td></tr>
+      <tr><td><code>src/autfin/mcp/</code></td><td class="no">deleted</td>
+          <td>settings + Obscura lifecycle moved into <code>tools/browser_agent.py</code>; its langchain client was the only part needing an undeclared dependency (<code>langchain-mcp-adapters</code>) and nothing called it. <code>run.py</code> now delegates to the shared autostart</td></tr>
       <tr><td><code>agents/guardrails.py</code> (input/output/tool guardrails)</td><td class="ok">now enforced</td>
           <td>attached per agent by <code>create_agent()</code> from <code>get_guardrails_for_agent()</code>: market_data gets input only, risk/supervisor/quant get the full suite, memory gets input+tool. Real trade args (qty, LIMIT price, <code>BAJAJ-AUTO</code>/<code>M&amp;M</code> symbols) validated, tool results sanitised for secrets, long outputs must cite a source, risk/reward must be &#8805; 2:1 and conviction &#8805; 0.5</td></tr>
       <tr><td><code>agents/durable.py</code> (Temporal)</td><td class="no">deleted</td>

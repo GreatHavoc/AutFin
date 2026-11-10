@@ -13,9 +13,8 @@ import logging
 import os
 import signal
 import subprocess
-import sys
-import time
-from datetime import datetime, time as dtime, timedelta
+from datetime import datetime, timedelta
+from datetime import time as dtime
 from pathlib import Path
 
 import logfire
@@ -35,7 +34,7 @@ _stop = False
 OBSCURA_DIR = Path(os.getenv("OBSCURA_DIR", r"C:\Users\Prakhar\Downloads\obscura-x86_64-windows"))
 OBSCURA_PORT = int(os.getenv("OBSCURA_PORT", "9222"))
 # Keep the MCP settings in sync with the port this daemon binds Obscura to,
-# so tools/browser_agent.py and mcp/browser_client.py dial the same server.
+# so tools/browser_agent.py dials the same server it starts.
 os.environ.setdefault("BROWSER_MCP_PORT", str(OBSCURA_PORT))
 
 MARKET_OPEN = dtime(9, 15)
@@ -53,42 +52,39 @@ signal.signal(signal.SIGTERM, _handle_signal)
 
 
 def _start_obscura() -> subprocess.Popen | None:
-    """Start Obscura MCP server if not already running."""
-    import socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.connect(("127.0.0.1", OBSCURA_PORT))
-        sock.close()
+    """Start Obscura if it is not already serving.
+
+    Delegates to the shared lifecycle in tools/browser_agent.py so the daemon
+    and the agent path spawn the same server the same way — this file used to
+    carry a second copy of the spawn-and-wait loop.
+    """
+    from autfin.tools.browser_agent import (
+        ObscuraNotInstalledError,
+        _port_open,
+        ensure_obscura_running,
+    )
+
+    if _port_open("127.0.0.1", OBSCURA_PORT):
         log.info("Obscura already running on port %d", OBSCURA_PORT)
         return None
-    except ConnectionRefusedError:
-        pass
 
-    exe = OBSCURA_DIR / "obscura.exe"
-    if not exe.exists():
-        log.warning("Obscura not found at %s — browser agent will be unavailable", exe)
+    # run.py's default is a Windows install path; expose it as the binary so the
+    # shared autostart finds it.
+    exe = Path(OBSCURA_DIR) / "obscura.exe"
+    if exe.exists():
+        os.environ["BROWSER_MCP_BINARY"] = str(exe)
+        os.environ["BROWSER_MCP_PORT"] = str(OBSCURA_PORT)
+
+    try:
+        proc = ensure_obscura_running()
+        log.info("Obscura MCP ready on port %d", OBSCURA_PORT)
+        return proc
+    except ObscuraNotInstalledError as exc:
+        log.warning("Obscura not available — browser agent will be idle: %s", exc)
         return None
-
-    log.info("Starting Obscura MCP on port %d...", OBSCURA_PORT)
-    proc = subprocess.Popen(
-        [str(exe), "mcp", "--http", "--port", str(OBSCURA_PORT)],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
-    # Wait for it to come up
-    for _ in range(30):
-        time.sleep(0.5)
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(("127.0.0.1", OBSCURA_PORT))
-            sock.close()
-            log.info("Obscura ready on port %d", OBSCURA_PORT)
-            return proc
-        except ConnectionRefusedError:
-            continue
-    log.warning("Obscura failed to start within 15s")
-    return proc
+    except Exception:
+        log.exception("Obscura failed to start")
+        return None
 
 
 def _is_market_hours() -> bool:

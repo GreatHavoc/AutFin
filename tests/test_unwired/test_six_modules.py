@@ -218,9 +218,9 @@ def test_agent_specific_datasets_are_built():
     assert len(create_agent_specific_dataset("risk").cases) > 0
 
 
-# ── mcp/browser_client ──────────────────────────────────────────────────────
+# ── browser MCP: settings + lifecycle ────────────────────────────────────────
 def test_mcp_settings_come_from_env(monkeypatch):
-    from autfin.mcp.browser_client import BrowserMCPSettings
+    from autfin.tools.browser_agent import BrowserMCPSettings
 
     monkeypatch.setenv("BROWSER_MCP_PORT", "9333")
     monkeypatch.setenv("BROWSER_MCP_TRANSPORT", "STDIO")
@@ -232,28 +232,23 @@ def test_mcp_settings_come_from_env(monkeypatch):
     assert s.autostart is False
 
 
-def test_mcp_client_reports_install_instructions_when_absent():
-    """Obscura is not installed here; the client must say so rather than hang
-    or fail with a bare ImportError."""
-    from autfin.mcp.browser_client import (
-        BrowserMCPNotInstalledError,
-        get_browser_mcp_client,
-        reset_browser_mcp_client,
-    )
+def test_autostart_names_the_missing_install(monkeypatch):
+    """Obscura is absent here; the error must name what to install rather than
+    fall back silently or raise a bare ImportError."""
+    from autfin.tools import browser_agent as ba
 
-    reset_browser_mcp_client()
-    try:
-        client = get_browser_mcp_client()
-        # If Obscura is present on this machine, a real client is returned.
-        assert client is not None
-    except BrowserMCPNotInstalledError as exc:
-        # Either the Obscura binary or its langchain adapter can be the missing
-        # piece; both must name the thing to install.
-        message = str(exc).lower()
-        assert "obscura" in message or "langchain-mcp-adapters" in message
+    monkeypatch.setattr(ba.shutil, "which", lambda *_: None)
+    monkeypatch.setattr(ba, "_port_open", lambda *a, **k: False)
+    monkeypatch.delenv("BROWSER_MCP_BINARY", raising=False)
+
+    with pytest.raises(ba.ObscuraNotInstalledError) as excinfo:
+        ba.autostart_obscura()
+    message = str(excinfo.value)
+    assert "obscura" in message.lower()
+    assert "https://github.com/h4ckf0r0day/obscura" in message
 
 
 def test_mcp_port_check_reports_closed_ports():
-    from autfin.mcp.browser_client import _port_open
+    from autfin.tools.browser_agent import _port_open
 
     assert _port_open("127.0.0.1", 1) is False  # port 1 is privileged/closed
