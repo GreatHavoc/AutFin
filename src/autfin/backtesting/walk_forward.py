@@ -82,7 +82,8 @@ def split_windows(
         n_bars: Total number of data points
         train_pct: Fraction of each window used for training
         n_folds: Number of walk-forward folds
-        step_pct: Step size as fraction of window (0 = auto)
+        step_pct: Overlap control — fraction of the full series to advance per
+            fold (0 = tile the series with non-overlapping windows)
 
     Returns:
         List of Window objects
@@ -96,15 +97,18 @@ def split_windows(
         train_end = int(n_bars * train_pct)
         return [Window(0, train_end, train_end, n_bars, fold=0)]
 
-    step = max(1, int(window_size * (1 - train_pct))) if step_pct <= 0 else max(1, int(n_bars * step_pct))
+    # Folds tile the series: consecutive windows start where the previous one
+    # ended, and the last fold absorbs any remainder. A smaller step overlaps
+    # windows if the caller asks for it via step_pct.
+    step = max(1, int(n_bars * step_pct)) if step_pct > 0 else window_size
 
     windows = []
     for i in range(n_folds):
         start = i * step
-        if start + window_size > n_bars:
+        if start >= n_bars:
             break
-        train_end = start + int(window_size * train_pct)
-        test_end = min(start + window_size, n_bars)
+        test_end = n_bars if i == n_folds - 1 else min(start + window_size, n_bars)
+        train_end = start + int((test_end - start) * train_pct)
         if train_end >= test_end or test_end - train_end < 3:
             continue
         windows.append(Window(
@@ -130,7 +134,12 @@ def _simple_returns(closes: List[float]) -> List[float]:
 
 
 def _sharpe_ratio(returns: List[float], risk_free: float = 0.0) -> float:
-    """Annualized Sharpe ratio (assume 252 trading days)."""
+    """Annualized Sharpe ratio (assume 252 trading days).
+
+    shortcut: annualizes a per-trade return series by sqrt(252), which overstates
+    Sharpe for low-frequency strategies. Upgrade to per-bar equity returns if the
+    absolute value (not the train/test comparison) starts driving decisions.
+    """
     if not returns:
         return 0.0
     excess = [r - risk_free for r in returns]
@@ -189,6 +198,11 @@ def simple_sma_crossover(
             ret = (closes[i] - position) / position
             trades.append(ret)
             position = None
+
+    # Mark the still-open position to market. Without this a trending series
+    # never closes a trade and reports zero trades / zero Sharpe.
+    if position is not None:
+        trades.append((closes[-1] - position) / position)
 
     return trades
 
@@ -310,11 +324,13 @@ def walk_forward(
         # Evaluate on test (out-of-sample)
         test_bt = _run_backtest(test_data, strategy_fn, best_params)
 
-        # Overfit ratio: IS Sharpe / OOS Sharpe
+        # Overfit ratio: IS Sharpe / OOS Sharpe. A test window too short for the
+        # strategy produces zero trades; that is missing evidence, not overfitting.
+        usable = test_bt.n_trades > 0 and train_bt.n_trades > 0
         overfit_ratio = (
-            train_bt.sharpe / test_bt.sharpe
-            if test_bt.sharpe > 0
-            else 999.0
+            round(train_bt.sharpe / test_bt.sharpe, 2)
+            if usable and test_bt.sharpe > 0
+            else 0.0
         )
 
         fr = FoldResult(
@@ -334,25 +350,56 @@ def walk_forward(
             train_trades=train_bt.n_trades,
             test_trades=test_bt.n_trades,
             best_params=best_params,
-            overfit_ratio=round(overfit_ratio, 2),
+            overfit_ratio=overfit_ratio,
         )
         fold_results.append(fr)
 
-    # Aggregate OOS metrics
-    oos_returns: List[float] = []
-    oos_sharpes: List[float] = []
-    oos_returns_pct: List[float] = []
-    oos_drawdowns: List[float] = []
+    usable_folds = [fr for fr in fold_results if fr.train_trades > 0 and fr.test_trades > 0]
 
-    for fr in fold_results:
-        oos_sharpes.append(fr.test_sharpe)
-        oos_returns_pct.append(fr.test_return_pct)
-        oos_drawdowns.append(fr.test_max_drawdown)
+    # Aggregate OOS metrics over folds that actually traded. Averages over
+    # zero-trade folds would read as "0.0 Sharpe" and trigger a false OVERFIT.
+    oos_sharpes = [fr.test_sharpe for fr in usable_folds]
+    oos_returns_pct = [fr.test_return_pct for fr in usable_folds]
+    oos_drawdowns = [fr.test_max_drawdown for fr in usable_folds]
 
-    avg_oos_sharpe = sum(oos_sharpes) / max(len(oos_sharpes), 1)
-    avg_oos_return = sum(oos_returns_pct) / max(len(oos_returns_pct), 1)
-    avg_oos_drawdown = sum(oos_drawdowns) / max(len(oos_drawdowns), 1)
-    avg_overfit = sum(fr.overfit_ratio for fr in fold_results) / max(len(fold_results), 1)
+    n_usable = max(len(usable_folds), 1)
+    avg_oos_sharpe = sum(oos_sharpes) / n_usable
+    avg_oos_return = sum(oos_returns_pct) / n_usable
+    avg_oos_drawdown = sum(oos_drawdowns) / n_usable
+    avg_overfit = sum(fr.overfit_ratio for fr in usable_folds) / n_usable
+
+    # Win consistency: how many usable folds had positive OOS return
+    positive_folds = sum(1 for r in oos_returns_pct if r > 0)
+    win_consistency = positive_folds / n_usable
+
+    if not usable_folds:
+        return {
+            "n_folds": len(fold_results),
+            "n_usable_folds": 0,
+            "fold_results": [
+                {
+                    "fold": fr.fold,
+                    "test_trades": fr.test_trades,
+                    "train_trades": fr.train_trades,
+                    "best_params": fr.best_params,
+                }
+                for fr in fold_results
+            ],
+            "aggregate": {
+                "avg_oos_sharpe": 0.0,
+                "avg_oos_return_pct": 0.0,
+                "avg_oos_drawdown": 0.0,
+                "avg_overfit_ratio": 0.0,
+                "win_consistency": 0.0,
+            },
+            "assessment": "INSUFFICIENT_DATA",
+            "is_overfit": False,
+            "recommendation": (
+                "No fold produced a completed trade — the test windows are shorter "
+                "than the strategy needs. Fetch more history, use fewer folds, or "
+                "shorten the indicator periods."
+            ),
+        }
 
     # Overfitting assessment
     is_overfit = avg_overfit > 1.5 or avg_oos_sharpe < 0.5
@@ -362,12 +409,9 @@ def walk_forward(
         else "HEALTHY"
     )
 
-    # Win consistency: how many folds had positive OOS return
-    positive_folds = sum(1 for r in oos_returns_pct if r > 0)
-    win_consistency = positive_folds / max(len(fold_results), 1)
-
     return {
         "n_folds": len(fold_results),
+        "n_usable_folds": len(usable_folds),
         "fold_results": [
             {
                 "fold": fr.fold,
@@ -377,6 +421,8 @@ def walk_forward(
                 "test_return_pct": fr.test_return_pct,
                 "train_max_drawdown": fr.train_max_drawdown,
                 "test_max_drawdown": fr.test_max_drawdown,
+                "train_trades": fr.train_trades,
+                "test_trades": fr.test_trades,
                 "best_params": fr.best_params,
                 "overfit_ratio": fr.overfit_ratio,
             }
@@ -409,7 +455,8 @@ async def fetch_price_data(
 ) -> List[float]:
     """Fetch close prices for walk-forward backtesting.
 
-    Uses yfinance_utils.fetch_history for point-in-time safety.
+    `as_of` is passed to yfinance as `end`, so a relative `period` is anchored
+    at the cutoff (point-in-time) instead of at today.
 
     Args:
         symbol: Stock symbol (e.g. "RELIANCE")
@@ -422,30 +469,34 @@ async def fetch_price_data(
     Returns:
         List of close prices. Empty list if no data.
     """
+    from datetime import datetime
+
     import yfinance as yf
 
-    from src.autfin.agents.yfinance_utils import normalize_symbol
+    from autfin.agents.yfinance_utils import normalize_symbol
 
     ticker = yf.Ticker(normalize_symbol(symbol))
 
     kwargs: dict = {"interval": interval}
-    if start and end:
+    if start:
         kwargs["start"] = start
-        kwargs["end"] = end
-    else:
+
+    # as_of becomes yfinance's `end` (exclusive) rather than a post-filter:
+    # yfinance anchors a relative `period` at `end`, and filtering afterwards
+    # compared a tz-aware index against a naive Timestamp.
+    end_dt = datetime.fromisoformat(end) if end else None
+    if as_of is not None:
+        cutoff = datetime.fromisoformat(as_of) if isinstance(as_of, str) else as_of
+        if end_dt is None or cutoff < end_dt:
+            end_dt = cutoff
+    if end_dt is not None:
+        kwargs["end"] = end_dt
+    if not start:
         kwargs["period"] = period
 
     df = await asyncio.to_thread(ticker.history, **kwargs)
     if df is None or df.empty:
         return []
-
-    # Point-in-time filtering
-    if as_of is not None:
-        if isinstance(as_of, str):
-            as_of_dt = datetime.fromisoformat(as_of)
-        else:
-            as_of_dt = as_of
-        df = df[df.index <= pd.Timestamp(as_of_dt)]
 
     return df["Close"].tolist()
 

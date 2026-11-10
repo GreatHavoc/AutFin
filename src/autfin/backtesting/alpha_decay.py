@@ -5,7 +5,7 @@ folds. When alpha decays below configurable thresholds, signals that the
 strategy needs re-optimization or retirement.
 
 Usage:
-    from src.autfin.backtesting.alpha_decay import AlphaDecayTracker
+    from autfin.backtesting.alpha_decay import AlphaDecayTracker
 
     tracker = AlphaDecayTracker()
     tracker.add_fold({"fold": 0, "test_sharpe": 1.2, "test_return_pct": 8.5})
