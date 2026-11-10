@@ -11,6 +11,7 @@ from pydantic_ai_harness.memory import FileStore, Memory
 
 from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import memory_instructions
+from autfin.tools import learning_toolset
 from autfin.types import (
     AgentDeps,
     ExecutionReport,
@@ -32,6 +33,7 @@ memory_agent = create_agent(
             inject_memory=True,
         ),
     ],
+    toolsets=[learning_toolset],
 )
 
 

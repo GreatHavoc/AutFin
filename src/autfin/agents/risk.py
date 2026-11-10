@@ -10,7 +10,7 @@ from pydantic_ai.capabilities import Thinking
 
 from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import risk_instructions
-from autfin.tools import risk_toolset, technical_toolset
+from autfin.tools import learning_toolset, risk_toolset, technical_toolset
 from autfin.types import (
     AgentDeps,
     Holding,
@@ -26,7 +26,7 @@ risk_agent = create_agent(
     capabilities=[
         Thinking(effort="high"),
     ],
-    toolsets=[risk_toolset, technical_toolset],
+    toolsets=[risk_toolset, technical_toolset, learning_toolset],
 )
 
 

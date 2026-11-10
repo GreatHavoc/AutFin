@@ -177,7 +177,7 @@
     <div class="card">
       <h3>risk <em>· standard</em></h3>
       <ul class="tools"><li>Kelly sizing · vol targeting</li><li>ATR-based stops</li><li>portfolio heat / correlation</li></ul>
-      <div class="kv"><span>60s · max 10 calls</span><span>kite + technical</span></div>
+      <div class="kv"><span>60s · max 10 calls</span><span>kite + technical + <b style="color:var(--amber)">learning</b></span></div>
     </div>
 
     <div class="card">
@@ -194,7 +194,7 @@
 
     <div class="card">
       <h3>memory <em>· fast</em></h3>
-      <ul class="tools"><li>no tools — uses the Memory capability store</li></ul>
+      <ul class="tools"><li>get_calibration · get_learning_context</li><li>record_trade_outcome · get_learning_summary</li><li>Memory capability (FileStore)</li></ul>
       <div class="kv"><span>30s · max 5 calls</span><span>calibration, patterns, lessons</span></div>
     </div>
 
@@ -232,7 +232,25 @@
     <code>OPENAI_API_KEY</code> that <code>.env.example</code> does not mention.
   </div>
 
-  <h2>4 · Model routing</h2>
+  <h2>4 · Where the learning happens (SQLite journal, not the agent graph)</h2>
+  <table>
+    <thead><tr><th>Tool exposed to agents</th><th>What it returns</th><th>Attached to</th></tr></thead>
+    <tbody>
+      <tr><td><code>get_calibration()</code></td><td>per conviction tier: expected vs actual win rate, <code>delta</code>, status (overconfident / calibrated / underconfident)</td><td>risk, memory, supervisor</td></tr>
+      <tr><td><code>get_learning_context(symbol, action, sector, raw_conviction)</code></td><td>similar past setups + calibration + risk patterns + <code>conviction_adjustment</code> — use the adjusted value, not the raw one</td><td>risk, memory, supervisor</td></tr>
+      <tr><td><code>calibrate_conviction(raw, sector)</code></td><td>adjusted conviction, clamped 0.1–0.99; passes through when no history exists</td><td>risk, memory, supervisor</td></tr>
+      <tr><td><code>record_trade_outcome(...)</code></td><td>writes a closed trade to <code>learning_journal</code>, returns the resulting calibration</td><td>risk, memory, supervisor</td></tr>
+      <tr><td><code>get_learning_summary()</code></td><td>calibration + detected patterns + recent trades</td><td>risk, memory, supervisor</td></tr>
+    </tbody>
+  </table>
+  <p class="sub" style="margin:12px 0 0">
+    State lives in <code>data/autfin.db</code> (gitignored, local-only). <code>get_connection()</code> quarantines a corrupt file as
+    <code>autfin.db.malformed-&lt;ts&gt;</code> instead of handing it out — every learning function swallows <code>Exception</code>, so without
+    that check the engine silently returned empty and traded on conviction that was never corrected.
+    The <code>run_morning_routine</code> tool does <b>not</b> call any of this in Python; the LLM chooses when to ask.
+  </p>
+
+  <h2>5 · Model routing</h2>
   <table>
     <thead><tr><th>Tier</th><th>Model id (<code>types.ModelConfig</code>)</th><th>Used by</th></tr></thead>
     <tbody>

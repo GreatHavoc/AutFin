@@ -27,6 +27,7 @@ from autfin.agents.market_data import market_data_agent
 from autfin.agents.memory import memory_agent
 from autfin.agents.research import research_agent
 from autfin.agents.risk import risk_agent
+from autfin.tools import learning_toolset
 from autfin.types import (
     AgentDeps,
     SupervisorOutput,
@@ -181,6 +182,7 @@ supervisor_agent = create_agent(
         Thinking(effort="high"),
         WebSearch(local="duckduckgo"),
     ],
+    toolsets=[learning_toolset],
     model_settings=ModelSettings(temperature=0.0, max_tokens=8192),
 )
 
