@@ -23,7 +23,23 @@ if TYPE_CHECKING:
     from pydantic_ai import Agent
     from pydantic_ai.mcp import MCPToolset
 
-_obscura_url = os.getenv("OBSCURA_MCP_URL", "http://localhost:9222/mcp")
+def _obscura_endpoint() -> str:
+    """Resolve the MCP endpoint from env, with the documented reader's defaults.
+
+    Named exports win first, then BROWSER_MCP_ENDPOINT/PORT — the settings
+    browser_client.py reads. This toolset used to default to a hardcoded
+    :9222 while browser_client.py defaulted to :8080 and .env.example said
+    :9333, so a stock deployment never connected to the Obscura it started.
+    """
+    explicit = os.getenv("OBSCURA_MCP_URL")
+    if explicit:
+        return explicit
+    from autfin.mcp.browser_client import BrowserMCPSettings
+
+    return BrowserMCPSettings.from_env().endpoint
+
+
+_obscura_url = _obscura_endpoint()
 
 _browser_toolset: MCPToolset | None = None
 _browser_agent: Agent | None = None

@@ -4,6 +4,7 @@ Input/Output/Tool guardrails for financial safety and compliance.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,9 @@ WORKSPACE = Path("./workspace").resolve()
 
 
 # ─── Custom Guard Functions ───
+
+# Reusing one detector instance per rule keeps the guard chain cheap: building
+# them on every call allocated fresh regex sets per tool invocation.
 
 def stay_in_workspace(call_info: Any) -> GuardrailResult:
     """Ensure file operations stay within workspace."""
@@ -53,9 +57,10 @@ def validate_trade_args(call_info: Any) -> GuardrailResult:
         if order_type in ('LIMIT', 'SL', 'SL-M') and (price is None or price <= 0):
             return GuardrailResult.block(f'{order_type} order requires valid price')
         
-        # Check symbol format
-        symbol = args.get('tradingsymbol', '')
-        if not symbol or not symbol.isalnum():
+        # Check symbol format. NSE tickers contain '-' and '&' (BAJAJ-AUTO, M&M),
+        # so isalnum() used to reject legitimate symbols.
+        symbol = args.get('tradingsymbol', '') or args.get('symbol', '')
+        if not symbol or not re.fullmatch(r'[A-Za-z0-9&.\-]{1,20}', symbol):
             return GuardrailResult.block('Invalid trading symbol')
     
     return GuardrailResult.allow()
@@ -151,7 +156,7 @@ output_guardrails = OutputGuardrail(
 
 # Tool Guardrails - validate tool calls and results
 tool_guardrails = ToolGuardrail(
-    guard=validate_trade_args,  # Validate trade arguments
+    guard=[validate_trade_args, stay_in_workspace],  # args, then containment
     result_guard=sanitize_output_result,  # Sanitize tool results
     tools=['place_order', 'execute_trade', 'write_file', 'edit_file'],
     hidden=['delete_everything', 'drop_database'],  # Never expose these

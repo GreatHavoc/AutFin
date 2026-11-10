@@ -16,6 +16,7 @@ from pydantic_ai.settings import ModelSettings
 from pydantic_ai.toolsets import AbstractToolset
 from pydantic_ai.usage import UsageLimits
 
+from autfin.agents.guardrails import get_guardrails_for_agent
 from autfin.types import MODEL_CONFIG, AgentDeps
 
 OutputT = TypeVar("OutputT")
@@ -130,7 +131,11 @@ def create_agent[OutputT](
         max_tokens=8192,
     )
 
+    # Guardrails are harness capabilities, so they belong in the same list as
+    # Thinking/Memory/SubAgents. Without this, guardrails.py defined a full
+    # input/output/tool suite that no agent ever ran.
     agent = Agent[AgentDeps, OutputT](
+        capabilities=[*(capabilities or []), *get_guardrails_for_agent(name)],
         name=name,
         model=model,
         deps_type=AgentDeps,
@@ -138,7 +143,6 @@ def create_agent[OutputT](
         instructions=instructions,
         model_settings=model_settings or default_settings,
         retries=retries,
-        capabilities=capabilities or [],
         toolsets=toolsets or [],
     )
 

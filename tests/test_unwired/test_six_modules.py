@@ -247,7 +247,10 @@ def test_mcp_client_reports_install_instructions_when_absent():
         # If Obscura is present on this machine, a real client is returned.
         assert client is not None
     except BrowserMCPNotInstalledError as exc:
-        assert "obscura" in str(exc).lower()
+        # Either the Obscura binary or its langchain adapter can be the missing
+        # piece; both must name the thing to install.
+        message = str(exc).lower()
+        assert "obscura" in message or "langchain-mcp-adapters" in message
 
 
 def test_mcp_port_check_reports_closed_ports():

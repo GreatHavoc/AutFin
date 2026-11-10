@@ -227,9 +227,11 @@
   </table>
 
   <div class="note">
-    <b>Port mismatch:</b> the browser toolset dials <code>OBSCURA_MCP_URL</code> (default
-    <code>localhost:9222</code>), while <code>.env.example</code> and <code>mcp/browser_client.py</code> document
-    <code>BROWSER_MCP_PORT</code> 9333 / 8080. Nothing reconciles them — set the URL explicitly.
+    <b>Ports reconciled:</b> <code>tools/browser_agent.py</code> resolves its endpoint through
+    <code>mcp/browser_client.BrowserMCPSettings</code> (a named <code>OBSCURA_MCP_URL</code> still wins),
+    and <code>run.py</code> writes the port it starts Obscura on into <code>BROWSER_MCP_PORT</code> &#8212;
+    one variable drives both sides instead of three competing defaults. <code>get_browser_agent()</code> still hardcodes <code>openai:gpt-4.1-mini</code>, which needs an
+    <code>OPENAI_API_KEY</code> that <code>.env.example</code> does not mention.
     The sentiment-scraping path additionally hardcodes <code>openai:gpt-4.1-mini</code>, which needs an
     <code>OPENAI_API_KEY</code> that <code>.env.example</code> does not mention.
   </div>
@@ -296,8 +298,8 @@
           <td>19 cases, round-trips through save/load; <code>evals/__init__.py</code> now exports the API</td></tr>
       <tr><td><code>mcp/browser_client.py</code></td><td class="part">unwired</td>
           <td>settings and lifecycle work, but nothing connects it — the live path is <code>tools/browser_agent.py</code></td></tr>
-      <tr><td><code>agents/guardrails.py</code></td><td class="part">defined, unenforced</td>
-          <td>exported from <code>agents/__init__.py</code> but attached to no agent</td></tr>
+      <tr><td><code>agents/guardrails.py</code> (input/output/tool guardrails)</td><td class="ok">now enforced</td>
+          <td>attached per agent by <code>create_agent()</code> from <code>get_guardrails_for_agent()</code>: market_data gets input only, risk/supervisor/quant get the full suite, memory gets input+tool. Real trade args (qty, LIMIT price, <code>BAJAJ-AUTO</code>/<code>M&amp;M</code> symbols) validated, tool results sanitised for secrets, long outputs must cite a source, risk/reward must be &#8805; 2:1 and conviction &#8805; 0.5</td></tr>
       <tr><td><code>agents/durable.py</code> (Temporal)</td><td class="no">deleted</td>
           <td>README and <code>test_validation.py</code> still reference it; that file now breaks bare <code>pytest</code></td></tr>
       <tr><td><code>agent_tools.py</code>, <code>tools.py</code>, <code>conferences.py</code>, <code>memory_system.py</code>, <code>schemas.py</code>, <code>peer_compare.py</code>, <code>supervisor_tools.py</code>, <code>*_wrapper.py</code>, <code>memory_tools.py</code>, <code>state/</code></td>
@@ -309,7 +311,7 @@
   <table>
     <thead><tr><th>Command</th><th>Today's truth</th></tr></thead>
     <tbody>
-      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">141 passed — 45 s warm, ~2.5 min cold</td></tr>
+      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">164 passed — 45 s warm, ~2.5 min cold</td></tr>
       <tr><td><code>uv run pytest tests/test_learning tests/test_memory tests/test_tools/test_walk_forward.py
       tests/test_tools/test_learning_toolset.py tests/test_portfolio tests/test_universe</code></td><td class="ok">the five suites repaired this session</td></tr>
       <tr><td><code>uv run pytest</code> (bare)</td><td class="no">collection error — root script files are ad-hoc, not tests</td></tr>
@@ -324,7 +326,7 @@
     Repaired this session: walk-forward backtesting (44% of history silently unused), the learning journal
     (a corrupt SQLite file made calibration a no-op), the tax engine (it read a column that does not exist,
     so every summary was zero), and the watchlist curator (it raised on numeric macro signals), and the memory layer (the connection pool never committed, so every pooled write vanished).
-    Repo-wide ruff: 184 → 85 errors. the anomaly detector (no z-score branch could ever fire), and the regime detector (no evidence sized at maximum aggression). Tests: 141.
+    Repo-wide ruff: 184 → 85 errors. the anomaly detector (no z-score branch could ever fire), and the regime detector (no evidence sized at maximum aggression). the regime detector (no evidence sized at maximum aggression), and guardrails that no agent ran. Tests: 164.
   </footer>
 
 </div>

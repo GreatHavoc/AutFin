@@ -34,6 +34,9 @@ _stop = False
 
 OBSCURA_DIR = Path(os.getenv("OBSCURA_DIR", r"C:\Users\Prakhar\Downloads\obscura-x86_64-windows"))
 OBSCURA_PORT = int(os.getenv("OBSCURA_PORT", "9222"))
+# Keep the MCP settings in sync with the port this daemon binds Obscura to,
+# so tools/browser_agent.py and mcp/browser_client.py dial the same server.
+os.environ.setdefault("BROWSER_MCP_PORT", str(OBSCURA_PORT))
 
 MARKET_OPEN = dtime(9, 15)
 MARKET_CLOSE = dtime(15, 30)
