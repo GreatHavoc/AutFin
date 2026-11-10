@@ -300,9 +300,10 @@
     <thead><tr><th>Command</th><th>Today's truth</th></tr></thead>
     <tbody>
       <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">119 passed — 45 s warm, ~2.5 min cold</td></tr>
-      <tr><td><code>uv run pytest tests/test_learning tests/test_tools/test_walk_forward.py tests/test_tools/test_learning_toolset.py tests/test_portfolio tests/test_universe</code></td><td class="ok">the five suites repaired this session</td></tr>
+      <tr><td><code>uv run pytest tests/test_learning tests/test_memory tests/test_tools/test_walk_forward.py
+      tests/test_tools/test_learning_toolset.py tests/test_portfolio tests/test_universe</code></td><td class="ok">the five suites repaired this session</td></tr>
       <tr><td><code>uv run pytest</code> (bare)</td><td class="no">collection error — root script files are ad-hoc, not tests</td></tr>
-      <tr><td><code>uv run ruff check .</code></td><td class="no">119 errors (was 184 before the cleanup)</td></tr>
+      <tr><td><code>uv run ruff check .</code></td><td class="no">85 errors (was 184 at the start of the session)</td></tr>
       <tr><td><code>uv run pyright</code></td><td class="no">~400 errors (no pyrightconfig.json exists)</td></tr>
     </tbody>
   </table>
@@ -312,8 +313,8 @@
     Where the README disagrees with the code (test counts, model ids, guardrails, Temporal), this page follows the code.
     Repaired this session: walk-forward backtesting (44% of history silently unused), the learning journal
     (a corrupt SQLite file made calibration a no-op), the tax engine (it read a column that does not exist,
-    so every summary was zero), and the watchlist curator (it raised on numeric macro signals). and the memory layer (the connection pool never committed, so every pooled write
-    vanished). Tests: 119.
+    so every summary was zero), and the watchlist curator (it raised on numeric macro signals), and the memory layer (the connection pool never committed, so every pooled write vanished).
+    Repo-wide ruff: 184 → 85 errors. Tests: 119.
   </footer>
 
 </div>

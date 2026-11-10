@@ -22,7 +22,7 @@ uv run python run.py --once                          # daemon; --mode paper|live
 
 ## The lint/type baseline is already red — do not "fix" it repo-wide
 
-`ruff check .` = 119 errors, `pyright` = ~400 errors. Fix only files you touch. One of those is a genuine bug, not style: `agents/base.py` uses PEP 695 generics (`def create_agent[OutputT]`), i.e. needs ≥3.12 even though `requires-python = ">=3.11"` and `ruff target-version = "py311"`. Ruff reads it as invalid syntax; don't "fix" by de-genericizing.
+`ruff check .` = 85 errors, `pyright` = ~400 errors. Fix only files you touch. One of those is a genuine bug, not style: `agents/base.py` uses PEP 695 generics (`def create_agent[OutputT]`), i.e. needs ≥3.12 even though `requires-python = ">=3.11"` and `ruff target-version = "py311"`. Ruff reads it as invalid syntax; don't "fix" by de-genericizing.
 
 ## What is actually wired
 
@@ -30,7 +30,7 @@ Entry graph: `agents/supervisor.py` → `create_agent()` in `agents/base.py` →
 
 Dead / legacy — unwired because no live replacement exists, do not extend, do not assume it runs:
 - `agents/moat.py`, `agents/regulatory.py` (SEBI), `risk/anomaly.py`, `risk/regime.py`.
-- `llm/`, `observability/`, `config/settings.py` — nothing reads them any more; models come from `types.ModelConfig`.
+- `llm/`, `observability/`, `config/settings.py` — unwired, but they run and are tested in `tests/test_memory/`. Model names now come from `types.MODEL_CONFIG` everywhere; `memory/{retrieval,consolidation}.py` were deleted (remnants of a removed store, zero importers).
 - `evals/`, `validation.py`, `mcp/browser_client.py` — unwired, no live replacement.
 - `agents/guardrails.py` is exported but attached to **no** agent; guardrails are not enforced despite what the README says.
 - Removed in the cleanup commit: `agents/{agent_tools,tools,conferences,memory_system,schemas,peer_compare}.py`, `tools/{supervisor_tools,fundamental_wrapper,technical_wrapper,memory_tools}.py`, `state/`. If you see a stale import of one, it was already dead.
