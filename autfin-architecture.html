@@ -322,10 +322,13 @@
   <footer>
     Generated from the repository at v7.0 — every path, port, limit and number above was read from source on disk.
     Where the README disagrees with the code (test counts, model ids, guardrails, Temporal), this page follows the code.
-    Repaired this session: walk-forward backtesting (44% of history silently unused), the learning journal
-    (a corrupt SQLite file made calibration a no-op), the tax engine (it read a column that does not exist,
-    so every summary was zero), and the watchlist curator (it raised on numeric macro signals), and the memory layer (the connection pool never committed, so every pooled write vanished).
-    Repo-wide ruff: 184 → 85 errors. the anomaly detector (no z-score branch could ever fire), and the regime detector (no evidence sized at maximum aggression). the regime detector (no evidence sized at maximum aggression), and guardrails that no agent ran. Tests: 164.
+    Repaired this session, in order: walk-forward backtesting (56% of history silently unused) · the learning
+    journal (a corrupt SQLite file made calibration a no-op) · the tax engine (read a column that does not exist)
+    · the watchlist curator (raised on numeric macro signals) · the memory layer (the connection pool never
+    committed, so every pooled write vanished) · the anomaly detector (no z-score branch could ever fire) ·
+    the regime detector (sized at maximum aggression on zero evidence) · guardrails that no agent ran ·
+    the browser MCP layer (<code>mcp/</code> deleted, settings and lifecycle folded into
+    <code>tools/browser_agent.py</code>). Repo-wide ruff: 184 → 85 errors. Tests: 164.
   </footer>
 
 </div>
