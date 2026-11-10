@@ -57,6 +57,12 @@
 
   .replace{color:var(--dim);font-size:10.5px}
   .replace b{color:var(--violet);font-weight:600}
+  td.st{white-space:nowrap}
+  .commit{font-size:9px;margin-top:3px}
+  .commit a{color:var(--dim);border:none}
+  tr.done-t td{opacity:.45}
+  tr.done-t td.st{opacity:1}
+  .strip{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;font-size:10.5px;color:var(--dim)}
   .src{font-size:10px;color:var(--dim);word-break:break-all}
 
   .note{border-left:2px solid var(--amber);background:#f5b5440d;padding:10px 14px;
@@ -106,31 +112,40 @@
   </div>
 
   <h2>A · Hand-rolled duplicates — replace with the framework feature</h2>
+  <div class="strip">
+    <span><b style="color:var(--green)">9</b> done in <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></span>
+    <span>&#183;</span><span><b style="color:var(--amber)">1</b> needs a version bump (A5)</span>
+    <span>&#183;</span><span><b>4</b> todo: A4, A9, A12, A14 &#8212; each needs an LLM call to verify, or a capability decision</span>
+  </div>
+
   <table>
-    <thead><tr><th class="chk">✓</th><th>Task</th><th>Replace (this repo)</th><th>Tag</th><th>Source</th></tr></thead>
+    <thead><tr><th class="chk">✓</th><th>Task</th><th>Replace (this repo)</th><th>Tag</th><th>Status</th><th>Source</th></tr></thead>
     <tbody>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task">Delete <code>create_select_model_capability()</code> and <code>create_adaptive_model_capability()</code> from <code>agents/base.py</code>; route tier choice through <code>SelectModel</code> with a real <code>ModelSelectionContext</code> (deps, prompt, history, usage, step).</td>
+        <td class="task done-t">Delete <code>create_select_model_capability()</code> and <code>create_adaptive_model_capability()</code> from <code>agents/base.py</code>; route tier choice through <code>SelectModel</code> with a real <code>ModelSelectionContext</code> (deps, prompt, history, usage, step).</td>
         <td class="replace">→ <b>agents/base.py:45-90</b> (both functions, dead)</td>
         <td><span class="tag t-del">delete</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/select-model">capabilities/select-model</a></td>
       </tr>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task">Collapse the three tier→model tables into one resolver. Keep <code>types.ModelConfig</code> as the source of truth, drop the duplicate tables.</td>
+        <td class="task done-t">Collapse the three tier→model tables into one resolver. Keep <code>types.ModelConfig</code> as the source of truth, drop the duplicate tables.</td>
         <td class="replace">→ <b>llm/model_tiers.py</b> <code>MODEL_REGISTRY</code> + <b>config/settings.py</b> <code>deep_model/fast_model/nvidia_model/nvidia_deep_model</b> (already forced to agree once; now remove the need)</td>
         <td><span class="tag t-del">delete</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/resolve-model-id">capabilities/resolve-model-id</a></td>
       </tr>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task">Replace the hand-rolled eval runner with <code>pydantic-evals</code>' own API — <code>Dataset.evaluate_sync()</code>, concurrency limits, retry strategies. Keep <code>create_autfin_dataset()</code> as the dataset builder only.</td>
+        <td class="task done-t">Replace the hand-rolled eval runner with <code>pydantic-evals</code>' own API — <code>Dataset.evaluate_sync()</code>, concurrency limits, retry strategies. Keep <code>create_autfin_dataset()</code> as the dataset builder only.</td>
         <td class="replace">→ <b>evals/dataset.py</b> <code>run_evaluations()</code> (the runner loop)</td>
         <td><span class="tag t-now">now</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evals">evals/evals</a> · <a href="https://pydantic.dev/docs/ai/evals/how-to/concurrency">how-to/concurrency</a> · <a href="https://pydantic.dev/docs/ai/evals/how-to/retry-strategies">how-to/retry-strategies</a></td>
       </tr>
 
@@ -139,6 +154,7 @@
         <td class="task">Stop hand-writing evaluator classes where a judge fits. Add <code>LLMJudge</code> (rubrics) and <code>GEval</code> (integer + chain-of-thought) to the dataset; keep deterministic ones as custom <code>Evaluator</code>s.</td>
         <td class="replace">→ <b>evals/dataset.py</b> <code>TradeQualityEvaluator</code>, <code>RiskVetoEvaluator</code>, <code>DebateQualityEvaluator</code>, <code>AnalysisCompletenessEvaluator</code>, <code>PositionSizingEvaluator</code>, <code>AgentBehaviorEvaluator</code></td>
         <td><span class="tag t-now">now</span></td>
+        <td class="st"><span class="tag t-keep">todo</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evaluators/llm-judge">evaluators/llm-judge</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/custom">evaluators/custom</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/standard-quality-metrics">evaluators/standard-quality-metrics</a></td>
       </tr>
 
@@ -146,31 +162,35 @@
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Use <code>InMemoryConversationStore</code>/a real store instead of hand-rolled JSON save/load; evaluate a run's trajectory with span-based + agentic evaluators rather than SQL.</td>
         <td class="replace">→ <b>evals/dataset.py</b> <code>save_dataset()</code>/<code>load_dataset()</code> · <b>observability/roro.py</b> <code>compute_roro()</code> (SQL over the <code>trades</code> table)</td>
-        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td><span class="tag t-up">upgrade</span></td>
+        <td class="st"><span class="tag t-up">upgrade</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/evals/how-to/dataset-serialization">how-to/dataset-serialization</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/span-based">evaluators/span-based</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/agentic">evaluators/agentic</a></td>
       </tr>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task">Delete the hand-rolled metrics recorder; read <code>RunUsage</code> (cost, tokens, requests, tool_calls) off every result and let <code>Instrumentation</code> emit the spans.</td>
+        <td class="task done-t">Delete the hand-rolled metrics recorder; read <code>RunUsage</code> (cost, tokens, requests, tool_calls) off every result and let <code>Instrumentation</code> emit the spans.</td>
         <td class="replace">→ <b>observability/metrics.py</b> <code>AgentMetrics</code>, <code>TradingMetrics</code>, <code>ObservabilityMetrics</code>, <code>record_agent()</code>, <code>record_llm()</code>, <code>record_trade()</code></td>
-        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td><span class="tag t-up">upgrade</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">capabilities/instrumentation</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/usage">api/pydantic-ai/usage</a></td>
       </tr>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task">Drop the SQLite trace store. Logfire (already wired in <code>run.py</code>) stores the OTel spans; <code>run_id</code>/<code>conversation_id</code> correlation comes free from core.</td>
+        <td class="task done-t">Drop the SQLite trace store. Logfire (already wired in <code>run.py</code>) stores the OTel spans; <code>run_id</code>/<code>conversation_id</code> correlation comes free from core.</td>
         <td class="replace">→ <b>observability/tracer.py</b> <code>AutFinTracer</code>, <code>TraceContext</code>, <code>_persist_trace()</code>, <code>_load_recent_traces_from_db()</code></td>
-        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td><span class="tag t-up">upgrade</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">capabilities/instrumentation</a> · <a href="https://pydantic.dev/docs/ai/integrations/logfire">integrations/logfire</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/message-history">core-concepts/message-history</a></td>
       </tr>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task">Replace the 8 hand-rolled gates with framework output: evals for behavioural gates, Instrumentation/Logfire for observability, StepPersistence for persistence.</td>
+        <td class="task done-t">Replace the 8 hand-rolled gates with framework output: evals for behavioural gates, Instrumentation/Logfire for observability, StepPersistence for persistence.</td>
         <td class="replace">→ <b>validation.py</b> <code>validate_type_checking/unit_tests/eval_suite/guardrails/memory_persistence/plan_persistence/load_test/durable_execution</code> + <b>test_validation.py</b> (already broken — imports a deleted function)</td>
-        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td><span class="tag t-up">upgrade</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evals">evals/evals</a> · <a href="https://pydantic.dev/docs/ai/harness/step-persistence">harness/step-persistence</a></td>
       </tr>
 
@@ -178,23 +198,26 @@
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Let the model write its own orchestration. <code>DynamicWorkflow</code> is already attached with <code>defer_loading=True</code>; the supervisor's Python fan-out duplicates it.</td>
         <td class="replace">→ <b>agents/supervisor.py</b> <code>run_morning_routine()</code>, <code>run_quarterly_review()</code>, <code>handle_price_alert()</code> (the imperative phase sequences)</td>
-        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td><span class="tag t-up">upgrade</span></td>
+        <td class="st"><span class="tag t-keep">todo</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/dynamic-workflow">harness/dynamic-workflow</a> · <a href="https://pydantic.dev/docs/ai/harness/subagents">harness/subagents</a></td>
       </tr>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task">Delete the per-tool argument rule table. Core validates tool args with the Pydantic schema and returns <code>ModelRetry</code> to the model.</td>
+        <td class="task done-t">Delete the per-tool argument rule table. Core validates tool args with the Pydantic schema and returns <code>ModelRetry</code> to the model.</td>
         <td class="replace">→ <b>llm/validation.py</b> <code>TOOL_PARAM_RULES</code></td>
-        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td><span class="tag t-up">upgrade</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/tools-toolsets/tools-advanced">tools-toolsets/tools-advanced</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/exceptions">api/pydantic-ai/exceptions</a></td>
       </tr>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task">Delete the hand-rolled retry/circuit-breaker/timeout knobs from settings; use <code>Agent(retries=...)</code>, <code>UsageLimits</code>, and per-run timeouts.</td>
+        <td class="task done-t">Delete the hand-rolled retry/circuit-breaker/timeout knobs from settings; use <code>Agent(retries=...)</code>, <code>UsageLimits</code>, and per-run timeouts.</td>
         <td class="replace">→ <b>config/settings.py</b> <code>retry_max_attempts</code>, <code>retry_initial_interval</code>, <code>retry_backoff_factor</code>, <code>node_timeout_seconds</code>, <code>circuit_breaker_threshold</code>, <code>circuit_breaker_reset_seconds</code></td>
-        <td><span class="tag t-now">now</span> <span class="tag t-del">delete</span></td>
+        <td><span class="tag t-up">upgrade</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/retries">core-concepts/retries</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/timeouts">core-concepts/timeouts</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/agent">core-concepts/agent</a></td>
       </tr>
 
@@ -203,14 +226,16 @@
         <td class="task">Replace the hand-rolled scraping agent with the framework's web capabilities; keep <code>get_browser_toolset()</code> (Obscura MCP) only for JS-rendered pages.</td>
         <td class="replace">→ <b>tools/browser_agent.py</b> <code>get_browser_agent()</code> (hardcoded <code>openai:gpt-4.1-mini</code>, needs an <code>OPENAI_API_KEY</code> that <code>.env.example</code> never lists)</td>
         <td><span class="tag t-now">now</span></td>
+        <td class="st"><span class="tag t-keep">todo</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/web-fetch">capabilities/web-fetch</a> · <a href="https://pydantic.dev/docs/ai/capabilities/web-search">capabilities/web-search</a> · <a href="https://pydantic.dev/docs/ai/harness/researcher">harness/researcher</a></td>
       </tr>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task">Stop using sha256 "hash embeddings" as semantic search. Retrieve over real stored history instead.</td>
+        <td class="task done-t">Stop using sha256 "hash embeddings" as semantic search. Retrieve over real stored history instead.</td>
         <td class="replace">→ <b>memory/embeddings.py</b> <code>generate_embedding()</code> fallback (silently used because <code>sentence-transformers</code> is not a dependency) + <b>learning/retriever.py</b> <code>retrieve_learnings()</code> similarity scoring</td>
         <td><span class="tag t-now">now</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/conversation-search">harness/conversation-search</a> · <a href="https://pydantic.dev/docs/ai/harness/memory">harness/memory</a> · <a href="https://pydantic.dev/docs/ai/guides/embeddings">guides/embeddings</a></td>
       </tr>
 
@@ -219,6 +244,7 @@
         <td class="task">Score the fuzzy qualitative dimensions (moat, distortion, regulatory impact) with a judge instead of hand-built heuristics.</td>
         <td class="replace">→ <b>agents/moat.py</b> <code>_assess_*</code> scoring functions · <b>agents/distortion.py</b> <code>check_distortion()</code> · <b>agents/regulatory.py</b> <code>classify_regulatory_event()</code> keyword tables</td>
         <td><span class="tag t-now">now</span></td>
+        <td class="st"><span class="tag t-keep">todo</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evaluators/llm-judge">evaluators/llm-judge</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/standard-quality-metrics">evaluators/standard-quality-metrics</a></td>
       </tr>
 
