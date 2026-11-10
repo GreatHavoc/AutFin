@@ -16,6 +16,10 @@ uv run python run.py --once                          # daemon; --mode paper|live
 - **Always pass `tests/`.** Bare `uv run pytest` fails collection: root `test_validation.py` imports `validate_durable_execution`, deleted along with `agents/durable.py`. Root `test_*.py` / `demo_sentiment.py` are ad-hoc scripts that hit live network at import.
 - Full-suite time is dominated by sentiment tests loading FinBERT (transformers → HF cache). ~1.5 min warm, ~4.5 min cold.
 
+## Housekeeping for every code change
+
+**`autfin-architecture.html` (repo root) is the living architecture page and must be updated in the same commit as the change it describes.** Edit the affected section only — it is a single self-contained file (no build, no CDN), so a stale number there is misinformation an agent will act on. Sections 1–7: runtime flow, agent grid, data sources, learning tools, model routing, live-vs-legacy, verification commands. Same rule for `AGENTS.md`.
+
 ## The lint/type baseline is already red — do not "fix" it repo-wide
 
 `ruff check .` = 119 errors, `pyright` = ~400 errors. Fix only files you touch. One of those is a genuine bug, not style: `agents/base.py` uses PEP 695 generics (`def create_agent[OutputT]`), i.e. needs ≥3.12 even though `requires-python = ">=3.11"` and `ruff target-version = "py311"`. Ruff reads it as invalid syntax; don't "fix" by de-genericizing.
