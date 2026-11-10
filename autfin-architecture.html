@@ -284,8 +284,18 @@
           <td>133-symbol Nifty 500 + 10-sector map, consistent with each other; <code>WatchlistCurator</code> no longer dies on numeric macro signals, and pre-earnings receives its arguments</td></tr>
       <tr><td><code>memory/</code> (performance, embeddings, pool, chroma), <code>observability/</code> (metrics, roro, tracer), <code>llm/</code>, <code>config/settings.py</code></td>
           <td class="ok">fixed</td><td>still unwired, but they run: the pool commits on exit, win/loss comes from pnl, settings agree with <code>types.ModelConfig</code>. <code>memory/{retrieval,consolidation}.py</code> deleted — remnants of a removed store, zero importers</td></tr>
-      <tr><td><code>agents/moat.py</code>, <code>agents/regulatory.py</code>, <code>risk/anomaly.py</code>, <code>risk/regime.py</code>, <code>evals/</code>, <code>mcp/</code></td>
-          <td class="part">unwired</td><td>no live replacement — real features, never called</td></tr>
+      <tr><td><code>risk/regime.py</code></td><td class="ok">fixed</td>
+          <td>"no evidence" now returns <code>unknown</code> with <code>kelly_mult</code> 0.50 and a 0.65 conviction bar — it used to read as <code>low_vol</code>, the <b>most aggressive</b> sizing, on zero data</td></tr>
+      <tr><td><code>risk/anomaly.py</code></td><td class="ok">fixed</td>
+          <td>every z-score branch was dead (<code>z_score(mean)</code> is always 0); a 100%&#8594;20% win-rate collapse now trips a high-severity alert</td></tr>
+      <tr><td><code>agents/moat.py</code></td><td class="ok">fixed</td>
+          <td>two of five dimensions read <code>debt_equity</code> where <code>gross_margin</code> was meant, so the margin never reached the score</td></tr>
+      <tr><td><code>agents/regulatory.py</code></td><td class="ok">fixed</td>
+          <td>classifier now reads <code>title/subject/headline</code> + <code>body/details/description</code>; a SEBI order sent as <code>headline</code> used to classify as "low"</td></tr>
+      <tr><td><code>evals/</code> (pydantic-evals dataset + evaluators)</td><td class="ok">fixed</td>
+          <td>19 cases, round-trips through save/load; <code>evals/__init__.py</code> now exports the API</td></tr>
+      <tr><td><code>mcp/browser_client.py</code></td><td class="part">unwired</td>
+          <td>settings and lifecycle work, but nothing connects it — the live path is <code>tools/browser_agent.py</code></td></tr>
       <tr><td><code>agents/guardrails.py</code></td><td class="part">defined, unenforced</td>
           <td>exported from <code>agents/__init__.py</code> but attached to no agent</td></tr>
       <tr><td><code>agents/durable.py</code> (Temporal)</td><td class="no">deleted</td>
@@ -299,7 +309,7 @@
   <table>
     <thead><tr><th>Command</th><th>Today's truth</th></tr></thead>
     <tbody>
-      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">119 passed — 45 s warm, ~2.5 min cold</td></tr>
+      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">141 passed — 45 s warm, ~2.5 min cold</td></tr>
       <tr><td><code>uv run pytest tests/test_learning tests/test_memory tests/test_tools/test_walk_forward.py
       tests/test_tools/test_learning_toolset.py tests/test_portfolio tests/test_universe</code></td><td class="ok">the five suites repaired this session</td></tr>
       <tr><td><code>uv run pytest</code> (bare)</td><td class="no">collection error — root script files are ad-hoc, not tests</td></tr>
@@ -314,7 +324,7 @@
     Repaired this session: walk-forward backtesting (44% of history silently unused), the learning journal
     (a corrupt SQLite file made calibration a no-op), the tax engine (it read a column that does not exist,
     so every summary was zero), and the watchlist curator (it raised on numeric macro signals), and the memory layer (the connection pool never committed, so every pooled write vanished).
-    Repo-wide ruff: 184 → 85 errors. Tests: 119.
+    Repo-wide ruff: 184 → 85 errors. the anomaly detector (no z-score branch could ever fire), and the regime detector (no evidence sized at maximum aggression). Tests: 141.
   </footer>
 
 </div>

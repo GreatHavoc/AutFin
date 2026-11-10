@@ -46,6 +46,23 @@ class RollingStats:
         variance = sum((x - m) ** 2 for x in self._values) / (len(self._values) - 1)
         return math.sqrt(variance)
 
+    @property
+    def latest_z(self) -> float:
+        """z-score of the newest value against the window before it.
+
+        check_anomalies used to call z_score(self.mean), which is always ~0:
+        every z-score branch was dead and the reported z was fake.
+        """
+        if len(self._values) < 2:
+            return 0.0
+        prior = list(self._values)[:-1]
+        last = self._values[-1]
+        prior_mean = sum(prior) / len(prior)
+        denom = sum((v - prior_mean) ** 2 for v in prior)
+        if denom <= 0:
+            return 0.0
+        return (last - prior_mean) / ((denom / (len(prior) - 1)) ** 0.5)
+
     def z_score(self, value: float) -> float:
         s = self.std
         if s == 0:
@@ -90,13 +107,13 @@ class AnomalyDetector:
                 anomalies.append({
                     "metric": "win_rate",
                     "value": round(self.win_rate.mean, 3),
-                    "z_score": round(self.win_rate.z_score(self.win_rate.mean), 2),
+                    "z_score": round(self.win_rate.latest_z, 2),
                     "severity": severity,
                     "message": f"Win rate {self.win_rate.mean:.1%} is below 40% threshold",
                 })
 
         if self.calibration_error.count >= 5:
-            z = self.calibration_error.z_score(self.calibration_error.mean)
+            z = self.calibration_error.latest_z
             if abs(z) > self.threshold or self.calibration_error.mean > 0.15:
                 anomalies.append({
                     "metric": "calibration_error",
@@ -107,7 +124,7 @@ class AnomalyDetector:
                 })
 
         if self.daily_pnl_pct.count >= 5:
-            z = self.daily_pnl_pct.z_score(self.daily_pnl_pct.mean)
+            z = self.daily_pnl_pct.latest_z
             if z < -self.threshold or self.daily_pnl_pct.mean < -2.0:
                 anomalies.append({
                     "metric": "daily_pnl",
@@ -118,7 +135,7 @@ class AnomalyDetector:
                 })
 
         if self.trade_frequency.count >= 5:
-            z = self.trade_frequency.z_score(self.trade_frequency.mean)
+            z = self.trade_frequency.latest_z
             if z > self.threshold:
                 anomalies.append({
                     "metric": "trade_frequency",

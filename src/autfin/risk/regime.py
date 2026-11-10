@@ -37,6 +37,7 @@ CRISIS_DRAWDOWN_THRESHOLD = -5.0  # 5% drawdown in 5 days
 
 # Regime-to-Kelly multiplier
 REGIME_KELLY_MULT = {
+    "unknown": 0.50,   # no signal at all: no aggression
     "low_vol": 1.0,
     "normal": 0.75,
     "high_vol": 0.50,
@@ -45,6 +46,7 @@ REGIME_KELLY_MULT = {
 
 # Regime-to-conviction threshold
 REGIME_CONV_THRESHOLD = {
+    "unknown": 0.65,   # no evidence: demand more conviction, not less
     "low_vol": 0.50,
     "normal": 0.55,
     "high_vol": 0.65,
@@ -139,13 +141,34 @@ class RegimeDetector:
             RegimeState with regime classification
         """
         # Primary: use VIX if available
+        no_signal = (
+            vix is None
+            and len(self._returns) < 5
+            and not (nifty_close_today and nifty_close_5d_ago)
+        )
         vol_signal = vix if vix and vix > 0 else self._realized_vol()
+
 
         # 5-day drawdown
         if nifty_close_today and nifty_close_5d_ago and nifty_close_5d_ago > 0:
             nifty_return_5d = ((nifty_close_today - nifty_close_5d_ago) / nifty_close_5d_ago) * 100
         else:
             nifty_return_5d = self._nifty_return_5d()
+
+# With no VIX and too few returns there is no evidence, and classifying
+        # that as low_vol used to hand out kelly_mult 1.0 - the most aggressive
+        # sizing on zero data. Say "unknown" instead.
+        if no_signal:
+            state = RegimeState(
+                regime="unknown",
+                vix=0.0,
+                realized_vol=0.0,
+                nifty_return_5d=nifty_return_5d,
+                updated_at=datetime.now(timezone.utc).isoformat(),
+                confidence=0.0,
+            )
+            self._last_regime = state
+            return state
 
         # Classify regime
         if vol_signal >= CRISIS_VOL_THRESHOLD or nifty_return_5d <= CRISIS_DRAWDOWN_THRESHOLD:

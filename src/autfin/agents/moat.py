@@ -87,7 +87,9 @@ async def moat_agent(state: dict, symbol: str | None = None) -> dict[str, Any]:
 def _assess_intangible_assets(data: dict, info: dict) -> int:
     parts = 0
     roe = info.get("roe") or 0
-    gm = info.get("debt_equity") or 99
+    # Was info.get("debt_equity"): this variable and its threshold mean gross
+    # margin, so the caller's gross_margin never reached the score.
+    gm = info.get("gross_margin") or info.get("grossMargins") or 0
     if roe > 0.25:
         parts += 8
     elif roe > 0.15:

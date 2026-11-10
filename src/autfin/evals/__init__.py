@@ -1,26 +1,13 @@
-"""AutFin v7.0 — Evaluation Framework"""
+﻿"""Evaluation suite: datasets, evaluators and the pydantic-evals runner.
+
+Consumed by `autfin.validation` (gate 3) via `run_evaluations`. Runs are
+deterministic except where LLM judges are enabled.
+"""
 from __future__ import annotations
 
-from .dataset import (
-    ALL_TEST_CASES,
-    BUILTIN_EVALUATORS,
-    FINANCIAL_LLM_JUDGES,
-    SPAN_BASED_EVALUATORS,
-    AgentBehaviorEvaluator,
-    AnalysisCompletenessEvaluator,
-    DebateQualityEvaluator,
-    PositionSizingEvaluator,
-    RiskVetoEvaluator,
-    TradeQualityEvaluator,
-    configure_evals_logfire,
+from autfin.evals.dataset import (
     create_agent_specific_dataset,
-    create_analysis_cases,
     create_autfin_dataset,
-    create_debate_cases,
-    create_memory_cases,
-    create_morning_routine_cases,
-    create_price_alert_cases,
-    create_risk_cases,
     create_test_deps,
     load_dataset,
     run_evaluations,
@@ -28,27 +15,10 @@ from .dataset import (
 )
 
 __all__ = [
-    "create_autfin_dataset",
     "create_agent_specific_dataset",
-    "save_dataset",
+    "create_autfin_dataset",
+    "create_test_deps",
     "load_dataset",
     "run_evaluations",
-    "TradeQualityEvaluator",
-    "RiskVetoEvaluator",
-    "DebateQualityEvaluator",
-    "AnalysisCompletenessEvaluator",
-    "PositionSizingEvaluator",
-    "AgentBehaviorEvaluator",
-    "FINANCIAL_LLM_JUDGES",
-    "SPAN_BASED_EVALUATORS",
-    "BUILTIN_EVALUATORS",
-    "ALL_TEST_CASES",
-    "create_morning_routine_cases",
-    "create_price_alert_cases",
-    "create_risk_cases",
-    "create_debate_cases",
-    "create_analysis_cases",
-    "create_memory_cases",
-    "configure_evals_logfire",
-    "create_test_deps",
+    "save_dataset",
 ]

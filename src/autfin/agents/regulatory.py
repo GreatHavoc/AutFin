@@ -88,9 +88,22 @@ def classify_regulatory_event(announcement: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         {impact_level, sector_impact, direction, urgency, matched_keywords}
     """
-    title = (announcement.get("title") or "").upper()
-    body = (announcement.get("body") or "").upper()
+    # Accept the field names producers actually send. Announcements shaped as
+    # {headline, description} used to scan an empty string and classify as
+    # "low" impact — a SEBI order read as nothing.
+    def _field(*keys: str) -> str:
+        for key in keys:
+            value = announcement.get(key)
+            if value:
+                return str(value).upper()
+        return ""
+
+    title = _field("title", "subject", "headline")
+    body = _field("body", "details", "description", "summary", "text")
     text = f"{title} {body}"
+
+    if not text.strip():
+        logger.debug("regulatory announcement had no scoreable text: %r", announcement)
 
     matched_keywords = []
 
