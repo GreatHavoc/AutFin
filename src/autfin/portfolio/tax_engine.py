@@ -37,6 +37,20 @@ def _get_fy_start(dt: datetime | date) -> date:
     return date(dt.year - 1, 4, 1)
 
 
+def _last_trade_prices(trades: List[Dict[str, Any]]) -> Dict[str, float]:
+    """Most recent recorded price per symbol.
+
+    The engine has no live quote feed, so this is the best price available.
+    shortcut: it is the last *recorded* trade, not the market price — wire a
+    quote source (kite/yfinance) here if harvest sizing needs to be accurate.
+    """
+    last: Dict[str, float] = {}
+    for t in sorted(trades, key=lambda t: str(t.get("timestamp", ""))):
+        if t.get("symbol") and t.get("price") is not None:
+            last[t["symbol"]] = float(t["price"])
+    return last
+
+
 class TaxEngine:
 
     def __init__(self, db_path: Optional[str] = None):
@@ -56,15 +70,19 @@ class TaxEngine:
             try:
                 where = "WHERE symbol = ?" if symbol else ""
                 params = [symbol] if symbol else []
+                # `pnl` is deliberately not selected: the trades table has no such
+                # column, and selecting it raised OperationalError, which the
+                # surrounding `except` swallowed into an empty list — making every
+                # tax and harvest result silently zero.
                 rows = conn.execute(
-                    f"SELECT symbol, action, quantity, price, timestamp, pnl FROM trades {where} ORDER BY timestamp",
+                    f"SELECT symbol, action, quantity, price, timestamp FROM trades {where} ORDER BY timestamp",
                     params,
                 ).fetchall()
                 for r in rows:
                     trades.append({
                         "symbol": r[0], "action": r[1], "quantity": r[2],
                         "price": r[3], "timestamp": r[4],
-                        "pnl": r[5] or 0.0, "source": "trades",
+                        "source": "trades",
                     })
             finally:
                 conn.close()
@@ -107,7 +125,7 @@ class TaxEngine:
             # Include ALL BUYs for lot tracking (even pre-FY), but only count SELLs within FY
             if action == "BUY":
                 lots.setdefault(sym, []).append({"date": trade_date, "qty": qty, "price": price})
-            elif action == "SELL" and trade_date <= fy_end and lots.get(sym):
+            elif action == "SELL" and fy_start <= trade_date <= fy_end and lots.get(sym):
                 remaining = qty
                 while remaining > 0 and lots[sym]:
                     lot = lots[sym][0]
@@ -168,16 +186,17 @@ class TaxEngine:
                         lots[sym].pop(0)
         candidates = []
         today = date.today()
+        last_prices = _last_trade_prices(trades)
         for sym, sym_lots in lots.items():
-            total_qty = sum(l["qty"] for l in sym_lots)
+            total_qty = sum(lot["qty"] for lot in sym_lots)
             if total_qty <= 0:
                 continue
-            avg_cost = sum(l["qty"] * l["price"] for l in sym_lots) / total_qty
-            last_price = sym_lots[-1]["price"] if sym_lots else avg_cost
+            avg_cost = sum(lot["qty"] * lot["price"] for lot in sym_lots) / total_qty
+            last_price = last_prices.get(sym, sym_lots[-1]["price"] if sym_lots else avg_cost)
             unrealized_pnl = (last_price - avg_cost) * total_qty
             unrealized_pct = ((last_price - avg_cost) / avg_cost * 100) if avg_cost > 0 else 0
             if unrealized_pnl < 0:
-                oldest_lot_date = min(l["date"] for l in sym_lots)
+                oldest_lot_date = min(lot["date"] for lot in sym_lots)
                 days_held = (today - oldest_lot_date).days
                 tax_class = "LTCG" if days_held >= HOLDING_PERIOD_DAYS else "STCG"
                 candidates.append({
@@ -224,13 +243,14 @@ class TaxEngine:
                     if lot["qty"] <= 0:
                         lots[sym].pop(0)
         candidates = []
+        last_prices = _last_trade_prices(trades)
         for sym, sym_lots in lots.items():
-            total_qty = sum(l["qty"] for l in sym_lots)
+            total_qty = sum(lot["qty"] for lot in sym_lots)
             if total_qty <= 0:
                 continue
-            avg_cost = sum(l["qty"] * l["price"] for l in sym_lots) / total_qty
-            last_price = sym_lots[-1]["price"]
-            oldest_lot_date = min(l["date"] for l in sym_lots)
+            avg_cost = sum(lot["qty"] * lot["price"] for lot in sym_lots) / total_qty
+            last_price = last_prices.get(sym, sym_lots[-1]["price"])
+            oldest_lot_date = min(lot["date"] for lot in sym_lots)
             days_held = (today - oldest_lot_date).days
             if days_held < HOLDING_PERIOD_DAYS:
                 continue
@@ -292,12 +312,14 @@ class TaxEngine:
         rate = 0.1
         for _ in range(100):
             npv = _npv(rate)
+            if abs(npv) < 0.01:
+                break
             dnpv = _npv_derivative(rate)
             if abs(dnpv) < 1e-12:
                 break
+            # Break on the check above first: taking the step before testing
+            # converged returned a rate one Newton update past the solution.
             rate -= npv / dnpv
-            if abs(npv) < 0.01:
-                break
         if not (-0.99 < rate < 10.0):
             return None
         return round(rate, 4)
