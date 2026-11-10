@@ -4,12 +4,12 @@ Wraps existing technical indicators as async functions for Pydantic AI agents.
 """
 from __future__ import annotations
 
-import yfinance as yf
-import pandas as pd
-import numpy as np
-import pandas_ta_classic as pta
-
 from typing import Any
+
+import numpy as np
+import pandas as pd
+import pandas_ta_classic as pta
+import yfinance as yf
 
 from autfin.agents.yfinance_utils import normalize_symbol
 

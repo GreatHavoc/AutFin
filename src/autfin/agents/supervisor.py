@@ -4,47 +4,38 @@ Coordinates 7 sub-agents via SubAgents + DynamicWorkflow capabilities.
 """
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic_ai import Agent, RunContext
-from pydantic_ai.capabilities import WebSearch, Thinking
-from pydantic_ai_harness.subagents import SubAgents, SubAgent
-from pydantic_ai_harness.dynamic_workflow import DynamicWorkflow, WorkflowAgent
-from pydantic_ai_harness.planning import Planning
-from pydantic_ai_harness.memory import Memory
-from pydantic_ai_harness.system_reminders import Reminder, SystemReminders
-from pydantic_ai_harness.memory import FileStore
-from pydantic_ai.usage import UsageLimits
+from pydantic_ai import RunContext
+from pydantic_ai.capabilities import Thinking, WebSearch
 from pydantic_ai.settings import ModelSettings
+from pydantic_ai.usage import UsageLimits
+from pydantic_ai_harness.dynamic_workflow import DynamicWorkflow, WorkflowAgent
+from pydantic_ai_harness.memory import FileStore, Memory
+from pydantic_ai_harness.planning import Planning
+from pydantic_ai_harness.subagents import SubAgent, SubAgents
+from pydantic_ai_harness.system_reminders import Reminder, SystemReminders
 
+from autfin.agents.analysis import analysis_agent
 from autfin.agents.base import create_agent, get_model
+from autfin.agents.conference import conference_agent
+from autfin.agents.debate import debate_agent
 from autfin.agents.managed_prompts import supervisor_instructions
-from autfin.agents.observability import create_debug_instrumentation
-from autfin.types import (
-    AgentDeps,
-    SupervisorOutput,
-    MarketSnapshotOutput,
-    AnalysisReport,
-    ResearchReport,
-    RiskAssessment,
-    DebateResult,
-    ConferenceResult,
-    MemoryResult,
-    TradeOrder,
-)
 
 # Import sub-agents
 from autfin.agents.market_data import market_data_agent
-from autfin.agents.analysis import analysis_agent
+from autfin.agents.memory import memory_agent
 from autfin.agents.research import research_agent
 from autfin.agents.risk import risk_agent
-from autfin.agents.debate import debate_agent
-from autfin.agents.conference import conference_agent
-from autfin.agents.memory import memory_agent
-
+from autfin.types import (
+    AgentDeps,
+    SupervisorOutput,
+    TradeOrder,
+)
 
 # ─── SubAgents Capability ──────────────────────────────────────────────
 subagents_capability = SubAgents(
+    id="sub_agents",
     agents=[
         SubAgent(
             market_data_agent,
@@ -162,6 +153,7 @@ memory_capability = Memory(
 
 # ─── System Reminders ──────────────────────────────────────────────────
 system_reminders_capability = SystemReminders(
+    id="system_reminders",
     reminders=[
         Reminder("Stay focused on risk management. Check risk/reward >= 2:1 before any trade."),
         Reminder("Verify conviction >= 0.5 before any trade execution."),
@@ -188,7 +180,6 @@ supervisor_agent = create_agent(
         system_reminders_capability,
         Thinking(effort="high"),
         WebSearch(local="duckduckgo"),
-        create_debug_instrumentation(),
     ],
     model_settings=ModelSettings(temperature=0.0, max_tokens=8192),
 )
@@ -294,7 +285,6 @@ async def analyze_symbol(
 ) -> SupervisorOutput:
     """Run full analysis on a single symbol."""
     # Batch all analysis dimensions
-    import asyncio
 
     fundamental_task = ctx.deps.kite_client and ctx.deps.kite_client.quote(symbol)
     
@@ -370,8 +360,7 @@ __all__ = [
     "conference_agent",
     "memory_agent",
     "subagents_capability",
-    "morning_workflow",
-    "quarterly_workflow",
+    "workflow_capability",
     "planning_capability",
     "memory_capability",
     "system_reminders_capability",

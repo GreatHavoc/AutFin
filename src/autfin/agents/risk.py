@@ -5,22 +5,18 @@ Position sizing, stop-loss, correlation checks, risk budgeting.
 from __future__ import annotations
 
 # ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
-from typing import Any
-
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import RunContext
 from pydantic_ai.capabilities import Thinking
 
-from autfin.agents.base import create_agent, get_model
+from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import risk_instructions
-from autfin.agents.observability import create_debug_instrumentation
 from autfin.tools import risk_toolset, technical_toolset
 from autfin.types import (
     AgentDeps,
+    Holding,
     RiskAssessment,
     TradeOrder,
-    Holding,
 )
-
 
 risk_agent = create_agent(
     name="risk",
@@ -29,7 +25,6 @@ risk_agent = create_agent(
     instructions=risk_instructions.default,
     capabilities=[
         Thinking(effort="high"),
-        create_debug_instrumentation(),
     ],
     toolsets=[risk_toolset, technical_toolset],
 )
@@ -46,9 +41,6 @@ async def assess_trade(
     portfolio_holdings: list[Holding] | None = None,
 ) -> RiskAssessment:
     """Comprehensive risk assessment for a trade."""
-    from autfin.risk.kelly import calculate_kelly_size
-    from autfin.risk.vol_targeting import calculate_vol_target_size
-    from autfin.risk.regime import check_correlation_risk
     from autfin.agents.risk_manager import assess_risk
 
     deps = ctx.deps

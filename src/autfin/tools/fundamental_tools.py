@@ -1,7 +1,7 @@
 """Fundamental analysis tools for AutFin — ratio computation, DCF modeling, health scoring."""
 
-from typing import Any, Dict, List, Optional
 import logging
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ class FundamentalTools:
         """
         try:
             import yfinance as yf
+
             from src.autfin.agents.yfinance_utils import normalize_symbol
             ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             info = ticker.info or {}
@@ -158,6 +159,7 @@ class FundamentalTools:
         """Fetch balance sheet data from yfinance."""
         try:
             import yfinance as yf
+
             from src.autfin.agents.yfinance_utils import normalize_symbol
             ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             bs = ticker.balance_sheet
@@ -180,6 +182,7 @@ class FundamentalTools:
         """Fetch income statement data from yfinance."""
         try:
             import yfinance as yf
+
             from src.autfin.agents.yfinance_utils import normalize_symbol
             ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             inc = ticker.financials
@@ -201,6 +204,7 @@ class FundamentalTools:
         """Fetch cash flow statement data from yfinance."""
         try:
             import yfinance as yf
+
             from src.autfin.agents.yfinance_utils import normalize_symbol
             ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             cf = ticker.cashflow

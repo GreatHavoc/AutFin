@@ -8,16 +8,14 @@ from typing import Any
 
 from pydantic_ai import FunctionToolset, RunContext
 
+from autfin.tools.fundamental_tools import FundamentalTools
 from autfin.tools.screening import (
+    NIFTY_500_SYMBOLS,
+    apply_sector_rotation,
+    indian_red_flags,
     liquidity_filter,
     magic_formula_rank,
-    piotroski_f_score,
-    indian_red_flags,
-    apply_sector_rotation,
-    NIFTY_500_SYMBOLS,
 )
-
-from autfin.tools.fundamental_tools import FundamentalTools
 from autfin.types import AgentDeps
 
 

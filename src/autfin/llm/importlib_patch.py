@@ -3,6 +3,7 @@ Monkey patch for importlib_metadata to handle None metadata case.
 Must be imported before ANY other imports (including langchain).
 """
 import importlib.metadata
+
 import importlib_metadata
 
 _original_metadata_version = importlib_metadata.version

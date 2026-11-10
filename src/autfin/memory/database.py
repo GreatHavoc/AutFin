@@ -4,7 +4,6 @@ Database schema and CRUD operations for AutFin
 import sqlite3
 from pathlib import Path
 
-
 DB_PATH = Path(__file__).parent.parent.parent.parent / "data" / "autfin.db"
 
 

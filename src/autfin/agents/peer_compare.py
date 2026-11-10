@@ -56,6 +56,7 @@ async def peer_compare_agent(state: dict, symbol: str | None = None) -> dict[str
 
     try:
         import yfinance as yf
+
         from src.autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol))

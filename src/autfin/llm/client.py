@@ -8,13 +8,12 @@ hand-rolled ReAct loop and no raw ``openai`` SDK. No litellm dependency.
 """
 
 import asyncio
-import json
 import logging
 import os
 import random
 import re
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -418,7 +417,7 @@ class LLMClient:
 
 def _dict_to_pydantic(schema: Dict[str, Any], name: str) -> Any:
     """Build a pydantic model from a JSON-schema dict for StructuredTool args_schema."""
-    from pydantic import BaseModel, Field, create_model
+    from pydantic import Field, create_model
 
     properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
     required = set(schema.get("required", []) if isinstance(schema, dict) else [])
@@ -449,11 +448,6 @@ def _dict_to_pydantic(schema: Dict[str, Any], name: str) -> Any:
         return create_model(model_name, **{k: (Any, None) for k in properties})
 
 
-from src.autfin.llm.validation import (
-    TOOL_PARAM_RULES,
-    _validate_tool_args,
-    _compress_tool_result,
-)
 
 # ================== SINGLETON ==================
 

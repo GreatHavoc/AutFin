@@ -6,11 +6,10 @@ from __future__ import annotations
 
 from typing import Any
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pandas_ta_classic as pta
 import yfinance as yf
-
 from pydantic_ai import FunctionToolset, RunContext
 
 from autfin.types import AgentDeps

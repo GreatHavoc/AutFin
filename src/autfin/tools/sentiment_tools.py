@@ -2,20 +2,23 @@
 
 Multi-source sentiment pipeline:
   - Marketaux (API, 0.4 weight) — structured news feed
-  - Moneycontrol (scraper, 0.2 weight) — Indian market news
-  - Economic Times (scraper, 0.2 weight) — Indian business news
-  - Reddit (PRAW, 0.2 weight) — retail sentiment
+  - Moneycontrol (browser, 0.2 weight) — Indian market news
+  - Economic Times (browser, 0.2 weight) — Indian business news
+  - Reddit (browser, 0.2 weight) — retail sentiment
 
+Scraping delegated to browser_agent (Obscura MCP).
 All sentiment scoring via HybridSentimentAnalyzer (FinBERT/VADER/keyword).
 """
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import httpx
 
+from .browser_agent import get_browser_agent
 from .sentiment_analyzer import get_sentiment_analyzer
 
 logger = logging.getLogger(__name__)
@@ -37,14 +40,12 @@ class SentimentTools:
         Initialize SentimentTools.
         
         Args:
-            api_token: Marketaux API token. If None, loads from environment.
+            api_token: Marketaux API token. If None, loads from MARKETAUX_API_KEY env var.
         """
-        self.api_token = api_token
+        self.api_token = api_token or os.environ.get("MARKETAUX_API_KEY", "")
         self.base_url = "https://api.marketaux.com/v1"
         self._client: Optional[httpx.AsyncClient] = None
         self._analyzer = get_sentiment_analyzer()
-        self._scraper = None  # Lazy-loaded ScraperTools
-        self._reddit = None  # Lazy-loaded RedditSentimentTool
     
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create httpx client."""
@@ -72,22 +73,26 @@ class SentimentTools:
         await self.close()
 
     # ------------------------------------------------------------------
-    # Lazy-loaded sub-tools
+    # Browser scraping via Obscura MCP
     # ------------------------------------------------------------------
 
-    def _get_scraper(self):
-        """Lazy-load ScraperTools for Moneycontrol/ET scraping."""
-        if self._scraper is None:
-            from src.autfin.tools.scraper_tools import ScraperTools
-            self._scraper = ScraperTools()
-        return self._scraper
+    async def _browser_scrape(self, task: str) -> str:
+        """Delegate scraping to browser agent via Obscura MCP."""
+        result = await get_browser_agent().run(task)
+        return result.output
 
-    def _get_reddit(self):
-        """Lazy-load RedditSentimentTool."""
-        if self._reddit is None:
-            from src.autfin.tools.reddit_sentiment import get_reddit_sentiment_tool
-            self._reddit = get_reddit_sentiment_tool()
-        return self._reddit
+    @staticmethod
+    def _parse_json_response(text: str) -> list:
+        """Extract JSON array from browser agent response."""
+        import json
+        start = text.find("[")
+        end = text.rfind("]")
+        if start != -1 and end != -1:
+            try:
+                return json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                pass
+        return []
     
     def _calculate_sentiment_score(self, text: str) -> float:
         """Calculate sentiment score using HybridSentimentAnalyzer (FinBERT/VADER/keyword).
@@ -407,16 +412,19 @@ class SentimentTools:
     async def get_moneycontrol_sentiment(
         self, symbol: str, limit: int = 5
     ) -> Dict[str, Any]:
-        """Scrape Moneycontrol news and analyze sentiment.
+        """Scrape Moneycontrol news via browser agent and analyze sentiment.
 
         Returns:
             {source, symbol, score, confidence, articles_count, method}
         """
         try:
-            scraper = self._get_scraper()
-            articles = await scraper.scrape_moneycontrol_news(symbol, limit=limit)
-
-            if not articles:
+            text = await self._browser_scrape(
+                f"Navigate to moneycontrol.com, search for '{symbol}' news. "
+                f"Extract the {limit} most recent headline titles. "
+                f"Return ONLY a JSON array of strings, no markdown."
+            )
+            headlines = self._parse_json_response(text)
+            if not headlines:
                 return {
                     "source": "moneycontrol",
                     "symbol": symbol,
@@ -426,10 +434,7 @@ class SentimentTools:
                     "method": "none",
                 }
 
-            # Score each headline
-            texts = [a.get("title", "") for a in articles if a.get("title")]
-            result = self._analyzer.analyze_batch(texts, source_type="news")
-
+            result = self._analyzer.analyze_batch(headlines, source_type="news")
             return {
                 "source": "moneycontrol",
                 "symbol": symbol,
@@ -453,16 +458,19 @@ class SentimentTools:
     async def get_economic_times_sentiment(
         self, symbol: str, limit: int = 5
     ) -> Dict[str, Any]:
-        """Scrape Economic Times news and analyze sentiment.
+        """Scrape Economic Times news via browser agent and analyze sentiment.
 
         Returns:
             {source, symbol, score, confidence, articles_count, method}
         """
         try:
-            scraper = self._get_scraper()
-            articles = await scraper.scrape_economic_times(symbol, limit=limit)
-
-            if not articles:
+            text = await self._browser_scrape(
+                f"Navigate to economictimes.indiatimes.com/markets. "
+                f"Search for '{symbol}'. Extract the {limit} most recent headline titles. "
+                f"Return ONLY a JSON array of strings, no markdown."
+            )
+            headlines = self._parse_json_response(text)
+            if not headlines:
                 return {
                     "source": "economic_times",
                     "symbol": symbol,
@@ -472,9 +480,7 @@ class SentimentTools:
                     "method": "none",
                 }
 
-            texts = [a.get("title", "") for a in articles if a.get("title")]
-            result = self._analyzer.analyze_batch(texts, source_type="news")
-
+            result = self._analyzer.analyze_batch(headlines, source_type="news")
             return {
                 "source": "economic_times",
                 "symbol": symbol,
@@ -498,27 +504,44 @@ class SentimentTools:
     async def get_reddit_sentiment(
         self, symbol: str, subreddits: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """Fetch Reddit sentiment for a stock.
+        """Scrape Reddit for retail sentiment via browser agent.
 
         Returns:
             {source, symbol, score, confidence, posts_count, method}
         """
         try:
-            reddit = self._get_reddit()
-            result = reddit.analyze(symbol, subreddits=subreddits)
+            subs = subreddits or ["IndianStockMarket", "IndiaInvestments"]
+            sub_filter = " OR ".join(f"r/{s}" for s in subs)
+            text = await self._browser_scrape(
+                f"Navigate to reddit.com and search {sub_filter} for '{symbol}' "
+                f"sorted by new, last 7 days. Extract post titles, upvotes, and "
+                f"comment counts. Return ONLY a JSON array of objects with keys: "
+                f"title, upvotes, comments. No markdown."
+            )
+            posts = self._parse_json_response(text)
 
-            posts_found = result.get("posts_found", 0)
-            avg_sentiment = result.get("avg_sentiment", 0.0)
+            if not posts:
+                return {
+                    "source": "reddit",
+                    "symbol": symbol,
+                    "score": 0.0,
+                    "confidence": 0.0,
+                    "posts_count": 0,
+                    "method": "none",
+                }
+
+            # Score each post title
+            titles = [p.get("title", "") for p in posts if p.get("title")]
+            result = self._analyzer.analyze_batch(titles, source_type="social")
 
             return {
                 "source": "reddit",
                 "symbol": symbol,
-                "score": avg_sentiment,
-                "confidence": min(1.0, posts_found / 10) if posts_found > 0 else 0.0,
-                "posts_count": posts_found,
-                "method": "vader",
-                "volume_signal": result.get("volume_signal", "none"),
-                "top_posts": result.get("top_posts", []),
+                "score": result["score"],
+                "confidence": min(1.0, result["count"] / 10),
+                "posts_count": result["count"],
+                "method": result["method"],
+                "top_posts": posts[:5],
             }
         except Exception as e:
             logger.debug("Reddit sentiment failed for %s: %s", symbol, e)
@@ -541,9 +564,9 @@ class SentimentTools:
 
         Sources:
           - Marketaux (API news) — weight 0.4
-          - Moneycontrol (scraped news) — weight 0.2
-          - Economic Times (scraped news) — weight 0.2
-          - Reddit (retail sentiment) — weight 0.2
+          - Moneycontrol (browser-scraped news) — weight 0.2
+          - Economic Times (browser-scraped news) — weight 0.2
+          - Reddit (browser-scraped retail) — weight 0.2
 
         Args:
             symbol: Stock symbol.

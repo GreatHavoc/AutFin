@@ -74,6 +74,98 @@ def create_fundamental_toolset() -> FunctionToolset[AgentDeps]:
             f"{symbol}: Board meeting scheduled for dividend announcement",
         ]
 
+    @toolset.tool
+    async def estimate_valuation(ctx: RunContext[AgentDeps], symbol: str) -> dict[str, Any]:
+        """Estimate fair value using simple DCF and relative valuation.
+
+        Uses yfinance data to compute:
+        - Simple DCF (10-year, 12% discount rate, 8% terminal growth)
+        - Relative valuation (PE-based vs sector)
+        - Fair value range and upside %
+
+        Args:
+            symbol: Stock symbol (e.g., "RELIANCE")
+        """
+        tools = _get_fundamental()
+        try:
+            financials = await tools.get_financials(symbol)
+            if "error" in financials:
+                return {"symbol": symbol, "error": financials["error"]}
+
+            pe = financials.get("pe", 0)
+            market_cap = financials.get("market_cap", 0)
+            fcf_yield = financials.get("fcf_yield", 0)
+            earnings_yield = financials.get("earnings_yield", 0)
+            revenue_growth = financials.get("revenue_growth_3y", 0.08)
+
+            # Simple DCF: FCF = market_cap * fcf_yield, grow at revenue_growth for 10yr
+            fcf = market_cap * (fcf_yield / 100) if fcf_yield and market_cap else 0
+            discount_rate = 0.12
+            terminal_growth = 0.08
+            growth_rate = min(revenue_growth / 100, 0.25) if revenue_growth else 0.08
+
+            dcf_value = 0
+            if fcf > 0:
+                for yr in range(1, 11):
+                    dcf_value += fcf * ((1 + growth_rate) ** yr) / ((1 + discount_rate) ** yr)
+                terminal_value = (fcf * ((1 + growth_rate) ** 10) * (1 + terminal_growth)) / (
+                    discount_rate - terminal_growth
+                )
+                dcf_value += terminal_value / ((1 + discount_rate) ** 10)
+
+            # Relative: assume sector PE ~20, compute implied price
+            sector_pe = 20
+            earnings = market_cap / pe if pe and pe > 0 else 0
+            relative_value = earnings * sector_pe if earnings > 0 else 0
+
+            # Fair value range
+            fair_values = [v for v in [dcf_value, relative_value] if v > 0]
+            if fair_values:
+                fv_low = min(fair_values) * 0.85
+                fv_high = max(fair_values) * 1.15
+                fv_mid = sum(fair_values) / len(fair_values)
+            else:
+                fv_low = fv_high = fv_mid = 0
+
+            current_price = financials.get("market_cap", 0)  # fallback
+            upside = ((fv_mid / current_price) - 1) * 100 if current_price and current_price > 0 else None
+
+            return {
+                "symbol": symbol,
+                "dcf_base": round(dcf_value, 0) if dcf_value else None,
+                "relative_value": round(relative_value, 0) if relative_value else None,
+                "fair_value_range": (round(fv_low, 0), round(fv_high, 0)) if fv_low else None,
+                "upside_pct": round(upside, 1) if upside is not None else None,
+                "key_assumptions": {
+                    "discount_rate": discount_rate,
+                    "terminal_growth": terminal_growth,
+                    "growth_rate": round(growth_rate, 3),
+                    "fcf_yield": fcf_yield,
+                    "pe": pe,
+                },
+                "summary": f"Fair value ₹{fv_mid:,.0f} (range ₹{fv_low:,.0f}-₹{fv_high:,.0f})"
+                if fv_mid
+                else "Insufficient data for valuation",
+            }
+        except Exception as e:
+            return {"symbol": symbol, "error": str(e)}
+
+    @toolset.tool
+    async def compare_peers_tool(
+        ctx: RunContext[AgentDeps], symbol: str, peers: list[str]
+    ) -> dict[str, Any]:
+        """Compare key financial ratios across a peer group.
+
+        Args:
+            symbol: Stock symbol (e.g., "RELIANCE")
+            peers: List of peer symbols (e.g., ["ONGC", "IOC", "BPCL"])
+        """
+        tools = _get_fundamental()
+        try:
+            return await tools.compare_peers(symbol, peers)
+        except Exception as e:
+            return {"symbol": symbol, "error": str(e)}
+
     return toolset
 
 

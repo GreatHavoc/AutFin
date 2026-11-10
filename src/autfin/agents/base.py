@@ -4,9 +4,9 @@ Creates type-safe agents with shared configuration, models, and capabilities.
 """
 from __future__ import annotations
 
+import os
 from typing import Any, Callable, Literal, TypeVar
 
-import os
 from dotenv import load_dotenv
 from pydantic_ai import Agent
 from pydantic_ai.capabilities import SelectModel
@@ -16,7 +16,7 @@ from pydantic_ai.settings import ModelSettings
 from pydantic_ai.toolsets import AbstractToolset
 from pydantic_ai.usage import UsageLimits
 
-from autfin.types import AgentDeps, MODEL_CONFIG, ModelConfig
+from autfin.types import MODEL_CONFIG, AgentDeps
 
 OutputT = TypeVar("OutputT")
 
@@ -131,6 +131,7 @@ def create_agent[OutputT](
     )
 
     agent = Agent[AgentDeps, OutputT](
+        name=name,
         model=model,
         deps_type=AgentDeps,
         output_type=output_type,

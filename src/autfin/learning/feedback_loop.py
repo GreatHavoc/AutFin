@@ -1,7 +1,8 @@
 """Feedback loop orchestrator — closes the loop: retrieve → decide → execute → observe → learn."""
 from __future__ import annotations
+
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,8 @@ async def pre_trade_context(
         }
     """
     try:
-        from src.autfin.learning.retriever import retrieve_learnings, search_similar_setups
         from src.autfin.learning.calibrator import CalibrationTracker
+        from src.autfin.learning.retriever import retrieve_learnings, search_similar_setups
 
         query = f"{action} {symbol}"
         if sector:
@@ -86,9 +87,9 @@ async def post_trade_learn(
     """
     try:
         from src.autfin.learning.calibrator import (
-            record_learning,
             CalibrationTracker,
             detect_patterns,
+            record_learning,
         )
 
         recorded = await record_learning(

@@ -14,13 +14,11 @@ from pydantic_ai_harness.guardrails import (
     ToolGuardrail,
 )
 from pydantic_ai_harness.guardrails.detectors import (
-    secret_data,
-    personal_data,
     blocked_keywords,
     for_text,
-    for_tool_result_text,
+    personal_data,
+    secret_data,
 )
-
 
 # ─── Workspace Path for Tool Guardrails ───
 WORKSPACE = Path("./workspace").resolve()

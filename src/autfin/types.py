@@ -7,12 +7,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+
 # ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
-from typing import Annotated, Any, Literal, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
-from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage as BaseMessage
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -22,12 +22,12 @@ from pydantic_ai.messages import ModelMessage as BaseMessage
 class ModelConfig(BaseModel):
     """Model routing configuration.
 
-    - nvidia/nemotron-3.5-lightning-30b-a3b (deep/reasoning)
-    - nvidia/nemotron-3.5-lightning-30b-a3b (fast/medium/code)
+    - nvidia/minimax-m3 (deep/reasoning — 456B MoE, stronger reasoning)
+    - nvidia/nemotron-3.5-lightning-30b-a3b (fast/code — lightweight, quick)
     """
-    deep: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    deep: str = "nvidia/minimax-m3"
     fast: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
-    reasoning: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    reasoning: str = "nvidia/minimax-m3"
     code: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
 
 MODEL_CONFIG = ModelConfig()

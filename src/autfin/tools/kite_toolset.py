@@ -4,14 +4,49 @@ Wraps existing KiteTools as a reusable FunctionToolset for Pydantic AI agents.
 """
 from __future__ import annotations
 
-import os
+import logging
 from typing import Any
 
 from pydantic_ai import FunctionToolset, RunContext
-from pydantic_ai.toolsets import CombinedToolset
 
 from autfin.tools.kite_tools import KiteTools
 from autfin.types import AgentDeps
+
+logger = logging.getLogger(__name__)
+
+
+async def get_yfinance_quotes(symbols: list[str]) -> dict[str, Any]:
+    """Fallback quote fetcher using yfinance when Kite fails."""
+    import yfinance as yf
+    from autfin.agents.yfinance_utils import normalize_symbol
+
+    quotes = {}
+    for sym in symbols:
+        try:
+            ticker = yf.Ticker(normalize_symbol(sym))
+            info = ticker.info or {}
+            hist = ticker.history(period="1d")
+            if hist is not None and not hist.empty:
+                last = float(hist["Close"].iloc[-1])
+                prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else last
+                change = last - prev
+                change_pct = (change / prev * 100) if prev else 0
+                quotes[sym] = {
+                    "symbol": sym,
+                    "ltp": last,
+                    "last_price": last,
+                    "change": change,
+                    "change_pct": change_pct,
+                    "volume": int(hist["Volume"].iloc[-1]) if "Volume" in hist.columns else 0,
+                    "open": float(hist["Open"].iloc[-1]),
+                    "high": float(hist["High"].iloc[-1]),
+                    "low": float(hist["Low"].iloc[-1]),
+                    "close": float(hist["Close"].iloc[-1]),
+                    "source": "yfinance",
+                }
+        except Exception as e:
+            logger.debug("yfinance quote failed for %s: %s", sym, e)
+    return quotes
 
 
 def create_kite_toolset() -> FunctionToolset[AgentDeps]:
@@ -42,14 +77,22 @@ def create_kite_toolset() -> FunctionToolset[AgentDeps]:
         Args:
             symbols: Comma-separated list of symbols (e.g., "RELIANCE,TCS,HDFCBANK")
         """
-        kite = _get_kite(ctx)
         symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-        instruments = [f"NSE:{sym}" for sym in symbol_list]
         
+        # Try Kite first
+        kite = _get_kite(ctx)
+        instruments = [f"NSE:{sym}" for sym in symbol_list]
         result = await kite.get_quotes(instruments)
-        if result.get("status") == "success":
+        
+        if result.get("status") == "success" and result.get("data"):
             return {"quotes": result.get("data", {}), "error": None}
-        return {"quotes": {}, "error": result.get("message", "Unknown error")}
+        
+        # Fallback to yfinance
+        logger.info("Kite quotes failed, falling back to yfinance")
+        quotes = await get_yfinance_quotes(symbol_list)
+        if quotes:
+            return {"quotes": quotes, "error": None, "source": "yfinance"}
+        return {"quotes": {}, "error": result.get("message", "Both Kite and yfinance failed")}
 
     @toolset.tool
     async def get_margins(ctx: RunContext[AgentDeps]) -> dict:
@@ -121,8 +164,9 @@ def create_kite_toolset() -> FunctionToolset[AgentDeps]:
     @toolset.tool
     async def get_market_status(ctx: RunContext[AgentDeps]) -> dict:
         """Get current market status from NSE API."""
-        import httpx
         from datetime import datetime, time
+
+        import httpx
         
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:

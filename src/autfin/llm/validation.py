@@ -5,12 +5,7 @@ Provides validation and compression helpers for tool arguments and results.
 Used by subagents that need custom validation beyond pydantic args_schema.
 """
 
-import json
-import re
 from typing import Any, Dict, Optional, Tuple
-
-from src.autfin.utils import extract_json
-
 
 # Per-tool input validation schemas
 TOOL_PARAM_RULES: Dict[str, Dict[str, Dict[str, Any]]] = {

@@ -25,7 +25,7 @@ import asyncio
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -423,6 +423,7 @@ async def fetch_price_data(
         List of close prices. Empty list if no data.
     """
     import yfinance as yf
+
     from src.autfin.agents.yfinance_utils import normalize_symbol
 
     ticker = yf.Ticker(normalize_symbol(symbol))

@@ -12,10 +12,9 @@ NOT available on Personal tier (require Connect ₹500/month):
 - WebSocket streaming
 """
 
-import os
-import hashlib
 import logging
-from datetime import datetime, timedelta
+import os
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 try:
@@ -179,7 +178,7 @@ class KiteTools:
                 
                 # Check if this redirect URL contains the request_token
                 if "request_token" in location:
-                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import parse_qs, urlparse
                     parsed = urlparse(location)
                     params = parse_qs(parsed.query)
                     request_token = params.get("request_token", [None])[0]

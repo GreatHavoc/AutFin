@@ -13,9 +13,8 @@ All arithmetic is deterministic -- no LLM involved.
 from __future__ import annotations
 
 import logging
-import math
 import sqlite3
-from datetime import datetime, date, timezone, timedelta
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 

@@ -6,19 +6,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic_ai import Agent, RunContext
+# Define quant output types
+from pydantic import BaseModel, ConfigDict
+from pydantic_ai import RunContext
 from pydantic_ai.capabilities import Thinking
 from pydantic_ai_harness import CodeMode
 
-from autfin.agents.base import create_agent, get_model
+from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import quant_instructions
-from autfin.agents.observability import create_debug_instrumentation
 from autfin.tools import risk_toolset, technical_toolset
 from autfin.types import AgentDeps
 
-
-# Define quant output types
-from pydantic import BaseModel, ConfigDict, Field
 # ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
 
 
@@ -68,7 +66,6 @@ quant_agent = create_agent(
     capabilities=[
         Thinking(effort="high"),
         CodeMode(),  # Sandbox all tools (default)
-        create_debug_instrumentation(),
     ],
     toolsets=[risk_toolset, technical_toolset],
 )
@@ -182,7 +179,6 @@ async def stress_test_portfolio(
         positions: List of {symbol, qty, price}
         scenarios: Optional custom scenarios (market_crash, correlation_break, etc.)
     """
-    import numpy as np
     
     if scenarios is None:
         scenarios = [

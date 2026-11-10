@@ -4,8 +4,9 @@ Uses sentence-transformers embeddings with cosine similarity for semantic retrie
 Falls back to keyword-overlap scoring if embeddings unavailable.
 """
 from __future__ import annotations
+
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ async def retrieve_learnings(
         ).fetchall()
 
         # Try semantic embeddings first, fall back to keyword overlap
-        from src.autfin.memory.embeddings import generate_embedding, cosine_similarity
+        from src.autfin.memory.embeddings import cosine_similarity, generate_embedding
 
         query_embedding = None
         try:

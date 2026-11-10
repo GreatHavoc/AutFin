@@ -1,9 +1,11 @@
 """ChromaDB vector store for AutFin embeddings and semantic search."""
 
-from typing import Any, Dict, List, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import chromadb
-from chromadb import EmbeddingFunction, Documents, Embeddings
+from chromadb import Documents, EmbeddingFunction, Embeddings
+
 from ..config.settings import AutFinSettings
 
 

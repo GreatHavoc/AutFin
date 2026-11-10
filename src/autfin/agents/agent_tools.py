@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +192,7 @@ async def technical_tool(symbol: str, depth: str = "standard", as_of: str | None
         depth: quick (3mo), standard (6mo), deep (1y)
         as_of: ISO datetime for point-in-time backtests (None = live)
     """
-    from src.autfin.tools.technical_tools import fetch_technical_indicators, detect_patterns
+    from src.autfin.tools.technical_tools import detect_patterns, fetch_technical_indicators
 
     try:
         indicators_json = await fetch_technical_indicators(symbol)
@@ -383,8 +383,9 @@ async def valuation_tool(symbol: str, depth: str = "standard") -> str:
         symbol: Stock symbol (e.g. 'RELIANCE')
         depth: quick (simple DCF), standard (3 scenarios), deep (full + reverse DCF)
     """
-    from src.autfin.tools.fundamental_tools import FundamentalTools
     from datetime import datetime
+
+    from src.autfin.tools.fundamental_tools import FundamentalTools
 
     def _compute_dcf(
         free_cash_flow: float,
@@ -550,8 +551,8 @@ async def research_tool(symbols: str, depth: str = "standard") -> str:
         symbols: Comma-separated stock symbols (e.g. 'RELIANCE,TCS')
         depth: quick, standard, or deep
     """
+    from src.autfin.agents.tools import FUNDAMENTALS_CALLABLES, FUNDAMENTALS_TOOLS
     from src.autfin.llm.client import get_llm_client
-    from src.autfin.agents.tools import FUNDAMENTALS_TOOLS, FUNDAMENTALS_CALLABLES
 
     llm = get_llm_client()
     if not llm.is_available:

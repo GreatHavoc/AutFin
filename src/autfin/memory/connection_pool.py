@@ -18,7 +18,6 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

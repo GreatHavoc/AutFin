@@ -13,8 +13,8 @@ from __future__ import annotations
 from .browser_client import (
     BrowserMCPConnectionError,
     BrowserMCPNotInstalledError,
-    BrowserMCPStartupError,
     BrowserMCPSettings,
+    BrowserMCPStartupError,
     autostart_observa,
     browser_mcp_register_tools,
     get_browser_mcp_client,

@@ -7,20 +7,15 @@ from __future__ import annotations
 # ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
 from typing import Any
 
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import RunContext
 from pydantic_ai.capabilities import Thinking
 
-from autfin.agents.base import create_agent, get_model
-from autfin.agents.managed_prompts import conference_instructions
-from autfin.agents.observability import create_debug_instrumentation
+from autfin.agents.base import create_agent
 from autfin.types import (
     AgentDeps,
-    ConferenceResult,
     AnalysisReport,
-    RiskAssessment,
-    DebateResult,
+    ConferenceResult,
 )
-
 
 conference_agent = create_agent(
     name="conference",
@@ -29,7 +24,6 @@ conference_agent = create_agent(
     instructions="You are the ConferenceAgent for AutFin v7.0 — multi-agent coordination conferences.",
     capabilities=[
         Thinking(effort="high"),
-        create_debug_instrumentation(),
     ],
 )
 
@@ -43,15 +37,15 @@ async def run_morning_conference(
     portfolio: list[Any],
 ) -> ConferenceResult:
     """Run morning capital allocation conference."""
-    import asyncio
+    from autfin.agents.debate import debate_agent
+    from autfin.agents.risk import risk_agent
 
     deps = ctx.deps
     capital = deps.capital
 
     decisions = []
     capital_allocation = {}
-    remaining_capital = capital * 0.1  # Keep 10% cash
-    risk_budget = capital * deps.max_drawdown_pct
+    remaining_capital = capital * 0.9  # Keep 10% cash
 
     # Process each candidate through debate + risk
     for symbol in candidates[:10]:  # Max 10 candidates
@@ -59,60 +53,76 @@ async def run_morning_conference(
         if not analysis:
             continue
 
-        # Run debate
-        from autfin.agents.debate import run_debate
-        debate_result = await run_debate(ctx, symbol, analysis, "buy")
+        # Get current price from fundamental data
+        current_price = 0.0
+        if analysis.fundamental and analysis.fundamental.market_cap:
+            # Estimate price from market cap and PE
+            pe = analysis.fundamental.pe_ratio or 20
+            eps = (analysis.fundamental.market_cap / pe) / 1e7 if pe > 0 else 0
+            current_price = eps * pe if eps > 0 else 0
+        if current_price <= 0:
+            continue
 
-        if debate_result.decision != "buy" or debate_result.confidence < 0.5:
+        # Run debate via agent
+        debate_prompt = (
+            f"Analyze {symbol} for a BUY decision. "
+            f"Current price: ₹{current_price:.2f}. "
+            f"Fundamental score: {analysis.fundamental.health_score if analysis.fundamental else 'N/A'}. "
+            f"Technical signal: {analysis.technical.signal if analysis.technical else 'N/A'}. "
+            f"Sentiment: {analysis.sentiment.sentiment_label if analysis.sentiment else 'N/A'}."
+        )
+        debate_result = await debate_agent.run(debate_prompt, deps=deps)
+
+        if debate_result.output.decision != "buy" or debate_result.output.confidence < 0.5:
             decisions.append({
                 "symbol": symbol,
                 "action": "skip",
-                "reason": f"Debate: {debate_result.decision}, confidence {debate_result.confidence:.2f}",
+                "reason": f"Debate: {debate_result.output.decision}, confidence {debate_result.output.confidence:.2f}",
             })
             continue
 
-        # Run risk check
-        from autfin.agents.risk import assess_trade
-        risk_result = await assess_trade(
-            ctx,
-            symbol=symbol,
-            action="buy",
-            entry_price=float(analysis.fundamental.market_cap / 1e7) if analysis.fundamental else 0,
-            conviction=debate_result.confidence,
-            analysis_data=analysis.model_dump() if hasattr(analysis, 'model_dump') else analysis,
+        # Run risk check via agent
+        risk_prompt = (
+            f"Assess trade for {symbol}: BUY at ₹{current_price:.2f}. "
+            f"Conviction: {debate_result.output.confidence:.2f}. "
+            f"Portfolio capital: ₹{capital:,.0f}. "
+            f"Existing positions: {len(portfolio)}."
         )
+        risk_result = await risk_agent.run(risk_prompt, deps=deps)
 
-        if risk_result.verdict == "reject":
+        if risk_result.output.verdict == "reject":
             decisions.append({
                 "symbol": symbol,
                 "action": "reject",
-                "reason": risk_result.rationale,
+                "reason": risk_result.output.rationale,
             })
             continue
 
         # Approved - allocate capital
-        position_size = risk_result.position_size
-        position_value = position_size * risk_result.stop_loss  # Approximate
+        position_size = risk_result.output.position_size
+        position_value = position_size * current_price
 
         if position_value > remaining_capital:
             # Scale down
-            position_size = int(remaining_capital / risk_result.stop_loss)
-            position_value = position_size * risk_result.stop_loss
+            position_size = int(remaining_capital / current_price)
+            position_value = position_size * current_price
+
+        if position_size <= 0:
+            continue
 
         decisions.append({
             "symbol": symbol,
             "action": "buy",
             "quantity": position_size,
-            "entry_price": float(risk_result.target),
-            "stop_loss": float(risk_result.stop_loss),
-            "target": float(risk_result.target),
-            "risk_reward": risk_result.risk_reward,
-            "conviction": debate_result.confidence,
+            "entry_price": current_price,
+            "stop_loss": float(risk_result.output.stop_loss),
+            "target": float(risk_result.output.target),
+            "risk_reward": risk_result.output.risk_reward,
+            "conviction": debate_result.output.confidence,
         })
 
         capital_allocation[symbol] = position_value
         remaining_capital -= position_value
-        risk_budget -= position_value * 0.08  # 8% risk per position
 
     # Determine regime
     regime = determine_regime(market_snapshot)

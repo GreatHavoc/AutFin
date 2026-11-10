@@ -9,13 +9,12 @@ Each tool is defined as a standalone async function with:
 Tools are organized by agent domain. Each agent picks the tools it needs.
 """
 
-from typing import Any, Callable, Dict, List, Optional
-
 import warnings
+from typing import Any, Callable, Dict, List
+
 warnings.filterwarnings("ignore", message=".*possibly delisted.*")
 warnings.filterwarnings("ignore", message=".*no price data found.*")
 import pandas as pd
-
 
 # ================== TOOL REGISTRY ==================
 
@@ -46,6 +45,7 @@ async def fetch_financial_info(symbol: str) -> str:
     """Fetch all financial info for a stock from yfinance (ratios, growth, balance sheet)."""
     try:
         import yfinance as yf
+
         from src.autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
@@ -72,6 +72,7 @@ async def fetch_balance_sheet(symbol: str) -> str:
     """Fetch the balance sheet for a stock from yfinance."""
     try:
         import yfinance as yf
+
         from src.autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
@@ -88,6 +89,7 @@ async def fetch_income_statement(symbol: str) -> str:
     """Fetch the income statement for a stock from yfinance."""
     try:
         import yfinance as yf
+
         from src.autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
@@ -104,6 +106,7 @@ async def fetch_cashflow(symbol: str) -> str:
     """Fetch the cash flow statement for a stock from yfinance."""
     try:
         import yfinance as yf
+
         from src.autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
@@ -126,6 +129,7 @@ async def fetch_historical_ohlcv(symbol: str, period: str = "6mo", interval: str
     """
     try:
         import yfinance as yf
+
         from src.autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
@@ -142,6 +146,7 @@ async def fetch_company_info(symbol: str) -> str:
     """Fetch company profile info (sector, industry, market cap, employees)."""
     try:
         import yfinance as yf
+
         from src.autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
@@ -391,6 +396,7 @@ async def fetch_fred_indicator(series_id: str) -> str:
     """
     try:
         import os
+
         import httpx
 
         api_key = os.environ.get("FRED_API_KEY")
@@ -446,8 +452,9 @@ async def fetch_marketaux_news(symbol: str, limit: int = 5) -> str:
     """
     try:
         import os
-        import httpx
         from datetime import datetime, timedelta
+
+        import httpx
 
         api_key = os.environ.get("MARKETAUX_API_KEY")
         if not api_key:
@@ -494,7 +501,7 @@ async def fetch_nse_announcements(symbol: str) -> str:
         import httpx
 
         response = httpx.get(
-            f"https://www.nseindia.com/api/corporate-announcements",
+            "https://www.nseindia.com/api/corporate-announcements",
             params={"index": "equities", "symbol": symbol.upper()},
             headers={
                 "User-Agent": "Mozilla/5.0",
@@ -635,6 +642,7 @@ async def compare_peers(symbol: str, metric: str = "valuation") -> str:
 
         try:
             import yfinance as yf
+
             from src.autfin.agents.yfinance_utils import normalize_symbol
             ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             info = ticker.info or {}

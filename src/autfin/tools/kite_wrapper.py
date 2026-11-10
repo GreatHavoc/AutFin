@@ -5,10 +5,8 @@ Wraps existing KiteTools class as async functions for Pydantic AI agents.
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from autfin.tools.kite_tools import KiteTools
-
 
 # Global singleton
 _kite_instance: KiteTools | None = None

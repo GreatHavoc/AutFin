@@ -5,26 +5,22 @@ Uses combined toolsets for all analysis dimensions.
 """
 from __future__ import annotations
 
-from typing import Any
+from pydantic_ai import RunContext
+from pydantic_ai.capabilities import Thinking, WebSearch
 
-from pydantic_ai import Agent, RunContext
-from pydantic_ai.capabilities import WebSearch, Thinking
-
-from autfin.agents.base import create_agent, get_model
+from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import analysis_instructions
-from autfin.agents.observability import create_debug_instrumentation
 from autfin.tools import analysis_toolset
 from autfin.types import (
     AgentDeps,
     AnalysisReport,
     FundamentalReport,
-    TechnicalReport,
-    SentimentReport,
-    ValuationReport,
-    PeerComparison,
     MoatAssessment,
+    PeerComparison,
+    SentimentReport,
+    TechnicalReport,
+    ValuationReport,
 )
-
 
 analysis_agent = create_agent(
     name="analyze",
@@ -34,7 +30,6 @@ analysis_agent = create_agent(
     capabilities=[
         Thinking(effort="high"),
         WebSearch(local="duckduckgo"),
-        create_debug_instrumentation(),
     ],
     toolsets=[analysis_toolset],
 )
@@ -46,9 +41,15 @@ async def analyze_all(ctx: RunContext[AgentDeps], symbol: str) -> AnalysisReport
     import asyncio
 
     # Import tool functions from toolsets
-    from autfin.tools.fundamental_toolset import get_financials, get_ratios, compute_health_score
-    from autfin.tools.technical_toolset import get_technical_data, get_atr
+    from autfin.tools.fundamental_toolset import (
+        compute_health_score,
+        compare_peers_tool,
+        estimate_valuation,
+        get_financials,
+        get_ratios,
+    )
     from autfin.tools.sentiment_toolset import get_sentiment_data
+    from autfin.tools.technical_toolset import get_atr, get_technical_data
 
     # Parallel execution of all dimensions
     fundamental_task = get_financials(ctx, symbol)
@@ -57,14 +58,23 @@ async def analyze_all(ctx: RunContext[AgentDeps], symbol: str) -> AnalysisReport
     technical_task = get_technical_data(ctx, symbol)
     sentiment_task = get_sentiment_data(ctx, symbol)
     atr_task = get_atr(ctx, symbol)
+    valuation_task = estimate_valuation(ctx, symbol)
 
-    fundamental_data, ratios, health, technical_data, sentiment_data, atr = await asyncio.gather(
-        fundamental_task, ratios_task, health_task, technical_task, sentiment_task, atr_task,
-        return_exceptions=True,
+    fundamental_data, ratios, health, technical_data, sentiment_data, atr, valuation_data = (
+        await asyncio.gather(
+            fundamental_task,
+            ratios_task,
+            health_task,
+            technical_task,
+            sentiment_task,
+            atr_task,
+            valuation_task,
+            return_exceptions=True,
+        )
     )
 
     # Handle exceptions
-    for item in [fundamental_data, ratios, health, technical_data, sentiment_data, atr]:
+    for item in [fundamental_data, ratios, health, technical_data, sentiment_data, atr, valuation_data]:
         if isinstance(item, Exception):
             item = None
 
@@ -131,10 +141,71 @@ async def analyze_all(ctx: RunContext[AgentDeps], symbol: str) -> AnalysisReport
             summary=sentiment_data.get("summary", ""),
         )
 
-    # Valuation, peers, moat - placeholder for now
+    # Valuation
     valuation = None
+    if valuation_data and "error" not in valuation_data:
+        fv_range = valuation_data.get("fair_value_range")
+        valuation = ValuationReport(
+            symbol=symbol,
+            dcf_base=valuation_data.get("dcf_base"),
+            fair_value_range=tuple(fv_range) if fv_range else None,
+            upside_pct=valuation_data.get("upside_pct"),
+            key_assumptions=valuation_data.get("key_assumptions", {}),
+            summary=valuation_data.get("summary", ""),
+        )
+
+    # Peer comparison - derive peers from sector
     peers = None
+    if fundamental and fundamental.sector:
+        sector_peers = {
+            "Energy": ["ONGC", "IOC", "BPCL", "HINDPETRO"],
+            "Financial Services": ["HDFCBANK", "ICICIBANK", "KOTAKBANK", "AXISBANK"],
+            "Technology": ["TCS", "INFY", "HCLTECH", "WIPRO"],
+            "Consumer Goods": ["HUL", "ITC", "NESTLEIND", "BRITANNIA"],
+            "Automobiles": ["MARUTI", "M&M", "TATAMOTORS", "BAJAJ-AUTO"],
+        }
+        peer_list = sector_peers.get(fundamental.sector, [])
+        if peer_list:
+            try:
+                peer_data = await compare_peers_tool(ctx, symbol, peer_list)
+                if peer_data and "error" not in peer_data:
+                    peers = PeerComparison(
+                        symbol=symbol,
+                        peers=peer_list,
+                        rankings=peer_data.get("peers", {}),
+                        summary=f"Compared against {len(peer_list)} peers in {fundamental.sector}",
+                    )
+            except Exception:
+                pass
+
+    # Moat - derive from fundamental signals
     moat = None
+    if fundamental:
+        moat_score = 0
+        moat_sources = []
+        if fundamental.roe and fundamental.roe > 15:
+            moat_score += 25
+            moat_sources.append("High ROE")
+        if fundamental.debt_equity and fundamental.debt_equity < 0.5:
+            moat_score += 20
+            moat_sources.append("Low debt")
+        if fundamental.revenue_growth and fundamental.revenue_growth > 10:
+            moat_score += 20
+            moat_sources.append("Strong growth")
+        if fundamental.operating_margin and fundamental.operating_margin > 20:
+            moat_score += 20
+            moat_sources.append("High margins")
+        if fundamental.market_cap and fundamental.market_cap > 1e11:
+            moat_score += 15
+            moat_sources.append("Large cap")
+        rating = "wide" if moat_score >= 70 else "narrow" if moat_score >= 40 else "none"
+        moat = MoatAssessment(
+            symbol=symbol,
+            score=moat_score,
+            rating=rating,
+            sources=moat_sources,
+            summary=f"Moat score {moat_score}/100 ({rating})",
+        )
 
     # Compute overall score (weighted average)
     scores = []

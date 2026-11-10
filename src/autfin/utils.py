@@ -2,7 +2,7 @@
 
 import json
 import re
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 
 def extract_json(text: str) -> Optional[Dict[str, Any]]:

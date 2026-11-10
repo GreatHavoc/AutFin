@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AutFin v7.0 — how it actually runs</title>
+<style>
+  :root{
+    --bg:#0a0e13; --panel:#111a22; --panel2:#0d151c; --line:#22303c;
+    --ink:#dbe6ef; --dim:#8ba0b3; --teal:#2dd4bf; --blue:#60a5fa;
+    --amber:#f5b544; --red:#f87171; --violet:#a78bfa; --green:#4ade80;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 var(--mono);
+       background-image:radial-gradient(circle at 20% -10%,#12313a 0,transparent 55%),
+                        radial-gradient(circle at 90% 0%,#1b2440 0,transparent 45%);}
+  .wrap{max-width:1180px;margin:0 auto;padding:34px 22px 70px}
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:-.3px}
+  h1 span{color:var(--teal)}
+  .sub{color:var(--dim);font-size:12.5px;margin:0 0 26px}
+  h2{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+     margin:38px 0 14px;padding-bottom:7px;border-bottom:1px solid var(--line);font-weight:600}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--dim);margin-bottom:8px}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+  .dot.live{background:var(--teal);box-shadow:0 0 0 3px #2dd4bf22}
+  .dot.dead{background:var(--red);box-shadow:0 0 0 3px #f8717122}
+
+  /* ── stage stack ── */
+  .stack{display:flex;flex-direction:column;gap:0}
+  .stage{position:relative;background:var(--panel);border:1px solid var(--line);
+         border-left:3px solid var(--teal);border-radius:9px;padding:13px 16px;margin:0}
+  .stage.dead{border-left-color:var(--red);opacity:.62}
+  .stage+.stage{margin-top:26px}
+  .stage+.stage::before{content:"";position:absolute;left:26px;top:-27px;height:26px;
+         width:1px;background:linear-gradient(var(--line),var(--teal))}
+  .stage+.stage::after{content:"▼";position:absolute;left:21px;top:-11px;font-size:9px;color:var(--teal)}
+  .stage.dead+.stage::before,.stage.dead+.stage::after{display:none}
+  .st-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .n{font-size:10px;color:var(--bg);background:var(--teal);border-radius:4px;padding:1px 6px;font-weight:700}
+  .stage.dead .n{background:var(--red)}
+  .title{font-weight:700;font-size:14px}
+  .file{color:var(--blue);font-size:11px}
+  .stage p{margin:7px 0 0;color:var(--dim);font-size:12.5px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .chip{font-size:10.5px;border:1px solid var(--line);border-radius:20px;padding:1px 9px;color:var(--dim);
+        background:var(--panel2)}
+  .chip.t{color:var(--teal);border-color:#2dd4bf44}
+  .chip.a{color:var(--amber);border-color:#f5b54455}
+  .chip.r{color:var(--red);border-color:#f8717144}
+
+  /* ── agent grid ── */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:11px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px 13px}
+  .card h3{margin:0;font-size:12.5px;color:var(--ink)}
+  .card h3 em{font-style:normal;color:var(--dim);font-weight:400;font-size:11px}
+  .card .tools{margin:8px 0 0;padding:0;list-style:none;font-size:11px;color:var(--dim)}
+  .card .tools li{padding:1px 0}
+  .card .tools li::before{content:"· ";color:var(--teal)}
+  .kv{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;color:var(--dim);
+      border-top:1px dashed var(--line);margin-top:9px;padding-top:6px}
+
+  /* ── tables ── */
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+  td code{color:var(--blue);font-size:11px}
+  tr:last-child td{border-bottom:none}
+  .ok{color:var(--green)} .no{color:var(--red)} .part{color:var(--amber)}
+
+  .note{border-left:2px solid var(--amber);background:#f5b5440d;padding:9px 13px;
+        font-size:11.5px;color:var(--dim);border-radius:0 6px 6px 0;margin-top:12px}
+  .note b{color:var(--amber)}
+  footer{margin-top:44px;color:#5d7285;font-size:10.5px;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>AutFin <span>v7.0</span> — how it actually runs</h1>
+  <p class="sub">Pydantic AI multi-agent system for NSE/BSE. Read from the live import graph, not the README.</p>
+
+  <div class="legend">
+    <span><i class="dot live"></i>live — imported and reachable</span>
+    <span><i class="dot dead"></i>legacy — present on disk, imported by nothing</span>
+  </div>
+
+  <h2>1 · Runtime flow (one morning run)</h2>
+
+  <div class="stack">
+
+    <div class="stage">
+      <div class="st-head"><span class="n">01</span><span class="title">Daemon wakes up</span>
+        <span class="file">run.py</span></div>
+      <p>Starts Obscura MCP (headless browser) if the port is closed, then <em>runs immediately on startup</em>.
+         After a run it sleeps until the next 09:15 IST, skips Sat/Sun, and fires the quarterly review every 90 days.</p>
+      <div class="chips"><span class="chip t">--mode paper | live | backtest</span>
+        <span class="chip t">--once</span><span class="chip a">market hours 09:15–15:30 IST</span>
+        <span class="chip">log → autfin.log</span></div>
+    </div>
+
+    <div class="stage">
+      <div class="st-head"><span class="n">02</span><span class="title">Deps object is built</span>
+        <span class="file">types.py → AgentDeps</span></div>
+      <p>One Pydantic model carries everything the agents need: <code>user_id</code>, <code>mode</code>,
+         <code>capital</code> (₹10L default), <code>max_position_pct</code> 0.30, <code>sector_limit_pct</code> 0.30,
+         <code>max_drawdown_pct</code> 0.15, and the optional <code>kite_client</code> / <code>vector_store</code> handles.
+         Every agent, tool and capability receives this same object as <code>ctx.deps</code>.</p>
+      <div class="chips"><span class="chip t">balance-is-budget: capital = deployable pool</span>
+        <span class="chip">paper mode = no order ever leaves the box</span></div>
+    </div>
+
+    <div class="stage">
+      <div class="st-head"><span class="n">03</span><span class="title">Supervisor plans and delegates</span>
+        <span class="file">agents/supervisor.py</span></div>
+      <p>A <code>deep</code>-tier LLM with 6 tools of its own
+         (<code>run_morning_routine</code>, <code>run_quarterly_review</code>, <code>handle_price_alert</code>,
+         <code>analyze_symbol</code>, <code>execute_trade</code>) plus 7 capabilities:
+         <b>SubAgents</b> (the team), <b>DynamicWorkflow</b> (model writes its own orchestration script),
+         <b>Planning</b>, <b>Memory</b>, <b>SystemReminders</b>, <b>Thinking(high)</b>, <b>WebSearch</b>.</p>
+      <div class="chips"><span class="chip t">instructions from ManagedPrompt (Logfire, falls back to inline default)</span></div>
+    </div>
+
+    <div class="stage">
+      <div class="st-head"><span class="n">04</span><span class="title">5-phase routine</span>
+        <span class="file">supervisor.run_morning_routine()</span></div>
+      <p>The tool runs the sequence in Python, not in the prompt: market snapshot → analysis of up to 10 holdings
+         <em>in parallel</em> via <code>asyncio.gather</code> → screening/research → risk assessment → conference for
+         capital allocation. Each sub-agent is a full agent with its own model, tools, token budget and timeout.</p>
+      <div class="chips"><span class="chip a">sub-agent errors are contained (contain_errors=True)</span>
+        <span class="chip">usage forwarded up to the supervisor</span></div>
+    </div>
+
+    <div class="stage">
+      <div class="st-head"><span class="n">05</span><span class="title">Order decision</span>
+        <span class="file">supervisor.execute_trade()</span></div>
+      <p><code>TradeOrder</code> in → if <code>deps.mode == "paper"</code> it only logs a simulated fill;
+         in <code>live</code> it calls <code>kite.place_order(...)</code> on NSE and returns the order id.
+         Missing Kite client returns an <code>action="error"</code> output instead of raising.</p>
+      <div class="chips"><span class="chip r">live orders are real money — mode comes from the CLI flag</span></div>
+    </div>
+
+    <div class="stage">
+      <div class="st-head"><span class="n">06</span><span class="title">What is written down</span>
+        <span class="file">capability Memory(FileStore("./data/memory"))</span></div>
+      <p>Markdown memory files namespaced per <code>user_id</code>, injected back into the next run's context
+         (<code>max_tokens=5000</code>, <code>max_lines=500</code>). Path is <b>CWD-relative</b> — run from the repo root.
+         The SQLite/ChromaDB layer in <code>src/autfin/memory/</code> is legacy and unused by this graph.</p>
+      <div class="chips"><span class="chip a">tests mutate the tracked data/memory/.memory-store.sqlite3</span></div>
+    </div>
+
+  </div>
+
+  <h2>2 · The team (7 sub-agents, all live)</h2>
+  <div class="grid">
+
+    <div class="card">
+      <h3>market_data <em>· fast</em></h3>
+      <ul class="tools"><li>get_portfolio</li><li>get_quotes</li><li>get_margins</li><li>get_positions</li><li>get_market_status</li></ul>
+      <div class="kv"><span>30s · max 3 calls</span><span>kite_toolset</span></div>
+    </div>
+
+    <div class="card">
+      <h3>analyze <em>· standard</em></h3>
+      <ul class="tools"><li>get_financials · get_ratios · health score</li><li>get_technical_data · RSI/MACD/ATR/BB</li><li>get_sentiment_data · analyze_text_sentiment</li><li>estimate_valuation · compare_peers</li></ul>
+      <div class="kv"><span>120s · max 10 calls</span><span>fundamental + technical + sentiment</span></div>
+    </div>
+
+    <div class="card">
+      <h3>research <em>· standard</em></h3>
+      <ul class="tools"><li>screen_stocks · magic formula · piotroski</li><li>red flags · sector rotation filter</li><li>MCP browser tools (Obscura)</li></ul>
+      <div class="kv"><span>180s · max 5 calls</span><span>screening + fundamental + browser</span></div>
+    </div>
+
+    <div class="card">
+      <h3>risk <em>· standard</em></h3>
+      <ul class="tools"><li>Kelly sizing · vol targeting</li><li>ATR-based stops</li><li>portfolio heat / correlation</li></ul>
+      <div class="kv"><span>60s · max 10 calls</span><span>kite + technical</span></div>
+    </div>
+
+    <div class="card">
+      <h3>debate <em>· deep</em></h3>
+      <ul class="tools"><li>no tools — reasons over analysis output</li></ul>
+      <div class="kv"><span>120s · max 5 calls</span><span>bull vs bear, mandatory before trades</span></div>
+    </div>
+
+    <div class="card">
+      <h3>conference <em>· deep</em></h3>
+      <ul class="tools"><li>kite_toolset (portfolio context)</li></ul>
+      <div class="kv"><span>180s · max 3 calls</span><span>multi-agent capital allocation</span></div>
+    </div>
+
+    <div class="card">
+      <h3>memory <em>· fast</em></h3>
+      <ul class="tools"><li>no tools — uses the Memory capability store</li></ul>
+      <div class="kv"><span>30s · max 5 calls</span><span>calibration, patterns, lessons</span></div>
+    </div>
+
+    <div class="card">
+      <h3>quant <em>· standard</em></h3>
+      <ul class="tools"><li>risk_toolset + technical_toolset</li></ul>
+      <div class="kv"><span>exported, not in the morning routine</span><span>opt-in</span></div>
+    </div>
+
+  </div>
+
+  <h2>3 · Where the data comes from</h2>
+  <table>
+    <thead><tr><th>Source</th><th>Provider</th><th>Status in code</th><th>What it is really used for</th></tr></thead>
+    <tbody>
+      <tr><td>Orders, holdings, positions, margins, GTT</td><td>Kite Connect (Personal tier)</td>
+          <td class="ok">works</td><td><code>kite_tools.py</code>, TOTP auto-login (2FA → request_token → session)</td></tr>
+      <tr><td>LTP, quotes, OHLC, historical candles</td><td>Kite</td>
+          <td class="no">BLOCKED</td><td>Personal tier lacks Connect — falls back to yfinance / holdings last price</td></tr>
+      <tr><td>OHLCV, ratios, global indices, FX</td><td>yfinance</td>
+          <td class="part">15-min delayed</td><td>technical + fundamental tools, screening universe</td></tr>
+      <tr><td>News sentiment</td><td>Marketaux</td><td class="ok">100 articles/day</td><td><code>get_news_sentiment</code></td></tr>
+      <tr><td>Text sentiment</td><td>FinBERT (ProsusAI) + VADER</td><td class="ok">local</td><td>the slow part of the test suite (~4.5 min)</td></tr>
+      <tr><td>Reddit / Moneycontrol / ET / Screener / NSE</td><td>Obscura MCP (headless Chrome)</td>
+          <td class="part">port must match</td><td>lazy MCP toolset attached to <code>research</code></td></tr>
+      <tr><td>US macro</td><td>FRED</td><td class="ok">120 req/min</td><td>regime / macro context</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <b>Port mismatch:</b> the browser toolset dials <code>OBSCURA_MCP_URL</code> (default
+    <code>localhost:9222</code>), while <code>.env.example</code> and <code>mcp/browser_client.py</code> document
+    <code>BROWSER_MCP_PORT</code> 9333 / 8080. Nothing reconciles them — set the URL explicitly.
+    The sentiment-scraping path additionally hardcodes <code>openai:gpt-4.1-mini</code>, which needs an
+    <code>OPENAI_API_KEY</code> that <code>.env.example</code> does not mention.
+  </div>
+
+  <h2>4 · Model routing</h2>
+  <table>
+    <thead><tr><th>Tier</th><th>Model id (<code>types.ModelConfig</code>)</th><th>Used by</th></tr></thead>
+    <tbody>
+      <tr><td><code>deep</code> / <code>reasoning</code></td><td>nvidia/minimax-m3</td><td>supervisor, debate, conference, research synthesis</td></tr>
+      <tr><td><code>fast</code> / <code>code</code></td><td>nvidia/nemotron-3.5-lightning-30b-a3b</td><td>market_data, memory, quick checks</td></tr>
+    </tbody>
+  </table>
+  <p class="sub" style="margin:12px 0 0">
+    Transport is not a native pydantic-ai provider: <code>create_nvidia_model()</code> wraps
+    <code>OpenAIChatModel</code> with <code>OpenAIProvider(base_url="https://integrate.api.nvidia.com/v1")</code>
+    and <code>NVIDIA_NIM_API_KEY</code>. Model ids change often because NIM rejects names and JSON-schema patterns
+    it cannot compile (this is why prices are <code>float</code>, not <code>Decimal</code>).
+    <code>config/settings.py</code> still names a third, older model — it is read only by legacy modules.
+  </p>
+
+  <h2>5 · Live vs. legacy (the part that wastes the most time)</h2>
+  <table>
+    <thead><tr><th>Path</th><th>State</th><th>Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td><code>agents/</code>, <code>tools/</code>, <code>backtest/</code>, <code>risk/</code>, <code>types.py</code></td>
+          <td class="ok">live</td><td>editing here changes behaviour</td></tr>
+      <tr><td><code>backtesting/</code> (walk-forward, alpha decay)</td><td class="no">legacy</td>
+          <td>the working backtester is <code>backtest/</code>; two near-identical names</td></tr>
+      <tr><td><code>portfolio/</code>, <code>state/</code>, <code>universe/</code>, <code>learning/</code>, <code>llm/</code>,
+              <code>observability/</code>, <code>memory/</code>, <code>mcp/</code>, <code>evals/</code></td>
+          <td class="no">legacy</td><td>imported by nothing in the agent graph</td></tr>
+      <tr><td><code>agents/agent_tools.py</code> + <code>tools/supervisor_tools.py</code></td>
+          <td class="no">broken</td><td>unreachable, and <code>supervisor_tools.py:1588</code> is a genuine <code>SyntaxError</code></td></tr>
+      <tr><td><code>agents/conferences.py</code> vs <code>conference.py</code></td><td class="no">legacy</td>
+          <td>the plural one is dead; <code>agents/__init__.py</code> imports the singular</td></tr>
+      <tr><td><code>agents/guardrails.py</code></td><td class="part">defined, unenforced</td>
+          <td>exported from <code>agents/__init__.py</code> but attached to no agent</td></tr>
+      <tr><td><code>agents/durable.py</code> (Temporal)</td><td class="no">deleted</td>
+          <td>README and <code>test_validation.py</code> still reference it; that file now breaks bare <code>pytest</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>6 · Verification surface</h2>
+  <table>
+    <thead><tr><th>Command</th><th>Today's truth</th></tr></thead>
+    <tbody>
+      <tr><td><code>uv run pytest tests/ -q</code></td><td class="ok">58 passed in 4m31s</td></tr>
+      <tr><td><code>uv run pytest</code> (bare)</td><td class="no">collection error — root script files are ad-hoc, not tests</td></tr>
+      <tr><td><code>uv run ruff check .</code></td><td class="no">184 errors (baseline is red; fix only your files)</td></tr>
+      <tr><td><code>uv run pyright</code></td><td class="no">421 errors / 114 files (no pyrightconfig.json exists)</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    Generated from the repository at v7.0 — every path, port, limit and number above was read from source on disk.
+    Where the README disagrees with the code (test counts, model ids, guardrails, Temporal), this page follows the code.
+  </footer>
+
+</div>
+</body>
+</html>

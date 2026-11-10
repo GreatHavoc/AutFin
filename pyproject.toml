@@ -9,9 +9,9 @@ authors = [
 
 dependencies = [
     # Pydantic AI (core)
-    "pydantic-ai[temporal]>=0.1.0",
-    "pydantic-ai-harness[codemode,dynamic-workflow]>=0.1.0",
-    "pydantic-evals>=0.1.0",
+    "pydantic-ai>=2.37.0",
+    "pydantic-ai-harness[codemode,dynamic-workflow]>=0.28.0",
+    "pydantic-evals>=2.37.0",
     # Pydantic
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
@@ -31,19 +31,18 @@ dependencies = [
     "httpx>=0.27.0",
     # Sentiment
     "transformers>=4.30.0",
+    "torch>=2.0.0",
     "vaderSentiment>=3.3.2",
-    "praw>=7.7.0",
     # Utilities
     "python-dotenv>=1.0.0",
     "rich>=13.0.0",
-    # Optional: Durable execution backends
-    # "temporalio>=1.0.0",
-    # "dbos>=0.1.0",
-    # "prefect>=3.0.0",
     # Observability
-    "logfire[variables]>=0.1.0",
-    "pydantic-ai-slim[duckduckgo]>=2.27.0",
+    "logfire[variables]>=4.41.0",
+    "pydantic-ai-slim[duckduckgo,mcp]>=2.37.0",
     "pandas-ta-classic>=0.6.52",
+    "backtesting>=0.6.6",
+    "vectorbt>=1.1.0",
+    "plotly>=5.0,<7.0",
 ]
 
 [project.optional-dependencies]
@@ -52,13 +51,8 @@ technical = [
     "pandas-ta-classic>=0.6.0",
 ]
 pydantic_ai = [
-    "pydantic-ai-harness[skills,logfire,stackone]>=0.1.0",
-    "pydantic-evals>=0.1.0",
-]
-durable = [
-    "temporalio>=1.0.0",
-    "dbos>=0.1.0",
-    "prefect>=3.0.0",
+    "pydantic-ai-harness[skills,logfire,stackone]>=0.28.0",
+    "pydantic-evals>=2.37.0",
 ]
 dev = [
     "pytest>=7.0.0",

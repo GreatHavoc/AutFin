@@ -5,6 +5,7 @@ Agents check this before calling external APIs to avoid errors.
 Updated automatically when a source fails — agents degrade gracefully.
 """
 from __future__ import annotations
+
 import logging
 from typing import Any
 

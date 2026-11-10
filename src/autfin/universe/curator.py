@@ -14,8 +14,7 @@ Deterministic — no LLM calls.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +93,9 @@ class WatchlistCurator:
         Uses Nifty 500 universe and checks for significant movers.
         """
         try:
-            from src.autfin.tools.universe import NIFTY_500
             import yfinance as yf
+
+            from src.autfin.tools.universe import NIFTY_500
 
             # Check a subset of the universe (top 50 by market cap)
             # to avoid rate limits

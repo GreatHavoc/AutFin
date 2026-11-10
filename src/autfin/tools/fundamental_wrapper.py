@@ -8,7 +8,6 @@ from typing import Any
 
 from autfin.tools.fundamental_tools import FundamentalTools
 
-
 # Global singleton
 _fundamental_instance: FundamentalTools | None = None
 

@@ -2,6 +2,7 @@
 AutFinSettings - Configuration model using Pydantic
 """
 from dotenv import load_dotenv
+
 load_dotenv()  # Load .env into os.environ before model reads it
 
 from pydantic import Field

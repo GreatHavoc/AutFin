@@ -6,7 +6,7 @@ financial domain evaluators, and Logfire integration.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+
 # ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
 from typing import Any
 
@@ -15,16 +15,12 @@ from pydantic_evals import Case, Dataset
 from pydantic_evals.evaluators import (
     Evaluator,
     EvaluatorContext,
-    IsInstance,
-    EqualsExpected,
-    Contains,
-    MaxDuration,
     HasMatchingSpan,
+    IsInstance,
     LLMJudge,
 )
 
 from autfin.types import AgentDeps
-
 
 # ─── Logfire Configuration for Evals ───
 

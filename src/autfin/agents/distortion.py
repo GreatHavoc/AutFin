@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import pandas as pd
 
@@ -337,6 +337,7 @@ async def distortion_audit(
     """
     try:
         import yfinance as yf
+
         from src.autfin.agents.yfinance_utils import normalize_symbol
 
         period_map = {"quick": "3mo", "standard": "6mo", "deep": "1y"}

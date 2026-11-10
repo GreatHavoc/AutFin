@@ -5,22 +5,17 @@ Uses KiteToolset for all broker interactions.
 """
 from __future__ import annotations
 
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import RunContext
 from pydantic_ai.capabilities import WebSearch
 from pydantic_ai_harness.filesystem import FileSystem
 
-from autfin.agents.base import create_agent, get_model
+from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import market_data_instructions
-from autfin.agents.observability import create_debug_instrumentation
-from autfin.tools import kite_toolset, market_data_toolset
+from autfin.tools import market_data_toolset
 from autfin.types import (
     AgentDeps,
     MarketSnapshotOutput,
-    Quote,
-    Holding,
-    MarketStatus,
 )
-
 
 market_data_agent = create_agent(
     name="market_data",
@@ -30,7 +25,6 @@ market_data_agent = create_agent(
     capabilities=[
         WebSearch(local="duckduckgo"),
         FileSystem(root_dir="./data/market"),
-        create_debug_instrumentation(),
     ],
     toolsets=[market_data_toolset],
 )
@@ -42,9 +36,23 @@ async def get_watchlist_quotes(ctx: RunContext[AgentDeps], watchlist: str = "") 
     if not watchlist:
         return {"quotes": {}}
     
-    # Delegate to the toolset's get_quotes
-    from autfin.tools.kite_toolset import get_quotes
-    return await get_quotes(ctx, watchlist)
+    symbols = [s.strip().upper() for s in watchlist.split(",") if s.strip()]
+    
+    # Try Kite first
+    from autfin.tools.kite_tools import KiteTools
+    kite = KiteTools()
+    instruments = [f"NSE:{sym}" for sym in symbols]
+    result = await kite.get_quotes(instruments)
+    
+    if result.get("status") == "success" and result.get("data"):
+        return result
+    
+    # Fallback to yfinance
+    from autfin.tools.kite_toolset import get_yfinance_quotes
+    quotes = await get_yfinance_quotes(symbols)
+    if quotes:
+        return {"status": "success", "data": quotes, "source": "yfinance"}
+    return {"status": "error", "data": {}, "message": "Failed to fetch quotes"}
 
 
 @market_data_agent.tool

@@ -4,22 +4,19 @@ Cross-session memory: market events, trade outcomes, patterns, calibration.
 """
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic_ai import Agent, RunContext
-from pydantic_ai_harness.memory import Memory, FileStore, SqliteMemoryStore
+from pydantic_ai import RunContext
+from pydantic_ai_harness.memory import FileStore, Memory
 
-from autfin.agents.base import create_agent, get_model
+from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import memory_instructions
-from autfin.agents.observability import create_debug_instrumentation
 from autfin.types import (
     AgentDeps,
+    ExecutionReport,
     MemoryResult,
     TradeOrder,
-    ExecutionReport,
-    Holding,
 )
-
 
 memory_agent = create_agent(
     name="memory",
@@ -34,7 +31,6 @@ memory_agent = create_agent(
             max_lines=500,
             inject_memory=True,
         ),
-        create_debug_instrumentation(),
     ],
 )
 

@@ -4,21 +4,19 @@ Bull/Bear adversarial debate for trade decisions.
 """
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import RunContext
 from pydantic_ai.capabilities import Thinking
 
-from autfin.agents.base import create_agent, get_model
+from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import debate_instructions
-from autfin.agents.observability import create_debug_instrumentation
 from autfin.types import (
     AgentDeps,
-    DebateResult,
-    DebateArgument,
     AnalysisReport,
+    DebateArgument,
+    DebateResult,
 )
-
 
 debate_agent = create_agent(
     name="debate",
@@ -27,7 +25,6 @@ debate_agent = create_agent(
     instructions=debate_instructions.default,
     capabilities=[
         Thinking(effort="high"),
-        create_debug_instrumentation(),
     ],
 )
 

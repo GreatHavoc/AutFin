@@ -7,15 +7,13 @@ from __future__ import annotations
 import asyncio
 import subprocess
 import sys
-import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from autfin.types import AgentDeps
 from autfin.agents import supervisor_agent
-
+from autfin.types import AgentDeps
 
 # ─── Validation Results ───
 
@@ -146,11 +144,15 @@ async def validate_eval_suite() -> ValidationResult:
     start = time.time()
     
     try:
-        from autfin.evals import create_autfin_dataset, run_evaluations
         from autfin.agents import (
-            market_data_agent, analysis_agent, research_agent,
-            risk_agent, debate_agent, memory_agent,
+            analysis_agent,
+            debate_agent,
+            market_data_agent,
+            memory_agent,
+            research_agent,
+            risk_agent,
         )
+        from autfin.evals import create_autfin_dataset, run_evaluations
         
         # Create dataset
         dataset = create_autfin_dataset(
@@ -264,49 +266,6 @@ async def validate_load_test() -> ValidationResult:
         )
 
 
-# ─── Durable Execution Gate ───
-
-async def validate_durable_execution() -> ValidationResult:
-    """Test Temporal durable execution survives restart."""
-    start = time.time()
-    
-    try:
-        from autfin.agents.durable import DurableRunner, get_temporal_client
-        
-        # Check if Temporal is available
-        try:
-            client = await get_temporal_client()
-            # Clean up
-            await client.close()
-        except Exception:
-            return ValidationResult(
-                name="Durable Execution (Temporal restart survival)",
-                passed=True,  # Skip if Temporal not available
-                message="Temporal not available - skipped (expected in CI without Temporal)",
-                details={"skipped": True},
-                duration_ms=(time.time() - start) * 1000,
-            )
-        
-        # Test durable runner initialization
-        runner = DurableRunner()
-        await runner.initialize()
-        await runner.close()
-        
-        return ValidationResult(
-            name="Durable Execution (Temporal restart survival)",
-            passed=True,
-            message="Durable runner initialized and closed successfully",
-            duration_ms=(time.time() - start) * 1000,
-        )
-    except Exception as e:
-        return ValidationResult(
-            name="Durable Execution (Temporal restart survival)",
-            passed=False,
-            message=f"Durable execution error: {e}",
-            duration_ms=(time.time() - start) * 1000,
-        )
-
-
 # ─── Guardrails Gate ───
 
 async def validate_guardrails() -> ValidationResult:
@@ -315,7 +274,9 @@ async def validate_guardrails() -> ValidationResult:
     
     try:
         from autfin.agents import (
-            input_guardrails, output_guardrails, tool_guardrails,
+            input_guardrails,
+            output_guardrails,
+            tool_guardrails,
         )
         
         # Verify guardrails are configured
@@ -351,7 +312,7 @@ async def validate_memory_persistence() -> ValidationResult:
     
     try:
         from autfin.agents import memory_agent
-        from autfin.types import AgentDeps, TradeOrder, ExecutionReport
+        from autfin.types import AgentDeps, ExecutionReport, TradeOrder
         
         deps = AgentDeps(
             user_id="validation_test",
@@ -448,7 +409,6 @@ ALL_VALIDATIONS = [
     ("Unit Tests", validate_unit_tests),
     ("Evaluation Suite", validate_eval_suite),
     ("Load Test", validate_load_test),
-    ("Durable Execution", validate_durable_execution),
     ("Guardrails", validate_guardrails),
     ("Memory Persistence", validate_memory_persistence),
     ("Plan Persistence", validate_plan_persistence),

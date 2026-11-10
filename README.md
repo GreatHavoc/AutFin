@@ -62,6 +62,7 @@ asyncio.run(main())
 │  └────────────────────────────────────────────────────┘  │
 │  Capabilities: Planning, Memory(FileStore), CodeMode,    │
 │  Guardrails, SystemReminders, Thinking, WebSearch        │
+│  TemporalDurability (crash recovery via Temporal)        │
 ├──────────────────────────────────────────────────────────┤
 │              Memory Layer                                 │
 │  SQLite (trades, signals, snapshots)                     │
@@ -160,6 +161,7 @@ autfin/
 │   │   ├── memory.py            # Cross-session learning
 │   │   ├── quant.py             # Quantitative analysis
 │   │   ├── supervisor.py        # Supervisor + SubAgents + Workflows
+│   │   ├── durable.py           # Temporal durable execution
 │   │   ├── managed_prompts.py   # Logfire ManagedPrompt instances
 │   │   ├── guardrails.py        # Input/output/tool guardrails
 │   │   ├── observability.py     # Logfire instrumentation
@@ -211,7 +213,7 @@ Run `uv run python test_validation.py` to execute all 6 gates:
 5. **Memory Persistence** — FileStore cross-session validation
 6. **Plan Persistence** — Planning capability state validation
 7. **Load Test** — Concurrent agent execution stress test
-8. **Durable Execution** — Temporal/DBOS/Preft backend validation
+8. **Durable Execution** — Temporal workflow/activity validation
 
 ## How It Works
 
@@ -245,6 +247,33 @@ Workflows handle:
 - Usage tracking and forwarding
 - Error containment (failures don't crash supervisor)
 - Deferred loading for fast startup
+
+### Temporal Durable Execution
+
+Agent I/O is routed through Temporal activities for crash recovery. If a run
+crashes mid-execution, Temporal replays it from the last activity checkpoint.
+
+```bash
+# Start Temporal dev server
+temporal server start-dev
+
+# Run a durable agent
+uv run python -c "
+import asyncio
+from autfin.agents.durable import DurableRunner
+
+async def main():
+    runner = DurableRunner()
+    await runner.initialize()
+    result = await runner.run_morning_routine(run_id='test-001')
+    print(result)
+    await runner.close()
+
+asyncio.run(main())
+"
+```
+
+Requires: `temporalio` (installed via `pydantic-ai[temporal]`).
 
 ### ManagedPrompts
 

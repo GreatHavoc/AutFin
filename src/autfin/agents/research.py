@@ -4,23 +4,20 @@ Deep research, screening, and thesis generation.
 """
 from __future__ import annotations
 
-from typing import Any
-
-from pydantic_ai import Agent, RunContext
-from pydantic_ai.capabilities import WebSearch, Thinking
+from pydantic_ai import RunContext
+from pydantic_ai.capabilities import Thinking, WebSearch
 from pydantic_ai_harness.planning import Planning
 
-from autfin.agents.base import create_agent, get_model
+from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import research_instructions
-from autfin.agents.observability import create_debug_instrumentation
 from autfin.tools import research_toolset
+from autfin.tools.browser_agent import get_browser_toolset
 from autfin.types import (
     AgentDeps,
     ResearchReport,
-    ScreeningResult,
     ScreeningCandidate,
+    ScreeningResult,
 )
-
 
 research_agent = create_agent(
     name="research",
@@ -31,9 +28,8 @@ research_agent = create_agent(
         Planning(store=None, enable_subtasks=True),  # In-memory by default
         Thinking(effort="high"),
         WebSearch(local="duckduckgo"),
-        create_debug_instrumentation(),
     ],
-    toolsets=[research_toolset],
+    toolsets=[research_toolset, get_browser_toolset()],
 )
 
 
@@ -53,23 +49,24 @@ async def screen_universe(
     max_results: int = 20
 ) -> ScreeningResult:
     """Screen NSE universe for opportunities."""
-    from autfin.tools.screening import screen_stocks
+    from autfin.tools.screening import run_screening_pipeline
 
-    candidates_data = await screen_stocks(criteria or {}, sector, max_results)
+    result = await run_screening_pipeline()
+    candidate_details = result.get("candidate_details", [])
 
     candidates = [
         ScreeningCandidate(
             symbol=c["symbol"],
             composite_score=c.get("composite_score", 0),
-            fundamental_score=c.get("fundamental_score", 0),
-            technical_score=c.get("technical_score", 0),
-            sentiment_score=c.get("sentiment_score", 0),
-            valuation_score=c.get("valuation_score", 0),
+            fundamental_score=c.get("earnings_yield", 0),
+            technical_score=c.get("roic", 0),
+            sentiment_score=0,
+            valuation_score=c.get("pe", 0) or 0,
             sector=c.get("sector", ""),
             market_cap=c.get("market_cap", 0),
-            recommendation=c.get("recommendation", "hold"),
+            recommendation="buy" if c.get("composite_score", 0) > 0.5 else "hold",
         )
-        for c in candidates_data
+        for c in candidate_details
     ]
 
     # Sector distribution

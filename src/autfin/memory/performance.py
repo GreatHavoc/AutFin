@@ -15,10 +15,10 @@ Design references:
 
 import logging
 import sqlite3
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from .database import get_connection, DB_PATH
+from .database import get_connection
 
 logger = logging.getLogger(__name__)
 

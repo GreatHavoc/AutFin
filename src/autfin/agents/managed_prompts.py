@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from pydantic_ai_harness.logfire import ManagedPrompt
 
-
 # ─── Managed Prompt Instances ───
 
 supervisor_instructions = ManagedPrompt(
@@ -51,7 +50,13 @@ ORCHESTRATION RULES (CRITICAL):
 🧠 LEARNING:
 - Learning context preloaded via Memory capability.
 - Record trade outcomes via memory_agent after execution.
-- Use get_calibration before sizing positions.""",
+- Use get_calibration before sizing positions.
+
+🌐 WEB SCRAPING:
+- analyze and research agents have browser access via Obscura MCP (headless Chrome)
+- Sentiment data is scraped live from Reddit, Moneycontrol, Economic Times
+- Research can scrape Trendlyne, Screener.in, SEBI filings
+- You do NOT need to manage browser scraping — agents handle it internally""",
     label="production",
     render_template=True,
 )

@@ -7,7 +7,6 @@ wrappers that fetch OHLCV from yfinance and return JSON-serialized results.
 
 import json
 import logging
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -231,6 +230,7 @@ async def fetch_technical_indicators(symbol: str) -> str:
     """
     try:
         import yfinance as yf
+
         from src.autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
@@ -291,6 +291,7 @@ async def compute_custom_indicator(
     """
     try:
         import yfinance as yf
+
         from src.autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
@@ -353,6 +354,7 @@ async def detect_patterns(symbol: str) -> str:
     """
     try:
         import yfinance as yf
+
         from src.autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
