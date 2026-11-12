@@ -231,7 +231,7 @@ async def fetch_technical_indicators(symbol: str) -> str:
     try:
         import yfinance as yf
 
-        from src.autfin.agents.yfinance_utils import normalize_symbol
+        from autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         hist = ticker.history(period="6mo", interval="1d")
@@ -292,7 +292,7 @@ async def compute_custom_indicator(
     try:
         import yfinance as yf
 
-        from src.autfin.agents.yfinance_utils import normalize_symbol
+        from autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         hist = ticker.history(period="6mo", interval="1d")
@@ -355,7 +355,7 @@ async def detect_patterns(symbol: str) -> str:
     try:
         import yfinance as yf
 
-        from src.autfin.agents.yfinance_utils import normalize_symbol
+        from autfin.agents.yfinance_utils import normalize_symbol
 
         ticker = yf.Ticker(normalize_symbol(symbol.upper()))
         hist = ticker.history(period="6mo", interval="1d")

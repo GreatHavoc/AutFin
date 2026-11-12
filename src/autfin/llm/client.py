@@ -361,7 +361,7 @@ class LLMClient:
         if not raw:
             return None
 
-        from src.autfin.utils import extract_json
+        from autfin.utils import extract_json
 
         result = extract_json(raw)
         if result:
@@ -466,7 +466,7 @@ def get_llm_client() -> LLMClient:
 
     if _default_client is None:
         try:
-            from src.autfin.config.settings import AutFinSettings
+            from autfin.config.settings import AutFinSettings
 
             settings = AutFinSettings()
 

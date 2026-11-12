@@ -22,7 +22,7 @@ class FundamentalTools:
         try:
             import yfinance as yf
 
-            from src.autfin.agents.yfinance_utils import normalize_symbol
+            from autfin.agents.yfinance_utils import normalize_symbol
             ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             info = ticker.info or {}
 
@@ -160,7 +160,7 @@ class FundamentalTools:
         try:
             import yfinance as yf
 
-            from src.autfin.agents.yfinance_utils import normalize_symbol
+            from autfin.agents.yfinance_utils import normalize_symbol
             ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             bs = ticker.balance_sheet
             if bs is not None and not bs.empty:
@@ -183,7 +183,7 @@ class FundamentalTools:
         try:
             import yfinance as yf
 
-            from src.autfin.agents.yfinance_utils import normalize_symbol
+            from autfin.agents.yfinance_utils import normalize_symbol
             ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             inc = ticker.financials
             if inc is not None and not inc.empty:
@@ -205,7 +205,7 @@ class FundamentalTools:
         try:
             import yfinance as yf
 
-            from src.autfin.agents.yfinance_utils import normalize_symbol
+            from autfin.agents.yfinance_utils import normalize_symbol
             ticker = yf.Ticker(normalize_symbol(symbol.upper()))
             cf = ticker.cashflow
             if cf is not None and not cf.empty:

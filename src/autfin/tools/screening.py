@@ -242,7 +242,7 @@ async def fetch_yfinance_bulk(symbols: list[str]) -> list[dict[str, Any]]:
         try:
             import yfinance as yf
 
-            from src.autfin.agents.yfinance_utils import normalize_symbol
+            from autfin.agents.yfinance_utils import normalize_symbol
 
             ticker = yf.Ticker(normalize_symbol(symbol))
             info = ticker.info or {}

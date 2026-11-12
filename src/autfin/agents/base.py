@@ -89,6 +89,7 @@ def create_agent[OutputT](
 
     from autfin.agents.order_approval import resolve_order_approvals
     from autfin.agents.spend import get_spend_limits
+    from autfin.agents.tool_output import get_tool_output_limits
 
     # Guardrails and the approval handler are capabilities, so they belong in the
     # same list as Thinking/Memory/SubAgents. Order tools are wrapped with
@@ -101,6 +102,7 @@ def create_agent[OutputT](
             # per capability, so a fresh one here would give every agent its own
             # daily ceiling.
             get_spend_limits(),
+            get_tool_output_limits(),
             *(capabilities or []),
             *get_guardrails_for_agent(name),
         ],

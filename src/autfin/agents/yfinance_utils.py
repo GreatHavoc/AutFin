@@ -6,7 +6,7 @@ to prevent look-ahead bias during backtests. The `normalize_symbol` helper
 eliminates the .NS suffix duplication across 16+ call sites.
 
 Usage:
-    from src.autfin.agents.yfinance_utils import fetch_history, normalize_symbol
+    from autfin.agents.yfinance_utils import fetch_history, normalize_symbol
 
     df = await fetch_history("RELIANCE", as_of="2024-06-01", period="1y")
     sym = normalize_symbol("RELIANCE")  # -> "RELIANCE.NS"

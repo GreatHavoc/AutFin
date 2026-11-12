@@ -338,7 +338,7 @@ async def distortion_audit(
     try:
         import yfinance as yf
 
-        from src.autfin.agents.yfinance_utils import normalize_symbol
+        from autfin.agents.yfinance_utils import normalize_symbol
 
         period_map = {"quick": "3mo", "standard": "6mo", "deep": "1y"}
         period = period_map.get(depth, "6mo")
