@@ -6,6 +6,7 @@ financial domain evaluators, and Logfire integration.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 
 # ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
 from typing import Any
@@ -343,6 +344,7 @@ BUILTIN_EVALUATORS = [
 
 # ─── Custom Financial Domain Evaluators ───
 
+@dataclass
 class TradeQualityEvaluator(Evaluator[dict, Any]):
     """Evaluate trade recommendation quality."""
     
@@ -367,6 +369,7 @@ class TradeQualityEvaluator(Evaluator[dict, Any]):
         return 1.0
 
 
+@dataclass
 class RiskVetoEvaluator(Evaluator[dict, Any]):
     """Verify risk agent vetoes high-risk trades."""
     
@@ -411,6 +414,7 @@ class DebateQualityEvaluator(Evaluator[dict, Any]):
         return 1.0
 
 
+@dataclass
 class AnalysisCompletenessEvaluator(Evaluator[dict, Any]):
     """Evaluate analysis report completeness."""
     
@@ -426,6 +430,7 @@ class AnalysisCompletenessEvaluator(Evaluator[dict, Any]):
         return score
 
 
+@dataclass
 class PositionSizingEvaluator(Evaluator[dict, Any]):
     """Evaluate position sizing logic."""
     
@@ -677,104 +682,6 @@ def create_agent_specific_dataset(agent_name: str) -> Dataset:
 
 # ─── Dataset Serialization ───
 
-def save_dataset(dataset: Dataset, path: str, format: str = "json") -> None:
-    """Save dataset to file."""
-    import json
-    
-    if format == "json":
-        data = {
-            "name": dataset.name,
-            "cases": [
-                {
-                    "name": case.name,
-                    "inputs": case.inputs,
-                    "expected_output": case.expected_output,
-                    "metadata": case.metadata,
-                    "evaluators": [str(e) for e in case.evaluators],
-                }
-                for case in dataset.cases
-            ],
-            "evaluators": [str(e) for e in dataset.evaluators],
-        }
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2, default=str)
-    elif format == "yaml":
-        import yaml
-        data = {
-            "name": dataset.name,
-            "cases": [
-                {
-                    "name": case.name,
-                    "inputs": case.inputs,
-                    "expected_output": case.expected_output,
-                    "metadata": case.metadata,
-                }
-                for case in dataset.cases
-            ],
-        }
-        with open(path, "w") as f:
-            yaml.dump(data, f, default_flow_style=False)
-
-
-def load_dataset(path: str, format: str = "json") -> Dataset:
-    """Load dataset from file."""
-    import json
-    
-    if format == "json":
-        with open(path, "r") as f:
-            data = json.load(f)
-        
-        cases = []
-        for case_data in data["cases"]:
-            cases.append(Case(
-                name=case_data["name"],
-                inputs=case_data["inputs"],
-                expected_output=case_data.get("expected_output"),
-                metadata=case_data.get("metadata", {}),
-            ))
-        
-        return Dataset(
-            name=data["name"],
-            cases=cases,
-            evaluators=list(BUILTIN_EVALUATORS) + [
-                TradeQualityEvaluator(),
-                RiskVetoEvaluator(),
-                DebateQualityEvaluator(),
-                AnalysisCompletenessEvaluator(),
-                PositionSizingEvaluator(),
-                AgentBehaviorEvaluator(),
-            ],
-        )
-    elif format == "yaml":
-        import yaml
-        with open(path, "r") as f:
-            data = yaml.safe_load(f)
-        
-        cases = []
-        for case_data in data["cases"]:
-            cases.append(Case(
-                name=case_data["name"],
-                inputs=case_data["inputs"],
-                expected_output=case_data.get("expected_output"),
-                metadata=case_data.get("metadata", {}),
-            ))
-        
-        return Dataset(
-            name=data["name"],
-            cases=cases,
-            evaluators=list(BUILTIN_EVALUATORS) + [
-                TradeQualityEvaluator(),
-                RiskVetoEvaluator(),
-                DebateQualityEvaluator(),
-                AnalysisCompletenessEvaluator(),
-                PositionSizingEvaluator(),
-                AgentBehaviorEvaluator(),
-            ],
-        )
-
-
-# ─── Evaluation Runner ───
-
 def create_test_deps(agent_name: str = "eval") -> AgentDeps:
     """Create test dependencies for evaluation."""
     return AgentDeps(
@@ -807,13 +714,7 @@ async def main():
         priority = case.metadata.get("priority", "medium")
         print(f"  - {case.name} ({cat}, {priority})")
     
-    # Test serialization
-    import tempfile
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        save_dataset(dataset, f.name, "json")
-        print(f"\nSaved dataset to {f.name}")
-    
-    print("\nPhase 5 Evaluation Framework Ready!")
+    # Serialization is the framework's own: Dataset.to_file / Dataset.from_file.
 
 
 if __name__ == "__main__":

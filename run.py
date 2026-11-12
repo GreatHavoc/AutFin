@@ -106,17 +106,24 @@ def _next_market_open() -> datetime:
 
 async def _run_morning(mode: str):
     from autfin.agents.supervisor import supervisor_agent
+    from autfin.conversation import get_conversation_store
     from autfin.types import AgentDeps
 
     log.info("Starting morning routine (mode=%s)", mode)
     deps = AgentDeps(user_id="daemon", mode=mode)
 
     try:
+        store = await get_conversation_store()
+        # Continue the previous run's conversation instead of starting cold: the
+        # supervisor keeps its usage and conversation_id across daily runs.
+        conversation = await store.load("daemon:morning")
         result = await supervisor_agent.run(
             "Run the complete morning routine: market snapshot, analyze holdings, research, risk, conference",
             deps=deps,
+            conversation=conversation,
         )
-        log.info("Morning routine: %s", result.output)
+        await store.save(result)
+        log.info("Morning routine: %s (conversation %s)", result.output, result.conversation_id)
         return result.output
     except Exception:
         log.exception("Morning routine failed")

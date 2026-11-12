@@ -198,14 +198,33 @@ def test_rolling_stats_z_score():
 
 # ── evals ───────────────────────────────────────────────────────────────────
 def test_evals_dataset_round_trips(tmp_path):
-    from autfin.evals import create_autfin_dataset, load_dataset, save_dataset
+    """Serialisation is the framework's: Dataset.to_file / from_file, with the
+    custom evaluator types named so behaviour survives, not just case names."""
+    from pydantic_evals import Dataset
+
+    from autfin.evals import create_autfin_dataset
+    from autfin.evals.dataset import (
+        AnalysisCompletenessEvaluator,
+        PositionSizingEvaluator,
+        RiskVetoEvaluator,
+        TradeQualityEvaluator,
+    )
 
     ds = create_autfin_dataset(include_llm_judges=False, include_span_eval=True)
-    assert len(ds.cases) > 0
+    out = tmp_path / "ds.json"
+    ds.to_file(out)
 
-    out = str(tmp_path / "ds.json")
-    save_dataset(ds, out)
-    assert len(load_dataset(out).cases) == len(ds.cases)
+    back = Dataset.from_file(
+        out,
+        custom_evaluator_types=[
+            TradeQualityEvaluator,
+            RiskVetoEvaluator,
+            AnalysisCompletenessEvaluator,
+            PositionSizingEvaluator,
+        ],
+    )
+    assert len(back.cases) == len(ds.cases)
+    assert len(back.evaluators) == len(ds.evaluators)
 
 
 def test_evals_deps_are_paper_mode_with_capital():
