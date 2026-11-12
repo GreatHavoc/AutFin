@@ -292,10 +292,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Bound the history.</b> Add <code>TieredCompaction</code> (cheap tiers first, summarize only if needed) with <code>max_fraction</code> so one config is right on every model, including unknown NIM windows.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t"><b>Bound the history.</b> <code>TieredCompaction</code> on the supervisor: <code>ClearToolResults</code> first (financial tool payloads are the biggest bytes, the last three pairs stay intact), <code>SummarizingCompaction</code> on the <b>fast</b> tier only when clearing is not enough. The target is <code>target_fraction=0.5</code> of the model's context window, not an absolute count — <code>resolve_context_window()</code> returns <code>None</code> for the NIM models, so a count would be a guess about a deployment the pricing registry does not describe, while the fraction is right whether the window resolves to 8k, 128k or falls back to 200k. Required here, not optional: <code>run.py</code> continues one conversation across trading days, so history grows by a full routine per day and every run resends all of it.</td>
         <td class="replace">→ attach to <b>agents/supervisor.py</b> (and the long-running sub-agents)</td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 1</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
+        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/f59310f">f59310f</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/compaction">harness/compaction</a> · <a href="https://pydantic.dev/docs/ai/capabilities/compaction">capabilities/compaction</a></td>
       </tr>
 
