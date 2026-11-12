@@ -360,25 +360,25 @@
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Read documents, not just HTML.</b> <code>FileUnderstanding</code> for SEBI filings/PDFs; <code>ImageGeneration</code> for charts in the printed backtest stats.</td>
+        <td class="task"><b>Read documents, not just HTML — measured, nothing to read.</b> <code>FileUnderstanding</code> describes files the serving model can't read, with a fallback model. No tool in this repo returns a file at all: a grep for <code>DocumentUrl</code>/<code>BinaryContent</code>/<code>.pdf</code> across <code>src/</code> returns nothing, and <code>tools/browser_agent.py</code> is HTML-only scraping. <code>ImageGeneration</code> for charts has the same problem — backtest stats are printed to logs, nothing renders them. Attaching either now would be a capability that never fires. Revisit when the research path starts fetching SEBI filings, or when backtest stats get rendered.</td>
         <td class="replace">→ attach to <b>agents/research.py</b>; extends the HTML-only scraping in <b>tools/browser_agent.py</b></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td><span class="tag t-up">not justified</span> <span class="prio">priority 3</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/file-understanding">capabilities/file-understanding</a> · <a href="https://pydantic.dev/docs/ai/capabilities/image-generation">capabilities/image-generation</a></td>
       </tr>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Cheaper evals.</b> Add <code>BatchModelRequests</code> so concurrent cases share provider batches.</td>
+        <td class="task"><b>Cheaper evals — measured, the wrong trade for this endpoint.</b> <code>BatchModelRequests</code> queues requests into the provider's batch API (about half price, but a result can take up to a day and each batch waits <code>max_wait</code>, 30s by default). NIM is reached through a custom <code>base_url</code>, and the OpenAI provider's own note says OpenAI-compatible endpoints "don't necessarily serve <code>/v1/batches</code>" — unverified here. It is also the wrong trade for a routine that must finish before the 09:15 open. Revisit when evals dominate spend and NIM's batch endpoint is confirmed.</td>
         <td class="replace">→ attach to the agents run by <b>evals/dataset.py</b> <code>run_evaluations()</code></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td><span class="tag t-up">not justified</span> <span class="prio">priority 3</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/batch">core-concepts/batch</a></td>
       </tr>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>On-demand procedures.</b> <code>Skills</code> for progressive <code>SKILL.md</code> disclosure, complementing ManagedPrompt's version control.</td>
+        <td class="task"><b>On-demand procedures — blocked by the workspace decision.</b> <code>Skills</code> reads skill directories from the run's workspace (<code>ctx.workspace</code>, or its own <code>workspace=</code>) and a run with neither fails at its start. Workspace capabilities are dropped repo-wide: <code>LocalWorkspace</code> is POSIX-only and <code>DockerSandbox</code> hard-codes the same POSIX subprocess runner, so there is no supported workspace on this Windows box. Revisit when a local workspace backend exists; until then the procedures already live in <code>agents/managed_prompts.py</code>, which is version-controlled and injected eagerly.</td>
         <td class="replace">→ attach to <b>agents/supervisor.py</b>; complements <b>agents/managed_prompts.py</b></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td><span class="tag t-up">blocked</span> <span class="prio">priority 3</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/skills">harness/skills</a></td>
       </tr>
 
@@ -417,9 +417,9 @@
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Declarative agent definitions.</b> Move the hand-built agent factory toward <code>AgentSpec</code> so agents are data, not Python.</td>
+        <td class="task"><b>Declarative agent definitions — measured, a second source of truth.</b> <code>AgentSpec</code> can express model, name, instructions, output schema, model settings and serializable capability specs. It cannot express what <code>create_agent()</code> actually wires: the toolset singletons are runtime objects (<code>CombinedToolset</code>, <code>ApprovalRequiredToolset</code>) built in <code>tools/__init__.py</code>, and every tool is registered with <code>@agent.tool</code> after construction. Converting would leave Python for the parts specs can't hold plus a YAML file for the rest — two places to edit for one agent, next to the version-controlled <code>agents/managed_prompts.py</code>. Revisit when agent definitions need changing without deploying code.</td>
         <td class="replace">→ <b>agents/base.py</b> <code>create_agent()</code> (the hand-rolled factory)</td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td><span class="tag t-up">not justified</span> <span class="prio">priority 3</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/agent-spec">core-concepts/agent-spec</a></td>
       </tr>
 
