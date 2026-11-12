@@ -24,6 +24,7 @@ uv run python run.py --once                          # daemon; --mode paper|live
 
 - **Always pass `tests/`.** Bare `uv run pytest` fails collection: root `test_validation.py` imports `validate_durable_execution`, deleted along with `agents/durable.py`. Root `test_*.py` / `demo_sentiment.py` are ad-hoc scripts that hit live network at import.
 - Full-suite time is dominated by sentiment tests loading FinBERT (transformers → HF cache). ~1.5 min warm, ~4.5 min cold.
+- `tests/test_tools/test_technical_toolset.py` calls live Yahoo on purpose ("no mocks"); its last close can come back `nan` when Yahoo rate-limits, which fails `test_sma_reliance` on `result.iloc[-1] > 0`. Re-run before blaming a change.
 
 ## Housekeeping for every code change
 
@@ -43,6 +44,7 @@ Dead / legacy — unwired because no live replacement exists, do not extend, do 
 - `mcp/` was deleted; its `BrowserMCPSettings` + Obscura lifecycle now live in `tools/browser_agent.py`.
 - `agents/guardrails.py` **is enforced now**: `create_agent()` in `agents/base.py` appends `get_guardrails_for_agent(name)` to every agent's capabilities, so each agent carries the set its name maps to. The tool guard also runs `stay_in_workspace` alongside `validate_trade_args`.
 - `create_agent()` also attaches `Instrumentation()` (default settings: the global tracer provider, no-op until one is configured) so spans come out of every entrypoint, not just `run.py`'s `logfire.instrument_pydantic_ai()` call. Note a test in `tests/test_guardrails/` imports `run.py`, which calls `logfire.configure()` at import — after that a *global* `TracerProvider` override is refused, so span assertions use logfire's own `capfire` fixture.
+- The memory agent carries `ConversationSearch` over the same step store as the supervisor's `StepPersistence` (`scope="conversation"`), so it can recall earlier turns of the daemon's thread with BM25. That store is shared through `agents/persistence.py::get_step_store()`; giving a capability its own copy of the store is the failure mode there (the spend limits comment in `base.py` documents the same shape).
 - Conversations persist in SQLite via `src/autfin/conversation/` (a `ConversationStore` on the existing
   `data/autfin.db`): `run.py`'s morning routine loads and saves `daemon:morning`, so usage and
   `conversation_id` carry across daily runs instead of every run starting cold. Dataset serialisation is the
