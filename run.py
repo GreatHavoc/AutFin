@@ -18,6 +18,9 @@ from datetime import time as dtime
 from pathlib import Path
 
 import logfire
+from pydantic_evals.online import evaluate
+
+from autfin.evals.online import ONLINE_EVALUATORS
 
 logfire.configure(service_name="autfin")
 logfire.instrument_pydantic_ai()
@@ -104,7 +107,12 @@ def _next_market_open() -> datetime:
     return target
 
 
+@evaluate(*ONLINE_EVALUATORS, target="morning_routine")
 async def _run_morning(mode: str):
+    """Grade the live routine in the background (B20): the deterministic
+    evaluator in evals/online.py scores each run's SupervisorOutput, so a
+    regression in what the supervisor queues surfaces in trace events instead of
+    waiting for someone to run the offline suite by hand."""
     from autfin.agents.supervisor import supervisor_agent
     from autfin.conversation import get_conversation_store
     from autfin.types import AgentDeps
