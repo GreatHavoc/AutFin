@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from pydantic_ai import RunContext
 from pydantic_ai.capabilities import WebSearch
-from pydantic_ai_harness.filesystem import FileSystem
 
 from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import market_data_instructions
@@ -22,9 +21,11 @@ market_data_agent = create_agent(
     output_type=MarketSnapshotOutput,
     model_type="fast",
     instructions=market_data_instructions.default,
+    # No FileSystem here: it now requires an attached workspace, and
+    # LocalWorkspace is POSIX-only. This agent's tools are kite-only - it
+    # never reads or writes a file, so the capability was speculative.
     capabilities=[
         WebSearch(local="duckduckgo"),
-        FileSystem(root_dir="./data/market"),
     ],
     toolsets=[market_data_toolset],
 )

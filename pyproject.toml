@@ -9,9 +9,9 @@ authors = [
 
 dependencies = [
     # Pydantic AI (core)
-    "pydantic-ai>=2.37.0",
-    "pydantic-ai-harness[codemode,dynamic-workflow]>=0.28.0",
-    "pydantic-evals>=2.37.0",
+    "pydantic-ai>=2.68.0",
+    "pydantic-ai-harness[codemode,dynamic-workflow]>=0.68.0",
+    "pydantic-evals>=2.68.0",
     # Pydantic
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
@@ -38,7 +38,7 @@ dependencies = [
     "rich>=13.0.0",
     # Observability
     "logfire[variables]>=4.41.0",
-    "pydantic-ai-slim[duckduckgo,mcp]>=2.37.0",
+    "pydantic-ai-slim[duckduckgo,mcp]>=2.68.0",
     "pandas-ta-classic>=0.6.52",
     "backtesting>=0.6.6",
     "vectorbt>=1.1.0",
@@ -51,8 +51,8 @@ technical = [
     "pandas-ta-classic>=0.6.0",
 ]
 pydantic_ai = [
-    "pydantic-ai-harness[skills,logfire,stackone]>=0.28.0",
-    "pydantic-evals>=2.37.0",
+    "pydantic-ai-harness[skills,logfire,stackone]>=0.68.0",
+    "pydantic-evals>=2.68.0",
 ]
 dev = [
     "pytest>=7.0.0",
@@ -93,4 +93,12 @@ disallow_untyped_defs = true
 [dependency-groups]
 dev = [
     "pyright>=1.1.411",
+    # Explicit, not transitive: pytest and pytest-asyncio used to arrive via a
+    # pydantic-ai extra, and `uv sync` dropped them when that extra changed,
+    # which made `uv run pytest` fall back to a system interpreter with no
+    # pydantic_ai installed.
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
 ]
+

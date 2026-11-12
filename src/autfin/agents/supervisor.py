@@ -124,7 +124,7 @@ workflow_capability = DynamicWorkflow(
     max_agent_calls=50,
     sub_agent_usage_limits=UsageLimits(request_limit=20, total_tokens_limit=50000),
     forward_usage=True,
-    resource_limits={"max_duration_secs": 300},
+    resource_limits={"max_duration_seconds": 300},
     inherit_model=False,
     id="supervisor_workflow",
     defer_loading=True,
@@ -134,11 +134,12 @@ workflow_capability = DynamicWorkflow(
 
 
 # ─── Planning Capability ───────────────────────────────────────────────
+# Planning no longer places a cache breakpoint of its own: configure caching
+# on the model (e.g. ModelSettings(anthropic_cache_messages=True)) instead.
 planning_capability = Planning(
     store=None,  # In-memory by default, can use SqlitePlanStore
     enable_subtasks=True,
     inject=True,
-    cache_ttl="5m",
 )
 
 
@@ -156,14 +157,13 @@ memory_capability = Memory(
 system_reminders_capability = SystemReminders(
     id="system_reminders",
     reminders=[
-        Reminder("Stay focused on risk management. Check risk/reward >= 2:1 before any trade."),
-        Reminder("Verify conviction >= 0.5 before any trade execution."),
-        Reminder("ALWAYS run debate before any trade decision. No exceptions."),
-        Reminder("Batch sub-agent calls in a single response for speed."),
-        Reminder("Use dynamic workflow for complex multi-step orchestration."),
+        Reminder("Stay focused on risk management. Check risk/reward >= 2:1 before any trade.", tag=None),
+        Reminder("Verify conviction >= 0.5 before any trade execution.", tag=None),
+        Reminder("ALWAYS run debate before any trade decision. No exceptions.", tag=None),
+        Reminder("Batch sub-agent calls in a single response for speed.", tag=None),
+        Reminder("Use dynamic workflow for complex multi-step orchestration.", tag=None),
     ],
     dynamic_reminders=[],
-    cache_ttl="5m",
 )
 
 
