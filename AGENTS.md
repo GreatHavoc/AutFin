@@ -42,6 +42,7 @@ Dead / legacy — unwired because no live replacement exists, do not extend, do 
 - `llm/`, `observability/`, `config/settings.py` — unwired, but they run and are tested in `tests/test_memory/`. Model names now come from `types.MODEL_CONFIG` everywhere; `memory/{retrieval,consolidation}.py` were deleted (remnants of a removed store, zero importers).
 - `mcp/` was deleted; its `BrowserMCPSettings` + Obscura lifecycle now live in `tools/browser_agent.py`.
 - `agents/guardrails.py` **is enforced now**: `create_agent()` in `agents/base.py` appends `get_guardrails_for_agent(name)` to every agent's capabilities, so each agent carries the set its name maps to. The tool guard also runs `stay_in_workspace` alongside `validate_trade_args`.
+- `create_agent()` also attaches `Instrumentation()` (default settings: the global tracer provider, no-op until one is configured) so spans come out of every entrypoint, not just `run.py`'s `logfire.instrument_pydantic_ai()` call. Note a test in `tests/test_guardrails/` imports `run.py`, which calls `logfire.configure()` at import — after that a *global* `TracerProvider` override is refused, so span assertions use logfire's own `capfire` fixture.
 - Conversations persist in SQLite via `src/autfin/conversation/` (a `ConversationStore` on the existing
   `data/autfin.db`): `run.py`'s morning routine loads and saves `daemon:morning`, so usage and
   `conversation_id` carry across daily runs instead of every run starting cold. Dataset serialisation is the

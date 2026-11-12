@@ -85,7 +85,7 @@ def create_agent[OutputT](
     # Guardrails are harness capabilities, so they belong in the same list as
     # Thinking/Memory/SubAgents. Without this, guardrails.py defined a full
     # input/output/tool suite that no agent ever ran.
-    from pydantic_ai.capabilities import HandleDeferredToolCalls
+    from pydantic_ai.capabilities import HandleDeferredToolCalls, Instrumentation
 
     from autfin.agents.order_approval import resolve_order_approvals
     from autfin.agents.spend import get_spend_limits
@@ -95,6 +95,10 @@ def create_agent[OutputT](
     # same list as Thinking/Memory/SubAgents. Order tools are wrapped with
     # ApprovalRequiredToolset in tools/__init__, so they pause here: paper mode is
     # approved automatically, live mode bubbles up as DeferredToolRequests.
+    # Instrumentation rides along per agent so spans are emitted by every
+    # entrypoint (tests, `python -m autfin`), not only run.py's global
+    # logfire.instrument_pydantic_ai() call, and it no-ops until a tracer
+    # provider is configured.
     agent = Agent[AgentDeps, OutputT](
         capabilities=[
             HandleDeferredToolCalls(handler=resolve_order_approvals),
@@ -103,6 +107,7 @@ def create_agent[OutputT](
             # daily ceiling.
             get_spend_limits(),
             get_tool_output_limits(),
+            Instrumentation(),
             *(capabilities or []),
             *get_guardrails_for_agent(name),
         ],
