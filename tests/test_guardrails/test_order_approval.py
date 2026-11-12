@@ -1,8 +1,6 @@
 """Tests for B1: order tools pause for a human before reaching the broker."""
 from __future__ import annotations
 
-import pytest
-
 
 def _agent(mode: str, kite=None):
     from pydantic_ai import Agent, DeferredToolRequests
@@ -86,8 +84,9 @@ def test_the_shared_kite_toolset_is_wrapped():
 
 
 def test_every_agent_carries_the_handler():
-    import autfin.agents as agents
     from pydantic_ai.capabilities import HandleDeferredToolCalls
+
+    import autfin.agents as agents
 
     for name in (
         "market_data", "analysis", "research", "risk", "debate",

@@ -88,6 +88,7 @@ def create_agent[OutputT](
     from pydantic_ai.capabilities import HandleDeferredToolCalls
 
     from autfin.agents.order_approval import resolve_order_approvals
+    from autfin.agents.spend import get_spend_limits
 
     # Guardrails and the approval handler are capabilities, so they belong in the
     # same list as Thinking/Memory/SubAgents. Order tools are wrapped with
@@ -96,6 +97,10 @@ def create_agent[OutputT](
     agent = Agent[AgentDeps, OutputT](
         capabilities=[
             HandleDeferredToolCalls(handler=resolve_order_approvals),
+            # One shared instance, not one per agent: the default store is built
+            # per capability, so a fresh one here would give every agent its own
+            # daily ceiling.
+            get_spend_limits(),
             *(capabilities or []),
             *get_guardrails_for_agent(name),
         ],
