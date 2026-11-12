@@ -123,9 +123,8 @@
 
   <h2>A · Hand-rolled duplicates — replace with the framework feature</h2>
   <div class="strip">
-    <span><b style="color:var(--green)">13</b> done</span>
-    <span>&#183;</span><span><b style="color:var(--amber)">1</b> needs a version bump (A5)</span>
-    <span>&#183;</span><span>A4, A9, A12 and A14 were finished after the 2.68.0 upgrade: judges and span evaluators for the evals, DynamicWorkflow for the fan-out, the scraping agent on the NVIDIA stack, and moat as a real agent</span>
+    <span><b style="color:var(--green)">14</b> done &#8212; section A complete</span>
+    <span>&#183;</span><span>last up: A5, the SQLite ConversationStore and native dataset serialisation, in <a href="https://github.com/GreatHavoc/AutFin/commit/176dead">176dead</a></span>
   </div>
 
   <table>
@@ -169,11 +168,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Use <code>InMemoryConversationStore</code>/a real store instead of hand-rolled JSON save/load; evaluate a run's trajectory with span-based + agentic evaluators rather than SQL.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t">Use <code>InMemoryConversationStore</code>/a real store instead of hand-rolled JSON save/load; evaluate a run's trajectory with span-based + agentic evaluators rather than SQL.</td>
         <td class="replace">→ <b>evals/dataset.py</b> <code>save_dataset()</code>/<code>load_dataset()</code> · <b>observability/roro.py</b> <code>compute_roro()</code> (SQL over the <code>trades</code> table)</td>
         <td><span class="tag t-now">now</span></td>
-        <td class="st"><span class="tag t-up">upgrade</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/176dead">176dead</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/evals/how-to/dataset-serialization">how-to/dataset-serialization</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/span-based">evaluators/span-based</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/agentic">evaluators/agentic</a></td>
       </tr>
 

@@ -42,6 +42,11 @@ Dead / legacy — unwired because no live replacement exists, do not extend, do 
 - `llm/`, `observability/`, `config/settings.py` — unwired, but they run and are tested in `tests/test_memory/`. Model names now come from `types.MODEL_CONFIG` everywhere; `memory/{retrieval,consolidation}.py` were deleted (remnants of a removed store, zero importers).
 - `mcp/` was deleted; its `BrowserMCPSettings` + Obscura lifecycle now live in `tools/browser_agent.py`.
 - `agents/guardrails.py` **is enforced now**: `create_agent()` in `agents/base.py` appends `get_guardrails_for_agent(name)` to every agent's capabilities, so each agent carries the set its name maps to. The tool guard also runs `stay_in_workspace` alongside `validate_trade_args`.
+- Conversations persist in SQLite via `src/autfin/conversation/` (a `ConversationStore` on the existing
+  `data/autfin.db`): `run.py`'s morning routine loads and saves `daemon:morning`, so usage and
+  `conversation_id` carry across daily runs instead of every run starting cold. Dataset serialisation is the
+  framework's (`Dataset.to_file`/`from_file`, with `custom_evaluator_types` — the old hand-rolled saver
+  flattened evaluators to strings).
 - Evals: `evals/dataset.py` keeps only the deterministic evaluators (field presence, thresholds, numeric checks). The judgemental ones moved to the framework — `LLMJudge` rubrics and nine `HasMatchingSpan` evaluators that were sitting unused.
 - `agents/moat.py` is now an agent: the five moat sources are a judgement, so the model scores them against a Pydantic-enforced contract, with ratio extraction kept deterministic. `agents/distortion.py` (volume-ratio arithmetic) and `agents/regulatory.py` (controlled-vocabulary keywords) are deliberately left deterministic — a judge would be worse at both.
 - Removed in the cleanup commit: `agents/{agent_tools,tools,conferences,memory_system,schemas,peer_compare}.py`, `tools/{supervisor_tools,fundamental_wrapper,technical_wrapper,memory_tools}.py`, `state/`. If you see a stale import of one, it was already dead.
