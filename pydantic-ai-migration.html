@@ -407,10 +407,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Persist conversations properly.</b> Store <code>result.conversation</code> (messages + usage + conversation_id + deferred requests) instead of only messages.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t"><b>Persist conversations properly.</b> A5 built the SQLite store (<code>src/autfin/conversation/</code>) and <code>run.py</code> loads/saves <code>daemon:morning</code>; the remaining gap was the read path, which handed the stored dict to the <code>ConversationRecord</code> constructor, so <code>deferred_tool_requests</code> came back a dict and a paused live order could not resume. Records now round-trip through the record's <code>TypeAdapter</code>, so messages, usage, conversation_id and deferred requests all survive.</td>
         <td class="replace">→ new: no conversation store exists today; each <code>supervisor_agent.run()</code> is a fresh run</td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 3</span></td>
+        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/6467273">6467273</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/persistence">core-concepts/persistence</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/conversation">api/pydantic-ai/conversation</a></td>
       </tr>
 
