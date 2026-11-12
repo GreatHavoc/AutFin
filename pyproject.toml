@@ -43,6 +43,10 @@ dependencies = [
     "backtesting>=0.6.6",
     "vectorbt>=1.1.0",
     "plotly>=5.0,<7.0",
+    # Pydantic AI capability extras (base deps so a plain `uv sync` gives a
+    # working agent): researcher, playwright, ipython, coder,
+    # repair-tool-arguments, prompt-injection-defender, temporal.
+    "pydantic-ai-harness[researcher,playwright,ipython,coder,repair-tool-arguments,prompt-injection-defender,temporal]>=0.68.0",
 ]
 
 [project.optional-dependencies]
@@ -53,6 +57,8 @@ technical = [
 pydantic_ai = [
     "pydantic-ai-harness[skills,logfire,stackone]>=0.68.0",
     "pydantic-evals>=2.68.0",
+    # The capability extras live in the base dependencies above so a plain
+    # `uv sync` installs them; they are not repeated here.
 ]
 dev = [
     "pytest>=7.0.0",
