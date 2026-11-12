@@ -132,10 +132,12 @@ async def calculate_stop_loss(
     atr: float | None = None,
 ) -> dict:
     """Calculate appropriate stop loss level."""
-    from autfin.agents.technical import get_atr
-
+    # `autfin.agents.technical` never existed; get_atr lives on the technical
+    # toolset, so call the registered function rather than importing a name.
     if atr is None:
-        atr = await get_atr(symbol)
+        from autfin.tools import technical_toolset
+
+        atr = await technical_toolset.tools["get_atr"].function(ctx, symbol)
 
     if action == "buy":
         # Long: stop below entry
