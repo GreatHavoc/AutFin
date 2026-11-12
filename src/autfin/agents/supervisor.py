@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic_ai import RunContext
+from pydantic_ai import ApprovalRequired, RunContext
 from pydantic_ai.capabilities import Thinking, WebSearch
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
@@ -221,6 +221,13 @@ async def execute_trade(
             action="error",
             message="No Kite client available",
             trade_queue=[],
+        )
+
+    # B1: a live order pauses for a human before it reaches Kite. Paper mode never
+    # contacts the broker, so approving there adds nothing.
+    if ctx.deps.mode != "paper" and not ctx.tool_call_approved:
+        raise ApprovalRequired(
+            metadata={"symbol": order.symbol, "action": order.action, "quantity": order.quantity}
         )
 
     if ctx.deps.mode == "paper":

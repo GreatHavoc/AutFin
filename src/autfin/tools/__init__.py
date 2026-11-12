@@ -5,8 +5,11 @@ Exports all toolsets and provides combined toolsets for agents.
 from __future__ import annotations
 
 from pydantic_ai import FunctionToolset
-from pydantic_ai.toolsets import CombinedToolset
+from pydantic_ai.toolsets import ApprovalRequiredToolset, CombinedToolset
 
+# Order tools pause for a human before they reach the broker. Wrapping the shared
+# kite toolset here means market_data / risk / conference / supervisor all inherit
+# the gate instead of each agent remembering to opt in.
 from autfin.tools.fundamental_toolset import fundamental_toolset, get_fundamental_toolset
 from autfin.tools.kite_toolset import get_kite_toolset, kite_toolset
 from autfin.tools.learning_toolset import get_learning_toolset, learning_toolset
@@ -14,6 +17,18 @@ from autfin.tools.screening_toolset import get_screening_toolset, screening_tool
 from autfin.tools.sentiment_toolset import get_sentiment_toolset, sentiment_toolset
 from autfin.tools.technical_toolset import get_technical_toolset, technical_toolset
 from autfin.types import AgentDeps
+
+# Order tools pause for a human before they reach the broker. Wrapping the shared
+# kite toolset here means market_data / risk / conference / supervisor all inherit
+# the gate instead of each agent remembering to opt in.
+# The predicate is inlined rather than imported from autfin.agents: importing any
+# autfin.agents submodule here triggers agents/__init__ -> analysis -> autfin.tools,
+# which is a circular import.
+from pydantic_ai.toolsets import ApprovalRequiredToolset
+
+_ORDER_TOOLS = frozenset({"place_order", "execute_trade"})
+
+kite_toolset = ApprovalRequiredToolset(kite_toolset, lambda name: name in _ORDER_TOOLS)
 
 # ─── Individual Toolsets ───
 __all__ = [
