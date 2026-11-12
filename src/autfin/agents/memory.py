@@ -7,10 +7,13 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic_ai import RunContext
+from pydantic_ai_harness import ConversationSearch
+from pydantic_ai_harness.conversation_search import SnapshotHistorySource
 from pydantic_ai_harness.memory import FileStore, Memory
 
 from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import memory_instructions
+from autfin.agents.persistence import get_step_store
 from autfin.tools import learning_toolset
 from autfin.types import (
     AgentDeps,
@@ -32,6 +35,13 @@ memory_agent = create_agent(
             max_lines=500,
             inject_memory=True,
         ),
+        # BM25 recall over the history the supervisor persists with
+        # StepPersistence (same store instance): earlier turns that context
+        # compaction dropped, and earlier runs of this conversation, are pulled
+        # back on demand. scope='conversation' keeps the corpus to this
+        # conversation's runs — the daemon threads one conversation id, so the
+        # memory agent reaches only that thread's history.
+        ConversationSearch(SnapshotHistorySource(get_step_store()), scope="conversation"),
     ],
     toolsets=[learning_toolset],
 )
