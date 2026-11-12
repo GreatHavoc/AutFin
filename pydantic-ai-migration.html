@@ -326,10 +326,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Real history recall.</b> <code>ConversationSearch</code> (BM25 over StepPersistence's log) so earlier turns — including ones compaction dropped — come back on demand.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t"><b>Real history recall.</b> <code>ConversationSearch</code> on the memory agent, reading the same shared step store: <code>search_conversation_history</code> ranks persisted history with BM25 and returns excerpts, so earlier turns that compaction dropped — and earlier runs of the daemon's thread — come back on demand. <code>scope='conversation'</code> keeps the corpus to one conversation's runs; the daemon threads a single conversation id, so store-wide search would pool every user into one corpus. The sha256 "hash embedding" similarity in <code>learning/retriever.py</code> stays for the learning journal — conversation recall is what this capability is for.</td>
         <td class="replace">→ attach to <b>agents/memory.py</b>; replaces the sha256 similarity path in <b>learning/retriever.py</b></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 2</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
+        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/fce6fc4">fce6fc4</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/conversation-search">harness/conversation-search</a></td>
       </tr>
 
