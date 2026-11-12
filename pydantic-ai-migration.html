@@ -336,9 +336,9 @@
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Mid-run escalation.</b> <code>Advisor</code> lets the bear case consult a stronger model instead of routing the whole debate to the deep tier.</td>
+        <td class="task"><b>Mid-run escalation — measured, not justified here.</b> <code>Advisor</code> gives an executor model a consultation tool so a light agent can escalate one judgement to a stronger model instead of running the whole thing on the deep tier. Neither premise holds in this repo: <code>debate.py</code>'s bull/bear case is deterministic arithmetic over confidence scores (no LLM deliberates, so there is no bear case to escalate), <code>conference.py</code>'s tools are deterministic fan-out, and every judgement agent already runs the top tier — <code>deep</code> and <code>reasoning</code> are the same model (<code>nvidia/minimax-m3</code>), so an advisor would consult the very model already running. Revisit when <code>MODEL_CONFIG</code> carries two genuinely different tiers, then attach to <code>agents/debate.py</code>/<code>agents/conference.py</code>.</td>
         <td class="replace">→ attach to <b>agents/debate.py</b> and <b>agents/conference.py</b></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 2</span></td>
+        <td><span class="tag t-up">not justified</span> <span class="prio">priority 2</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/advisor">harness/advisor</a></td>
       </tr>
 
