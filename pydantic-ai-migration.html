@@ -299,11 +299,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Cap oversized tool returns.</b> <code>ToolOutputLimits</code> to truncate or spill the yfinance payloads that currently flood the context.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t"><b>Cap oversized tool returns.</b> <code>ToolOutputLimits</code> spills at 20k chars and truncates at 8k on a <code>LocalFileStore</code>. Measured live returns are 536 chars, so these bands are a guard rather than a fix for a measured flood.</td>
         <td class="replace">→ attach to <b>tools/universe.py</b> <code>fetch_universe_data()</code> (200 symbols × full financials) and <b>tools/fundamental_tools.py</b> <code>get_financials()</code></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 1</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/tool-output-limits">harness/tool-output-limits</a></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
+        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/95a400d">95a400d</a></div></td>
       </tr>
 
       <tr>
