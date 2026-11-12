@@ -103,6 +103,15 @@
   </div>
 
   <div class="note">
+    <b>Decisions recorded, so they are not re-litigated:</b>
+    workspace capabilities are <b>dropped entirely</b> &#8212; pydantic-ai 2.68 requires an attached
+    workspace, <code>LocalWorkspace</code> is POSIX-only and <code>DockerSandbox</code> hard-codes that
+    same POSIX runner on the client, so Windows has no supported local workspace. No agent exposes
+    file/workspace/shell tools, so nothing was lost. <code>browser-use</code> is uninstallable
+    (pins <code>pydantic==2.12.5</code>).
+  </div>
+
+  <div class="note">
     <b>How to read the tags:</b>
     <span class="tag t-now">done / usable</span> ·
     <span class="tag t-up">extra needed</span> module present but its optional dependency is not installed ·

@@ -21,9 +21,12 @@ market_data_agent = create_agent(
     output_type=MarketSnapshotOutput,
     model_type="fast",
     instructions=market_data_instructions.default,
-    # No FileSystem here: it now requires an attached workspace, and
-    # LocalWorkspace is POSIX-only. This agent's tools are kite-only - it
-    # never reads or writes a file, so the capability was speculative.
+    # No FileSystem/workspace capability. pydantic-ai 2.68 requires one to be
+    # attached, LocalWorkspace is POSIX-only, and DockerSandbox hard-codes that
+    # same POSIX runner on the client side - so on Windows there is no supported
+    # local workspace. This agent is kite-only and never touched a file, so the
+    # capability was speculative; if file tools are ever needed, pair them with
+    # a container/VM workspace or move the agent under WSL.
     capabilities=[
         WebSearch(local="duckduckgo"),
     ],

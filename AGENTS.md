@@ -7,8 +7,8 @@ Pydantic AI multi-agent trading system for NSE/BSE. Python 3.13 in `.venv`, mana
 `pydantic-ai` / `pydantic-ai-slim` / `pydantic-evals` **2.68.0**, `pydantic-ai-harness` **0.68.0**.
 
 - The migration checklist (`pydantic-ai-migration.html`) was written against 2.37.0 and re-verified after the bump. Section C lists what the upgrade unlocked: `Caching`, `ModelFallback`, `LocalWorkspace`, `conversation_store`, `workspaces`, `pydantic_graph`, plus the harness safety layer (`DetectLoops`, `AskUser`, `Permissions`, `ApprovalReviewer`, `ToolCallJudge`, `TrajectoryJudge`, `ArtifactScanning`, `SmartSearch`).
-- Still optional extras, **not** installed: `browser-use`, `exa-py`, `playwright`, `stackone-defender`, `youdotcom`, `jupyter-client`+`ipykernel`, `json-repair`, `temporalio`. Importing those capabilities raises `ImportError` naming the install command.
-- `FileSystem` (harness) needs an attached workspace and `LocalWorkspace` is **POSIX-only** — on this Windows box `market_data_agent` carries no `FileSystem` for that reason. Attaching one requires a container/VM workspace (Docker/Podman).
+- Capability extras installed as base deps (`uv sync` covers them): `researcher`, `playwright` (+Chromium), `ipython`, `coder`, `repair-tool-arguments`, `prompt-injection-defender`, `temporal`. `browser-use` is **not installable** (pins `pydantic==2.12.5`, conflicts with pydantic-ai-slim 2.68.0); `exa`/`youdotcom` need paid keys.
+- `FileSystem`/workspace capabilities are **dropped entirely**: 2.68 requires an attached workspace, `LocalWorkspace` is POSIX-only, and `DockerSandbox` hard-codes that same POSIX subprocess runner on the client — so there is no supported local workspace on this Windows box. No agent exposes file/workspace/shell tools, so nothing was lost. Podman 5.8.2 works for containers generally; it is the *client-side* runner that blocks it.
 - `pytest`, `pytest-asyncio`, `ruff` are now explicit `[dependency-groups] dev` deps: they used to arrive transitively via a pydantic-ai extra, and `uv sync` dropped them when that extra changed — which made `uv run pytest` fall back to a system interpreter with no `pydantic_ai`.
 
 ## Commands
