@@ -266,10 +266,10 @@
     <tbody>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Human approval before a live order.</b> Wrap the order tools in <code>ApprovalRequiredToolset</code> and handle the deferred run with <code>HandleDeferredToolCalls</code>. Today guardrails validate <em>arguments</em> but nothing gates <em>execution</em>.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t"><b>Human approval before a live order.</b> Wrap the order tools in <code>ApprovalRequiredToolset</code> and handle the deferred run with <code>HandleDeferredToolCalls</code>. Today guardrails validate <em>arguments</em> but nothing gates <em>execution</em>.</td>
         <td class="replace">→ attach to <b>agents/risk.py</b> + <b>agents/supervisor.py</b> <code>execute_trade()</code>/<code>place_order</code></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 1</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/tools-toolsets/deferred-tools">tools-toolsets/deferred-tools</a> · <a href="https://pydantic.dev/docs/ai/tools-toolsets/toolsets">tools-toolsets/toolsets</a> · <a href="https://pydantic.dev/docs/ai/capabilities/handle-deferred-tool-calls">capabilities/handle-deferred-tool-calls</a></td>
       </tr>
 
