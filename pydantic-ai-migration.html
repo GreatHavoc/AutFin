@@ -283,10 +283,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Tool catalogue discipline.</b> Mark the large toolsets <code>defer_loading=True</code> (or wrap in <code>DeferredLoadingToolset</code>) so the model discovers tools by search instead of carrying every schema.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t"><b>Tool catalogue discipline.</b> Measured the tool schemas the model actually receives per request (TestModel ground truth): supervisor 23, analysis 22, research 29, memory 14, risk 6, quant 5 — nothing crosses the ~30-tool threshold, so no toolset is marked <code>defer_loading=True</code>; that would add a search round-trip to save nothing. The duplicate that did exist — <code>risk.py</code> and <code>quant.py</code> mounting <code>technical_toolset</code> beside <code>risk_toolset</code>, which already bundles it — is removed, and a test asserts it stays removed. Audit surfaced four live bugs: the risk agent's core tool imported a module that never existed, the output guardrail crashed every structured output, the spend scope crashed on <code>ctx.deps=None</code>, and each fixed with tests.</td>
         <td class="replace">→ attach to <b>tools/__init__.py</b> toolset singletons (kite, fundamental, technical, sentiment, screening, learning, browser)</td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 1</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
+        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/8e623a8">8e623a8</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/tool-search">capabilities/tool-search</a> · <a href="https://pydantic.dev/docs/ai/tools-toolsets/toolsets">tools-toolsets/toolsets</a> · <a href="https://pydantic.dev/docs/ai/capabilities/on-demand">capabilities/on-demand</a></td>
       </tr>
 
