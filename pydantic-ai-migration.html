@@ -424,10 +424,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Live grading.</b> Online evaluation attaches evaluators to production traffic so every call (or a sample) is graded in the background.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t"><b>Live grading.</b> <code>run.py</code>'s <code>_run_morning</code> carries a deterministic evaluator through <code>pydantic_evals.online.evaluate</code>: each production run's <code>SupervisorOutput</code> is scored in the background and the result lands on the call span's OTel event. The existing <code>TradeQualityEvaluator</code> could not be reused as-is — it indexes <code>ctx.output</code> as a dict and would raise on every production call, since the supervisor returns a model — so <code>evals/online.py</code> adds <code>SupervisorOutputEvaluator</code> with the same risk/reward and conviction floors.</td>
         <td class="replace">→ extends <b>evals/dataset.py</b>; the natural home for the calibration question in <b>learning/calibrator.py</b></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 3</span></td>
+        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/10b100f">10b100f</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/evals/online-evaluation">evals/online-evaluation</a></td>
       </tr>
 
