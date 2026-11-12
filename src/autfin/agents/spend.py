@@ -37,7 +37,7 @@ PER_REQUEST_USD = Decimal(os.getenv("AUTFIN_SPEND_USD_REQUEST", "0.002"))
 
 # Per-tenant partitions: each `user_id` gets its own ceiling rather than one
 # shared pool, which is what a single shared counter would otherwise give.
-TENANT_SCOPE = lambda ctx: ctx.deps.user_id  # noqa: E731
+TENANT_SCOPE = lambda ctx: getattr(getattr(ctx, "deps", None), "user_id", "global")  # noqa: E731
 
 
 def _price(_response: Any) -> Decimal:

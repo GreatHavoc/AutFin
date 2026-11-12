@@ -147,7 +147,10 @@ input_guardrails = InputGuardrail(
 # Output Guardrails - validate model outputs before returning
 output_guardrails = OutputGuardrail(
     guard=[
-        for_text(secret_data()),  # Remove secrets from text outputs
+        # on_other='allow' on both text detectors: agents here return structured
+        # models (RiskAssessment, SupervisorOutput, ...) and a text detector
+        # applied to one raises UserError without it.
+        for_text(secret_data(), on_other='allow'),  # Remove secrets from text outputs
         for_text(personal_data(only=['us_ssn', 'credit_card', 'iban']), on_other='allow'),
         enforce_citations,  # Require citations for long outputs
         validate_risk_reward,  # Validate trade recommendations

@@ -10,7 +10,7 @@ from pydantic_ai.capabilities import Thinking
 
 from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import risk_instructions
-from autfin.tools import learning_toolset, risk_toolset, technical_toolset
+from autfin.tools import learning_toolset, risk_toolset
 from autfin.types import (
     AgentDeps,
     Holding,
@@ -26,7 +26,9 @@ risk_agent = create_agent(
     capabilities=[
         Thinking(effort="high"),
     ],
-    toolsets=[risk_toolset, technical_toolset, learning_toolset],
+    # risk_toolset already bundles technical (kite + technical), so mounting both
+    # registered every technical tool twice in the toolset list.
+    toolsets=[risk_toolset, learning_toolset],
 )
 
 
@@ -41,7 +43,7 @@ async def assess_trade(
     portfolio_holdings: list[Holding] | None = None,
 ) -> RiskAssessment:
     """Comprehensive risk assessment for a trade."""
-    from autfin.agents.risk_manager import assess_risk
+    from autfin.risk.manager import assess_risk
 
     deps = ctx.deps
     capital = deps.capital

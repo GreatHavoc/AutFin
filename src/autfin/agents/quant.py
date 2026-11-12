@@ -14,7 +14,7 @@ from pydantic_ai_harness import CodeMode
 
 from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import quant_instructions
-from autfin.tools import risk_toolset, technical_toolset
+from autfin.tools import risk_toolset
 from autfin.types import AgentDeps
 
 # ponytail: removed Decimal — NIM xgrammar chokes on its regex pattern
@@ -67,7 +67,9 @@ quant_agent = create_agent(
         Thinking(effort="high"),
         CodeMode(),  # Sandbox all tools (default)
     ],
-    toolsets=[risk_toolset, technical_toolset],
+    # risk_toolset already bundles technical (kite + technical), so mounting both
+    # registered every technical tool twice in the toolset list.
+    toolsets=[risk_toolset],
 )
 
 
