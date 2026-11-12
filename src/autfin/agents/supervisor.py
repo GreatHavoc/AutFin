@@ -18,6 +18,7 @@ from pydantic_ai_harness.system_reminders import Reminder, SystemReminders
 
 from autfin.agents.analysis import analysis_agent
 from autfin.agents.base import create_agent, get_model
+from autfin.agents.compaction import get_history_compaction
 from autfin.agents.conference import conference_agent
 from autfin.agents.debate import debate_agent
 from autfin.agents.managed_prompts import supervisor_instructions
@@ -181,6 +182,10 @@ supervisor_agent = create_agent(
         planning_capability,
         memory_capability,
         system_reminders_capability,
+        # The daemon continues one conversation across trading days, so the
+        # supervisor's history grows by a full routine per day: cheap tiers
+        # first, the summarizer only when clearing tool results is not enough.
+        get_history_compaction(),
         # Crash recovery: snapshots each settled step of the daemon's run to
         # data/autfin.db, so a crashed routine resumes instead of restarting.
         get_step_persistence(),

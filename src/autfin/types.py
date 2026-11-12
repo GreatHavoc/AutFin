@@ -29,9 +29,11 @@ class ModelConfig(BaseSettings):
     both duplicates are now gone. BaseSettings keeps the `.env` override that
     callers relied on (DEEP_MODEL=..., FAST_MODEL=...).
     """
-    deep: str = Field(default="nvidia/minimax-m3", validation_alias="DEEP_MODEL")
+    # Verified against the NIM endpoint on 2026-11-12: minimax-m3 returns 404
+    # ("404 page not found"), so the deep tier now points at the id that answers.
+    deep: str = Field(default="minimaxai/minimax-m3.1-flash", validation_alias="DEEP_MODEL")
     fast: str = Field(default="nvidia/nemotron-3.5-lightning-30b-a3b", validation_alias="FAST_MODEL")
-    reasoning: str = Field(default="nvidia/minimax-m3", validation_alias="REASONING_MODEL")
+    reasoning: str = Field(default="minimaxai/minimax-m3.1-flash", validation_alias="REASONING_MODEL")
     code: str = Field(default="nvidia/nemotron-3.5-lightning-30b-a3b", validation_alias="CODE_MODEL")
 
 

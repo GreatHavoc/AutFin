@@ -96,6 +96,13 @@
         <span class="file">run.py</span></div>
       <p>Starts Obscura MCP (headless browser) if the port is closed, then <em>runs immediately on startup</em>.
          After a run it sleeps until the next 09:15 IST, skips Sat/Sun, and fires the quarterly review every 90 days.</p>
+      <p style="margin-top:8px">Each run is graded in the background by the deterministic evaluator in
+         <code>evals/online.py</code>, and its settled steps are snapshotted to
+         <code>data/autfin_steps.db</code> (its own file: the harness's schema creates a <code>runs</code> table,
+         which the AutFin data directory already carried from the deleted hand-rolled run log).
+         The conversation it continues — one thread across trading days — is bounded by
+         <code>TieredCompaction</code> before it reaches the model: cheap tiers first, the fast-tier
+         summarizer last, at half the model's context window.</p>
       <div class="chips"><span class="chip t">--mode paper | live | backtest</span>
         <span class="chip t">--once</span><span class="chip a">market hours 09:15–15:30 IST</span>
         <span class="chip">log → autfin.log</span></div>
@@ -150,10 +157,12 @@
          Separately, when an agent calls <code>record_trade_outcome</code> the closed trade lands in the SQLite
          <code>learning_journal</code> (<code>data/autfin.db</code>, gitignored) — calibration is computed from that table.
          Only it is live in <code>src/autfin/memory/</code>; the rest is legacy.
-         The same file also holds the <code>StepPersistence</code> store (<code>agents/persistence.py</code>): the
-         supervisor snapshots every settled step there, so a crashed daily routine resumes from its last settled
-         step instead of restarting — and the dead <code>runs</code> table that recorded only a run's start and end
-         is gone.</p>
+         The <code>StepPersistence</code> store lives in <code>data/autfin_steps.db</code>, its own file
+          (<code>agents/persistence.py</code>): the supervisor snapshots every settled step there, so a
+          crashed daily routine resumes from its last settled step instead of restarting. The harness's schema
+          creates a <code>runs</code> table and this directory already carried one from the deleted hand-rolled
+          run log, so a shared file left <code>CREATE TABLE IF NOT EXISTS</code> keeping the old shape and every
+          write failed.</p>
       <div class="chips"><span class="chip a">tests mutate the tracked data/memory/.memory-store.sqlite3</span></div>
     </div>
 
@@ -263,8 +272,8 @@
   <table>
     <thead><tr><th>Tier</th><th>Model id (<code>types.ModelConfig</code>)</th><th>Used by</th></tr></thead>
     <tbody>
-      <tr><td><code>deep</code> / <code>reasoning</code></td><td>nvidia/minimax-m3</td><td>supervisor, debate, conference, research synthesis</td></tr>
-      <tr><td><code>fast</code> / <code>code</code></td><td>nvidia/nemotron-3.5-lightning-30b-a3b</td><td>market_data, memory, quick checks</td></tr>
+      <tr><td><code>deep</code> / <code>reasoning</code></td><td>minimaxai/minimax-m3.1-flash</td><td>supervisor, debate, conference, research synthesis</td></tr>
+      <tr><td><code>fast</code> / <code>code</code></td><td>nvidia/nemotron-3.5-lightning-30b-a3b</td><td>market_data, memory, quick checks, the compaction summarizer</td></tr>
     </tbody>
   </table>
   <p class="sub" style="margin:12px 0 0">
@@ -336,7 +345,7 @@
     the browser MCP layer (<code>mcp/</code> deleted, settings and lifecycle folded into
     <code>tools/browser_agent.py</code>). Later sections of the migration checklist, same session:
     tool-catalogue audit (a tool mounted twice, an import of a module that never existed, an output guardrail that
-    crashed every structured output) · crash recovery (<code>StepPersistence</code> on the same SQLite file) ·
+    crashed every structured output) · crash recovery (<code>StepPersistence</code> on its own SQLite file) ·
     per-agent OTel spans · BM25 conversation recall · a paused order that now survives a store round-trip ·
     online grading of the live routine. Repo-wide ruff: 184 → 85 errors. Tests: 246.
   </footer>
