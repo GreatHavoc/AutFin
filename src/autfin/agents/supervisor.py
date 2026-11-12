@@ -161,7 +161,8 @@ system_reminders_capability = SystemReminders(
         Reminder("Verify conviction >= 0.5 before any trade execution.", tag=None),
         Reminder("ALWAYS run debate before any trade decision. No exceptions.", tag=None),
         Reminder("Batch sub-agent calls in a single response for speed.", tag=None),
-        Reminder("Use dynamic workflow for complex multi-step orchestration.", tag=None),
+        Reminder("For multi-step work load the run_workflow capability and write one script "
+                  "that fans out to the sub-agents; do not run them one at a time.", tag=None),
     ],
     dynamic_reminders=[],
 )
@@ -190,108 +191,15 @@ supervisor_agent = create_agent(
 # ─── Supervisor Tools ──────────────────────────────────────────────────
 
 @supervisor_agent.tool
-async def run_morning_routine(ctx: RunContext[AgentDeps]) -> SupervisorOutput:
-    """Execute complete morning routine: market data → analysis → research → debate → risk → conference."""
-    import asyncio
-
-    # 1. Market snapshot
-    market_result = await market_data_agent.run("Get portfolio and market snapshot", deps=ctx.deps)
-
-    # 2. Analysis on holdings (parallel)
-    holdings = ctx.deps.holdings if hasattr(ctx.deps, 'holdings') else []
-    analysis_tasks = [
-        analysis_agent.run(f"Analyze {h.get('tradingsymbol', h) if isinstance(h, dict) else h}", deps=ctx.deps)
-        for h in holdings[:10]
-    ]
-    analysis_results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
-
-    # 3. Research for new opportunities
-    research_result = await research_agent.run("Screen for new opportunities", deps=ctx.deps)
-
-    # 4. Risk check
-    risk_result = await risk_agent.run("Portfolio risk assessment", deps=ctx.deps)
-
-    # 5. Conference for capital allocation
-    conference_result = await conference_agent.run("Morning conference: allocate capital", deps=ctx.deps)
-
-    return SupervisorOutput(
-        action="complete",
-        message=f"Morning routine complete. Market: ok, Analyzed: {len(analysis_results)} holdings, Research: ok, Risk: ok, Conference: ok",
-        trade_queue=[],
-        next_context=None,
-    )
-
-
-@supervisor_agent.tool
-async def run_quarterly_review(ctx: RunContext[AgentDeps]) -> SupervisorOutput:
-    """Execute quarterly portfolio review: deep analysis → sector rotation → debate → rebalance."""
-    import asyncio
-
-    # 1. Market snapshot
-    market_result = await market_data_agent.run("Get portfolio and market snapshot", deps=ctx.deps)
-
-    # 2. Deep analysis on holdings (parallel)
-    holdings = ctx.deps.holdings if hasattr(ctx.deps, 'holdings') else []
-    analysis_tasks = [
-        analysis_agent.run(f"Deep analysis with DCF on {h.get('tradingsymbol', h) if isinstance(h, dict) else h}", deps=ctx.deps)
-        for h in holdings[:10]
-    ]
-    analysis_results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
-
-    # 3. Sector rotation & macro research
-    research_result = await research_agent.run("Sector rotation and macro theme research", deps=ctx.deps)
-
-    # 4. Risk checks & rebalancing
-    risk_result = await risk_agent.run("Portfolio risk review and rebalancing", deps=ctx.deps)
-
-    # 5. Conference
-    conference_result = await conference_agent.run("Quarterly review conference", deps=ctx.deps)
-
-    return SupervisorOutput(
-        action="complete",
-        message=f"Quarterly review complete. Analyzed: {len(analysis_results)} holdings",
-        trade_queue=[],
-        next_context=None,
-    )
-
-
-@supervisor_agent.tool
-async def handle_price_alert(
-    ctx: RunContext[AgentDeps],
-    symbol: str,
-    price_move_pct: float,
-) -> SupervisorOutput:
-    """Quick 3-agent response to price alert."""
-    # 1. Fresh quote
-    market_result = await market_data_agent.run(f"Get fresh quote for {symbol}", deps=ctx.deps)
-
-    # 2. Quick analysis
-    analysis_result = await analysis_agent.run(f"Quick analysis on {symbol}: price moved {price_move_pct:.1f}%", deps=ctx.deps)
-
-    # 3. Risk check
-    risk_result = await risk_agent.run(f"Risk check on {symbol} after {price_move_pct:.1f}% move", deps=ctx.deps)
-
-    return SupervisorOutput(
-        action="complete",
-        message=f"Price alert handled for {symbol} ({price_move_pct:.1f}% move)",
-        trade_queue=[],
-        next_context=None,
-    )
-
-
-@supervisor_agent.tool
 async def analyze_symbol(
     ctx: RunContext[AgentDeps],
     symbol: str,
     depth: "Literal['quick', 'standard', 'deep']" = "standard",
 ) -> SupervisorOutput:
     """Run full analysis on a single symbol."""
-    # Batch all analysis dimensions
-
-    fundamental_task = ctx.deps.kite_client and ctx.deps.kite_client.quote(symbol)
-    
-    # This would delegate to sub-agents
-    # For now, return structured response
+    # Analysis is delegated through the SubAgents capability: this tool exists
+    # only to shape the supervisor's decision, the dimensions are computed by
+    # the analyze sub-agent.
     return SupervisorOutput(
         action="continue",
         message=f"Analysis requested for {symbol} at {depth} depth",

@@ -614,14 +614,18 @@ def create_autfin_dataset(
     include_span_eval: bool = True,
 ) -> Dataset:
     """Create the complete AutFin evaluation dataset."""
+    # Deterministic rules stay as custom Evaluators: field presence, thresholds and
+    # numeric checks are cheaper and more exact than a judge call. What moved to the
+    # framework: DebateQualityEvaluator (its "substantive" check only tested that a
+    # string was non-empty; the LLMJudge debate_quality rubric judges the arguments)
+    # and AgentBehaviorEvaluator (walked ctx.span_tree by hand, which is what
+    # HasMatchingSpan does - nine of them already exist in SPAN_BASED_EVALUATORS).
     evaluators = list(BUILTIN_EVALUATORS)
     evaluators.extend([
         TradeQualityEvaluator(),
         RiskVetoEvaluator(),
-        DebateQualityEvaluator(),
         AnalysisCompletenessEvaluator(),
         PositionSizingEvaluator(),
-        AgentBehaviorEvaluator(),
     ])
     
     if include_llm_judges:

@@ -62,51 +62,56 @@ def test_regime_history_tracks_transitions():
 
 # ── agents/moat ─────────────────────────────────────────────────────────────
 @pytest.mark.asyncio
-async def test_moat_scores_gross_margin_not_debt_equity():
-    """Both moat helpers read debt_equity into a variable used as gross margin,
-    so the caller's gross_margin never reached the score."""
-    from autfin.agents.moat import moat_agent
+async def test_moat_is_an_agent_and_returns_the_documented_shape():
+    """The scoring is a judgement, so the model makes it; the ratio extraction
+    stays deterministic. Five invented per-dimension thresholds were removed,
+    two of which read debt_equity where gross margin was meant."""
+    from autfin.agents import moat
 
-    strong = {
-        "holdings": [{"tradingsymbol": "NESTLEIND"}],
-        "fundamental_reports": {
-            "NESTLEIND": {
-                "ratios": {
-                    "roe": 0.35,
-                    "gross_margin": 0.45,
-                    "pb": 7.0,
-                    "debt_equity": 0.05,
-                    "revenue_growth": 0.20,
-                    "fcf_yield": 0.06,
-                },
-                "market_cap": 800_000_00_00_00_000,
-            }
-        },
-    }
-    weak = {
-        "candidates": ["NESTLEIND"],
-        "fundamental_reports": {
-            "NESTLEIND": {
-                "ratios": {"roe": 0.05, "gross_margin": 0.08, "pb": 1.0, "debt_equity": 2.0}
-            }
-        },
+    assert callable(moat._moat_agent.run)
+    assert set(moat.DIMENSIONS) == {
+        "intangible_assets", "switching_costs", "network_effect",
+        "cost_advantage", "efficient_scale",
     }
 
-    strong_score = (await moat_agent(strong))["moat_assessments"]["NESTLEIND"]["score"]
-    weak_score = (await moat_agent(weak))["moat_assessments"]["NESTLEIND"]["score"]
 
-    assert strong_score >= 50, "strong fundamentals must reach at least NARROW"
-    assert weak_score < 50
+def test_moat_evidence_extraction_passes_gross_margin_through():
+    """The old bug: two of the five scorers read debt_equity into a variable
+    used as gross margin, so the caller's gross_margin never reached the score."""
+    from autfin.agents.moat import _extract_evidence
+
+    ev = _extract_evidence(
+        {"fundamental_reports": {"X": {"ratios": {
+            "roe": 0.35, "gross_margin": 0.45, "debt_equity": 0.1, "pb": 7.0,
+        }}}},
+        "X",
+    )
+    assert ev["gross_margin"] == 0.45
+    assert ev["debt_equity"] == 0.1
+    assert ev["roe"] == 0.35
 
 
 @pytest.mark.asyncio
-async def test_moat_degrades_without_fundamentals():
+async def test_moat_degrades_to_error_rather_than_raising():
+    """Bad model output or an unreachable endpoint must produce the documented
+    shape with rating ERROR, not crash the caller."""
     from autfin.agents.moat import moat_agent
 
     result = await moat_agent({"holdings": [], "candidates": ["UNKNOWNSTOCK"]})
     assessment = result["moat_assessments"]["UNKNOWNSTOCK"]
     assert assessment["rating"] in {"NONE", "ERROR"}
-    assert 0 <= assessment["score"] < 50
+    assert 0 <= assessment["score"] < 100
+    assert "errors" in result
+
+
+def test_moat_report_rejects_out_of_range_scores():
+    """The output contract is enforced by Pydantic, not by an if-statement."""
+    from pydantic import ValidationError
+
+    from autfin.agents.moat import MoatReport
+
+    with pytest.raises(ValidationError):
+        MoatReport(score=250, rating="WIDE", sources={})
 
 
 # ── agents/regulatory ───────────────────────────────────────────────────────

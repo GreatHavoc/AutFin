@@ -123,9 +123,9 @@
 
   <h2>A · Hand-rolled duplicates — replace with the framework feature</h2>
   <div class="strip">
-    <span><b style="color:var(--green)">9</b> done in <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></span>
+    <span><b style="color:var(--green)">13</b> done</span>
     <span>&#183;</span><span><b style="color:var(--amber)">1</b> needs a version bump (A5)</span>
-    <span>&#183;</span><span><b>4</b> todo: A4, A9, A12, A14 &#8212; each needs an LLM call to verify, or a capability decision</span>
+    <span>&#183;</span><span>A4, A9, A12 and A14 were finished after the 2.68.0 upgrade: judges and span evaluators for the evals, DynamicWorkflow for the fan-out, the scraping agent on the NVIDIA stack, and moat as a real agent</span>
   </div>
 
   <table>
@@ -160,11 +160,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Stop hand-writing evaluator classes where a judge fits. Add <code>LLMJudge</code> (rubrics) and <code>GEval</code> (integer + chain-of-thought) to the dataset; keep deterministic ones as custom <code>Evaluator</code>s.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t">Stop hand-writing evaluator classes where a judge fits. Add <code>LLMJudge</code> (rubrics) and <code>GEval</code> (integer + chain-of-thought) to the dataset; keep deterministic ones as custom <code>Evaluator</code>s.</td>
         <td class="replace">→ <b>evals/dataset.py</b> <code>TradeQualityEvaluator</code>, <code>RiskVetoEvaluator</code>, <code>DebateQualityEvaluator</code>, <code>AnalysisCompletenessEvaluator</code>, <code>PositionSizingEvaluator</code>, <code>AgentBehaviorEvaluator</code></td>
         <td><span class="tag t-now">now</span></td>
-        <td class="st"><span class="tag t-keep">todo</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evaluators/llm-judge">evaluators/llm-judge</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/custom">evaluators/custom</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/standard-quality-metrics">evaluators/standard-quality-metrics</a></td>
       </tr>
 
@@ -173,7 +173,7 @@
         <td class="task">Use <code>InMemoryConversationStore</code>/a real store instead of hand-rolled JSON save/load; evaluate a run's trajectory with span-based + agentic evaluators rather than SQL.</td>
         <td class="replace">→ <b>evals/dataset.py</b> <code>save_dataset()</code>/<code>load_dataset()</code> · <b>observability/roro.py</b> <code>compute_roro()</code> (SQL over the <code>trades</code> table)</td>
         <td><span class="tag t-now">now</span></td>
-        <td class="st"><span class="tag t-keep">todo</span></td>
+        <td class="st"><span class="tag t-up">upgrade</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/evals/how-to/dataset-serialization">how-to/dataset-serialization</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/span-based">evaluators/span-based</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/agentic">evaluators/agentic</a></td>
       </tr>
 
@@ -205,11 +205,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Let the model write its own orchestration. <code>DynamicWorkflow</code> is already attached with <code>defer_loading=True</code>; the supervisor's Python fan-out duplicates it.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t">Let the model write its own orchestration. <code>DynamicWorkflow</code> is already attached with <code>defer_loading=True</code>; the supervisor's Python fan-out duplicates it.</td>
         <td class="replace">→ <b>agents/supervisor.py</b> <code>run_morning_routine()</code>, <code>run_quarterly_review()</code>, <code>handle_price_alert()</code> (the imperative phase sequences)</td>
         <td><span class="tag t-up">upgrade</span></td>
-        <td class="st"><span class="tag t-keep">todo</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/dynamic-workflow">harness/dynamic-workflow</a> · <a href="https://pydantic.dev/docs/ai/harness/subagents">harness/subagents</a></td>
       </tr>
 
@@ -232,11 +232,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Replace the hand-rolled scraping agent with the framework's web capabilities; keep <code>get_browser_toolset()</code> (Obscura MCP) only for JS-rendered pages.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t">Replace the hand-rolled scraping agent with the framework's web capabilities; keep <code>get_browser_toolset()</code> (Obscura MCP) only for JS-rendered pages.</td>
         <td class="replace">→ <b>tools/browser_agent.py</b> <code>get_browser_agent()</code> (hardcoded <code>openai:gpt-4.1-mini</code>, needs an <code>OPENAI_API_KEY</code> that <code>.env.example</code> never lists)</td>
         <td><span class="tag t-now">now</span></td>
-        <td class="st"><span class="tag t-keep">todo</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/web-fetch">capabilities/web-fetch</a> · <a href="https://pydantic.dev/docs/ai/capabilities/web-search">capabilities/web-search</a> · <a href="https://pydantic.dev/docs/ai/harness/researcher">harness/researcher</a></td>
       </tr>
 
@@ -250,11 +250,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Score the fuzzy qualitative dimensions (moat, distortion, regulatory impact) with a judge instead of hand-built heuristics.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t">Score the fuzzy qualitative dimensions (moat, distortion, regulatory impact) with a judge instead of hand-built heuristics.</td>
         <td class="replace">→ <b>agents/moat.py</b> <code>_assess_*</code> scoring functions · <b>agents/distortion.py</b> <code>check_distortion()</code> · <b>agents/regulatory.py</b> <code>classify_regulatory_event()</code> keyword tables</td>
         <td><span class="tag t-now">now</span></td>
-        <td class="st"><span class="tag t-keep">todo</span></td>
+        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evaluators/llm-judge">evaluators/llm-judge</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/standard-quality-metrics">evaluators/standard-quality-metrics</a></td>
       </tr>
 

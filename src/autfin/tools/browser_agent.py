@@ -231,14 +231,24 @@ def get_browser_toolset() -> "MCPToolset":
 
 
 def get_browser_agent() -> "Agent":
-    """Lazy singleton — creates the browser Agent on first call."""
+    """Lazy singleton — the scraping agent, on the same model stack as the rest.
+
+    Was a hardcoded `openai:gpt-4.1-mini`, which required an OPENAI_API_KEY that
+    .env.example never mentioned and that no other part of the system uses. It
+    now runs on the configured NVIDIA model with WebFetch alongside the Obscura
+    MCP toolset: plain pages come from fetch, JS-rendered ones from the browser.
+    """
     global _browser_agent
     if _browser_agent is None:
         from pydantic_ai import Agent
+        from pydantic_ai.capabilities import WebFetch
+
+        from autfin.agents.base import get_model
 
         _browser_agent = Agent(
-            "openai:gpt-4.1-mini",
+            get_model("fast"),
             toolsets=[get_browser_toolset()],
+            capabilities=[WebFetch(local=True)],
             instructions=(
                 "You are a web scraping agent. You control a headless Chrome browser.\n"
                 "Navigate to pages, extract text content, handle popups and consent banners.\n"
