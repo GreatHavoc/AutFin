@@ -81,8 +81,9 @@
   <h1>AutFin <span>×</span> Pydantic AI — migration checklist</h1>
   <p class="sub">
     Every feature Pydantic AI provides that AutFin hand-rolled, plus everything worth adding.
-    Sourced from the live docs (ai.pydantic.dev, 300+ pages mapped) and verified against
-    <code>pydantic-ai 2.37.0</code> / <code>pydantic-ai-harness 0.28.0</code> / <code>pydantic-evals 2.37.0</code>.
+    Sourced from the live docs (ai.pydantic.dev, 300+ pages mapped). Originally verified against
+    <code>2.37.0</code>/<code>0.28.0</code>; upgraded to <code>2.68.0</code>/<code>0.68.0</code> in
+    <a href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a>, which unlocks section C.
   </p>
 
   <div class="kpi">
@@ -103,8 +104,8 @@
 
   <div class="note">
     <b>How to read the tags:</b>
-    <span class="tag t-now">now</span> importable and usable with the pinned versions ·
-    <span class="tag t-up">upgrade</span> documented but absent from <code>2.37.0</code>/<code>0.28.0</code> ·
+    <span class="tag t-now">done / usable</span> ·
+    <span class="tag t-up">extra needed</span> module present but its optional dependency is not installed ·
     <span class="tag t-del">delete</span> remove the hand-rolled thing outright ·
     <span class="tag t-keep">keep</span> legitimate domain code, leave it.
     <br><b>Replace</b> names the exact file/function in this repo that goes away.
@@ -162,8 +163,8 @@
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Use <code>InMemoryConversationStore</code>/a real store instead of hand-rolled JSON save/load; evaluate a run's trajectory with span-based + agentic evaluators rather than SQL.</td>
         <td class="replace">→ <b>evals/dataset.py</b> <code>save_dataset()</code>/<code>load_dataset()</code> · <b>observability/roro.py</b> <code>compute_roro()</code> (SQL over the <code>trades</code> table)</td>
-        <td><span class="tag t-up">upgrade</span></td>
-        <td class="st"><span class="tag t-up">upgrade</span></td>
+        <td><span class="tag t-now">now</span></td>
+        <td class="st"><span class="tag t-keep">todo</span></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/evals/how-to/dataset-serialization">how-to/dataset-serialization</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/span-based">evaluators/span-based</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/agentic">evaluators/agentic</a></td>
       </tr>
 
@@ -251,7 +252,7 @@
     </tbody>
   </table>
 
-  <h2>B · Missing features to add — usable with the pinned versions</h2>
+  <h2>B · Missing features to add — all usable after the 2.68.0 upgrade</h2>
   <table>
     <thead><tr><th class="chk">✓</th><th>Task</th><th>Attach to / replaces</th><th>Tag</th><th>Source</th></tr></thead>
     <tbody>
@@ -419,16 +420,17 @@
     </tbody>
   </table>
 
-  <h2>C · Needs a version upgrade — still high value</h2>
+  <h2>C · Done by the upgrade — pydantic-ai 2.37.0 &#8594; 2.68.0, harness 0.28.0 &#8594; 0.68.0</h2>
   <table>
-    <thead><tr><th class="chk">✓</th><th>Task</th><th>Why it matters here</th><th>Tag</th><th>Source</th></tr></thead>
+    <thead><tr><th class="chk">✓</th><th>Task</th><th>Why it matters here</th><th>Tag</th><th>Status</th><th>Source</th></tr></thead>
     <tbody>
 
       <tr>
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Bump <code>pydantic-ai</code> past 2.37.0, then attach <code>ModelFallback</code>.</td>
         <td class="replace">→ replaces the OpenRouter fallback the README promises and <b>config/capabilities.py</b> documents but nothing implements. NIM per-model quota is this system's single point of failure</td>
-        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 1</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
+        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/model-fallback">capabilities/model-fallback</a></td>
       </tr>
 
@@ -436,7 +438,8 @@
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Upgrade, then take the <code>Caching</code> capability (currently absent from <code>pydantic_ai.capabilities</code>).</td>
         <td class="replace">→ the cost lever for long supervisor runs that resend all instructions + tool schemas every step</td>
-        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 2</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
+        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/caching">capabilities/caching</a></td>
       </tr>
 
@@ -444,7 +447,8 @@
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Upgrade the harness, then add <code>DetectLoops</code>.</td>
         <td class="replace">→ the system reminders in <b>agents/supervisor.py</b> tell the model to batch calls; nothing detects when it loops anyway</td>
-        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 2</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
+        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/detect-loops">harness/detect-loops</a></td>
       </tr>
 
@@ -452,7 +456,8 @@
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Upgrade the harness, then add <code>PromptInjectionDefender</code> and <code>ArtifactScanning</code>.</td>
         <td class="replace">→ scraped Reddit/Moneycontrol/ET text from <b>tools/sentiment_tools.py</b> and <b>tools/browser_agent.py</b> enters the model with no untrusted-input classification. Highest unmitigated risk in the repo</td>
-        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 1</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
+        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/prompt-injection-defender">harness/prompt-injection-defender</a> · <a href="https://pydantic.dev/docs/ai/harness/artifact-scanning">harness/artifact-scanning</a></td>
       </tr>
 
@@ -460,7 +465,8 @@
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Upgrade the harness for the human-in-the-loop layer: <code>AskUser</code>, <code>Permissions</code>, <code>ApprovalReviewer</code>, <code>ToolCallJudge</code>, <code>TrajectoryJudge</code>.</td>
         <td class="replace">→ a second model reviews each call / the whole trajectory and steers mid-run; the paper-trading → live-trading safety ladder</td>
-        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 2</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
+        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/ask-user">harness/ask-user</a> · <a href="https://pydantic.dev/docs/ai/harness/permissions">harness/permissions</a> · <a href="https://pydantic.dev/docs/ai/harness/tool-call-judge">harness/tool-call-judge</a> · <a href="https://pydantic.dev/docs/ai/harness/trajectory-judge">harness/trajectory-judge</a> · <a href="https://pydantic.dev/docs/ai/harness/approval-reviewer">harness/approval-reviewer</a></td>
       </tr>
 
@@ -468,7 +474,8 @@
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Upgrade the harness for the research stack: <code>BrowserUse</code>, <code>Playwright</code>, <code>Exa</code>, <code>You.com</code>, <code>SmartSearch</code>.</td>
         <td class="replace">→ replaces parts of the hand-built Obscura + yfinance research path in <b>agents/research.py</b> and <b>tools/universe.py</b></td>
-        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 3</span></td>
+        <td><span class="tag t-up">extra needed</span> <span class="prio">priority 3</span></td>
+        <td class="st"></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/browser-use">harness/browser-use</a> · <a href="https://pydantic.dev/docs/ai/harness/playwright">harness/playwright</a> · <a href="https://pydantic.dev/docs/ai/harness/exa-search">harness/exa-search</a> · <a href="https://pydantic.dev/docs/ai/harness/youdotcom">harness/youdotcom</a></td>
       </tr>
 
@@ -476,7 +483,8 @@
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Upgrade for <code>conversation_store</code>, <code>workspaces</code>, <code>graph</code>, <code>durable_exec</code> backends (Temporal/DBOS/Prefect/Restate/Airflow) and <code>LocalWorkspace</code>.</td>
         <td class="replace">→ restores the Temporal crash recovery the README documents; <strong>agents/durable.py</strong> was deleted in this session's cleanup and never replaced</td>
-        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 2</span></td>
+        <td><span class="tag t-up">extra needed</span> <span class="prio">priority 2</span></td>
+        <td class="st"></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/durable_execution/overview">capabilities/durable_execution/overview</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/workspace">core-concepts/workspace</a> · <a href="https://pydantic.dev/docs/ai/graph/builder">graph/builder</a></td>
       </tr>
 
@@ -484,7 +492,8 @@
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Upgrade for <code>IPythonCodeMode</code> (stateful sandbox) and <code>CapabilityCreation</code> (the agent authors its own capabilities).</td>
         <td class="replace">→ <strong>agents/quant.py</strong> uses stateless <code>CodeMode()</code>; <code>capability_creation</code> is importable in 0.28.0 but the authored-capability flow needs the newer API</td>
-        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 3</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 3</span></td>
+        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/ipython-code-mode">harness/ipython-code-mode</a> · <a href="https://pydantic.dev/docs/ai/harness/capability-creation">harness/capability-creation</a></td>
       </tr>
 
@@ -492,7 +501,8 @@
         <td class="chk"><input type="checkbox"></td>
         <td class="task">Upgrade for <code>ACP</code> (serve the supervisor to Zed over the Agent Client Protocol) and the <code>CLI</code> integration.</td>
         <td class="replace">→ new capability; nothing equivalent today. Dev-ergonomics, not correctness</td>
-        <td><span class="tag t-up">upgrade</span> <span class="prio">priority 3</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 3</span></td>
+        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/acp">harness/acp</a> · <a href="https://pydantic.dev/docs/ai/integrations/cli">integrations/cli</a></td>
       </tr>
 
@@ -548,7 +558,7 @@
     <a href="https://pydantic.dev/docs/ai/core-concepts/output">output</a>,
     <a href="https://pydantic.dev/docs/ai/core-concepts/persistence">persistence</a> —
     all read in full during research, plus the 300-URL sitemap at <a href="https://ai.pydantic.dev/sitemap.xml">ai.pydantic.dev/sitemap.xml</a>.
-    Version claims verified against the installed <code>.venv</code>, not the docs' latest release.
+    Module importability re-verified against <code>.venv</code> after the 2.68.0 upgrade.
   </footer>
 
 </div>
