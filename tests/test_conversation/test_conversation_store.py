@@ -1,6 +1,8 @@
 """Tests for the SQLite conversation store and native dataset serialisation."""
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 
@@ -140,3 +142,47 @@ def test_evals_package_no_longer_exports_handrolled_serialisation():
     assert not hasattr(evals, "save_dataset")
     assert not hasattr(evals, "load_dataset")
     assert not hasattr(evals, "run_evaluations")
+
+
+# ── deferred orders survive the round-trip (B18) ─────────────────────────────
+
+
+def test_a_paused_order_survives_the_store_round_trip(tmp_path):
+    """A live order that pauses for approval must still be resumable after the
+    conversation is saved and loaded: the deferred requests are part of the
+    record, not just the messages."""
+    from pydantic_ai import Agent, DeferredToolRequests
+    from pydantic_ai.capabilities import HandleDeferredToolCalls
+    from pydantic_ai.models.test import TestModel
+
+    from autfin.agents.order_approval import resolve_order_approvals
+    from autfin.agents.supervisor import execute_trade
+    from autfin.conversation import SqliteConversationStore
+    from autfin.types import AgentDeps
+
+    store = SqliteConversationStore(tmp_path / "conv.db")
+
+    def build():
+        agent = Agent(
+            TestModel(call_tools=["execute_trade"]),
+            deps_type=AgentDeps,
+            output_type=[str, DeferredToolRequests],
+            capabilities=[HandleDeferredToolCalls(handler=resolve_order_approvals)],
+        )
+        agent.tool(execute_trade)
+        return agent
+
+    agent = build()
+    result = agent.run_sync("place an order", deps=AgentDeps(mode="live", kite_client=object()))
+    assert type(result.output).__name__ == "DeferredToolRequests"
+
+    async def round_trip():
+        await store.save(result)
+        return await store.load(result.conversation_id)
+
+    loaded = asyncio.run(round_trip())
+    assert loaded is not None
+    assert len(loaded.deferred_tool_requests.approvals) == 1
+    assert [c.tool_name for c in loaded.deferred_tool_requests.approvals] == ["execute_trade"]
+    # and the messages are still there to resume against
+    assert len(loaded.messages) == len(result.all_messages())

@@ -11,6 +11,11 @@ The five primitives below are what core asks a backend to implement
 load, save, branch and fork are built on top of them by core. All are async
 because core awaits them, and their signatures are core's, not ours: entry ids
 are global, and revision/scope are keyword-only on the paths core calls.
+
+Records are written with `to_jsonable_python(dataclasses.asdict(record))` and
+read back through the record's `TypeAdapter`, so nested types survive the
+round-trip: `deferred_tool_requests` comes back as `DeferredToolRequests` (a
+paused order stays resumable) and timestamps as datetimes, not strings.
 """
 from __future__ import annotations
 
@@ -18,9 +23,9 @@ import dataclasses
 import logging
 from typing import Any
 
+from pydantic import TypeAdapter
 from pydantic_ai.conversation_store import ConversationEntry, ConversationRecord, ConversationStore
 from pydantic_ai.messages import ModelMessagesTypeAdapter
-from pydantic_ai.usage import RunUsage
 from pydantic_core import to_jsonable_python
 
 from autfin.memory import database
@@ -54,8 +59,15 @@ def _record_to_json(record: ConversationRecord) -> dict[str, Any]:
     return to_jsonable_python(dataclasses.asdict(record))
 
 
+_record_adapter = TypeAdapter(ConversationRecord)
+
+
 def _record_from_json(data: dict[str, Any]) -> ConversationRecord:
-    return ConversationRecord(usage=RunUsage(**data.pop("usage", {})), **data)
+    # Validate through the dataclass' TypeAdapter rather than handing the dict
+    # straight to the constructor: `deferred_tool_requests` then comes back as a
+    # DeferredToolRequests instead of a dict, `updated_at` as a datetime, and a
+    # paused order stays resumable after a save/load round-trip.
+    return _record_adapter.validate_python(data)
 
 
 class SqliteConversationStore(ConversationStore):
