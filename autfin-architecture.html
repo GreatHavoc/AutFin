@@ -149,7 +149,11 @@
          (<code>max_tokens=5000</code>, <code>max_lines=500</code>). Path is <b>CWD-relative</b> — run from the repo root.
          Separately, when an agent calls <code>record_trade_outcome</code> the closed trade lands in the SQLite
          <code>learning_journal</code> (<code>data/autfin.db</code>, gitignored) — calibration is computed from that table.
-         Only it is live in <code>src/autfin/memory/</code>; the rest is legacy.</p>
+         Only it is live in <code>src/autfin/memory/</code>; the rest is legacy.
+         The same file also holds the <code>StepPersistence</code> store (<code>agents/persistence.py</code>): the
+         supervisor snapshots every settled step there, so a crashed daily routine resumes from its last settled
+         step instead of restarting — and the dead <code>runs</code> table that recorded only a run's start and end
+         is gone.</p>
       <div class="chips"><span class="chip a">tests mutate the tracked data/memory/.memory-store.sqlite3</span></div>
     </div>
 

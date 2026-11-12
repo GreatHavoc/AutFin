@@ -235,68 +235,6 @@ def init_database_if_not_exists():
         init_database()
 
 
-def record_run_start(
-    run_id: str,
-    query: str = "",
-    mode: str = "recommendation",
-    model_deep: str = "",
-    model_fast: str = "",
-) -> None:
-    """Record the start of an invocation run."""
-    import datetime
-    conn = get_connection()
-    try:
-        conn.execute(
-            """INSERT OR REPLACE INTO runs (run_id, started_at, status, query, mode, model_deep, model_fast)
-               VALUES (?, ?, 'running', ?, ?, ?, ?)""",
-            (run_id, datetime.datetime.now().isoformat(), query, mode, model_deep, model_fast),
-        )
-    finally:
-        conn.close()
-
-
-def record_run_end(
-    run_id: str,
-    status: str = "completed",
-    error_message: str = None,
-    total_tokens: int = 0,
-    total_cost_inr: float = 0.0,
-    nodes_visited: list = None,
-    decisions_made: int = 0,
-    trades_executed: int = 0,
-    duration_ms: float = 0.0,
-    metadata: dict = None,
-) -> None:
-    """Record the end of an invocation run."""
-    import datetime
-    import json
-    conn = get_connection()
-    try:
-        conn.execute(
-            """UPDATE runs SET
-                finished_at = ?, status = ?, error_message = ?,
-                total_tokens = ?, total_cost_inr = ?,
-                nodes_visited = ?, decisions_made = ?, trades_executed = ?,
-                duration_ms = ?, metadata_json = ?
-               WHERE run_id = ?""",
-            (
-                datetime.datetime.now().isoformat(),
-                status,
-                error_message,
-                total_tokens,
-                total_cost_inr,
-                json.dumps(nodes_visited or []),
-                decisions_made,
-                trades_executed,
-                duration_ms,
-                json.dumps(metadata or {}),
-                run_id,
-            ),
-        )
-    finally:
-        conn.close()
-
-
 if __name__ == "__main__":
     init_database()
     print("Database initialized successfully at", DB_PATH)

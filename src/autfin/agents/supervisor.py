@@ -25,6 +25,7 @@ from autfin.agents.managed_prompts import supervisor_instructions
 # Import sub-agents
 from autfin.agents.market_data import market_data_agent
 from autfin.agents.memory import memory_agent
+from autfin.agents.persistence import get_step_persistence
 from autfin.agents.research import research_agent
 from autfin.agents.risk import risk_agent
 from autfin.tools import learning_toolset
@@ -180,6 +181,9 @@ supervisor_agent = create_agent(
         planning_capability,
         memory_capability,
         system_reminders_capability,
+        # Crash recovery: snapshots each settled step of the daemon's run to
+        # data/autfin.db, so a crashed routine resumes instead of restarting.
+        get_step_persistence(),
         Thinking(effort="high"),
         WebSearch(local="duckduckgo"),
     ],
