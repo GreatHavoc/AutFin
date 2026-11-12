@@ -317,10 +317,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>OTel spans everywhere.</b> Add the <code>Instrumentation</code> capability per agent so tests and any entrypoint (not just <code>run.py</code>) emit traces.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t"><b>OTel spans everywhere.</b> <code>Instrumentation()</code> with default settings is attached in <code>create_agent()</code>, so every agent emits <code>invoke_agent</code>/<code>chat</code> spans on the global tracer provider from any entrypoint — not only <code>run.py</code>'s <code>logfire.instrument_pydantic_ai()</code> call, which the daemon alone reached. It no-ops until a provider is configured.</td>
         <td class="replace">→ attach in <b>agents/base.py</b> <code>create_agent()</code>; complements the <code>logfire.instrument_pydantic_ai()</code> calls in <b>run.py</b>/<code>__main__.py</b></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 2</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
+        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/bfd1d92">bfd1d92</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">capabilities/instrumentation</a></td>
       </tr>
 
