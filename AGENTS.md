@@ -2,6 +2,15 @@
 
 Pydantic AI multi-agent trading system for NSE/BSE. Python 3.13 in `.venv`, managed by `uv` (lockfile committed).
 
+## Versions — upgraded in `fcc62b3`
+
+`pydantic-ai` / `pydantic-ai-slim` / `pydantic-evals` **2.68.0**, `pydantic-ai-harness` **0.68.0**.
+
+- The migration checklist (`pydantic-ai-migration.html`) was written against 2.37.0 and re-verified after the bump. Section C lists what the upgrade unlocked: `Caching`, `ModelFallback`, `LocalWorkspace`, `conversation_store`, `workspaces`, `pydantic_graph`, plus the harness safety layer (`DetectLoops`, `AskUser`, `Permissions`, `ApprovalReviewer`, `ToolCallJudge`, `TrajectoryJudge`, `ArtifactScanning`, `SmartSearch`).
+- Still optional extras, **not** installed: `browser-use`, `exa-py`, `playwright`, `stackone-defender`, `youdotcom`, `jupyter-client`+`ipykernel`, `json-repair`, `temporalio`. Importing those capabilities raises `ImportError` naming the install command.
+- `FileSystem` (harness) needs an attached workspace and `LocalWorkspace` is **POSIX-only** — on this Windows box `market_data_agent` carries no `FileSystem` for that reason. Attaching one requires a container/VM workspace (Docker/Podman).
+- `pytest`, `pytest-asyncio`, `ruff` are now explicit `[dependency-groups] dev` deps: they used to arrive transitively via a pydantic-ai extra, and `uv sync` dropped them when that extra changed — which made `uv run pytest` fall back to a system interpreter with no `pydantic_ai`.
+
 ## Commands
 
 ```bash
