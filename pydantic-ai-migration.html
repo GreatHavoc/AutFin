@@ -308,10 +308,11 @@
       </tr>
 
       <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Crash recovery for the routine.</b> <code>StepPersistence</code> (SQLite store) to snapshot each settled step; <code>continue_run</code>/<code>fork_run</code> replace the hand-rolled <code>runs</code> table.</td>
+        <td class="chk"><input type="checkbox" checked></td>
+        <td class="task done-t"><b>Crash recovery for the routine.</b> <code>StepPersistence</code> on a shared <code>SqliteStepStore</code> (<code>data/autfin.db</code>) snapshots every settled step, appends a step-event trail and keeps a tool-effect ledger, so a crashed daemon run resumes from its last complete snapshot and an interrupted tool reads as <code>unknown_after_crash</code>. The dead <code>runs</code> table plus <code>record_run_start()</code>/<code>record_run_end()</code> are deleted — they had zero callers and recorded only start/end. Attached to the supervisor only; sub-agent steps would just be noise.</td>
         <td class="replace">→ attach to <b>agents/supervisor.py</b>; replaces <b>memory/database.py</b> <code>runs</code> table + <code>record_run_start()</code>/<code>record_run_end()</code></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 2</span></td>
+        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
+        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/fb897e9">fb897e9</a></div></td>
         <td class="src"><a href="https://pydantic.dev/docs/ai/harness/step-persistence">harness/step-persistence</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/persistence">core-concepts/persistence</a></td>
       </tr>
 
