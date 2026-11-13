@@ -11,7 +11,7 @@ from pydantic_ai.capabilities import Thinking, WebSearch
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 from pydantic_ai_harness.dynamic_workflow import DynamicWorkflow, WorkflowAgent
-from pydantic_ai_harness.memory import FileStore, Memory
+from pydantic_ai_harness.memory import Memory
 from pydantic_ai_harness.planning import Planning
 from pydantic_ai_harness.subagents import SubAgent, SubAgents
 from pydantic_ai_harness.system_reminders import Reminder, SystemReminders
@@ -29,6 +29,7 @@ from autfin.agents.memory import memory_agent
 from autfin.agents.persistence import get_step_persistence
 from autfin.agents.research import research_agent
 from autfin.agents.risk import risk_agent
+from autfin.memory.store import get_memory_store
 from autfin.tools import learning_toolset
 from autfin.types import (
     AgentDeps,
@@ -146,8 +147,11 @@ planning_capability = Planning(
 
 
 # ─── Memory Capability ────────────────────────────────────────────────
+# SqliteMemoryStore, not FileStore: a file store resolves its directory from the
+# run's workspace, and no workspace backend exists on this platform, so FileStore
+# raised UserError in before_run on every live run. See memory/store.py.
 memory_capability = Memory(
-    FileStore("./data/memory"),
+    get_memory_store(),
     namespace=lambda ctx: ctx.deps.user_id,
     max_tokens=5000,
     max_lines=500,

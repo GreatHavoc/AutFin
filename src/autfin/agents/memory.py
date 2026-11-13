@@ -9,11 +9,12 @@ from typing import Literal
 from pydantic_ai import RunContext
 from pydantic_ai_harness import ConversationSearch
 from pydantic_ai_harness.conversation_search import SnapshotHistorySource
-from pydantic_ai_harness.memory import FileStore, Memory
+from pydantic_ai_harness.memory import Memory
 
 from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import memory_instructions
 from autfin.agents.persistence import get_step_store
+from autfin.memory.store import get_memory_store
 from autfin.tools import learning_toolset
 from autfin.types import (
     AgentDeps,
@@ -28,8 +29,11 @@ memory_agent = create_agent(
     model_type="fast",
     instructions=memory_instructions.default,
     capabilities=[
+        # SqliteMemoryStore, not FileStore: a file store resolves its directory
+        # from the run's workspace, and there is no workspace backend on this
+        # platform, so FileStore raised UserError in before_run on every run.
         Memory(
-            FileStore("./data/memory"),
+            get_memory_store(),
             namespace=lambda ctx: ctx.deps.user_id,
             max_tokens=5000,
             max_lines=500,
@@ -71,7 +75,7 @@ async def record_market_event(
     # Write to memory using the Memory capability
     from pydantic_ai_harness.memory import MemoryToolset
     mem_capability = Memory(
-        FileStore("./data/memory"),
+        get_memory_store(),
         namespace=ctx.deps.user_id,
     )
     toolset = MemoryToolset(mem_capability)
@@ -119,7 +123,7 @@ async def record_trade_outcome(
     # Write to memory
     from pydantic_ai_harness.memory import MemoryToolset
     mem_capability = Memory(
-        FileStore("./data/memory"),
+        get_memory_store(),
         namespace=ctx.deps.user_id,
     )
     toolset = MemoryToolset(mem_capability)
@@ -158,7 +162,7 @@ async def record_pattern(
 
     from pydantic_ai_harness.memory import MemoryToolset
     mem_capability = Memory(
-        FileStore("./data/memory"),
+        get_memory_store(),
         namespace=ctx.deps.user_id,
     )
     toolset = MemoryToolset(mem_capability)
@@ -180,7 +184,7 @@ async def get_context_for_symbol(
     """Retrieve relevant memories for a symbol."""
     from pydantic_ai_harness.memory import MemoryToolset
     mem_capability = Memory(
-        FileStore("./data/memory"),
+        get_memory_store(),
         namespace=ctx.deps.user_id,
     )
     toolset = MemoryToolset(mem_capability)
@@ -214,7 +218,7 @@ async def get_calibration(
     """Get conviction calibration stats (accuracy of confidence estimates)."""
     from pydantic_ai_harness.memory import MemoryToolset
     mem_capability = Memory(
-        FileStore("./data/memory"),
+        get_memory_store(),
         namespace=ctx.deps.user_id,
     )
     toolset = MemoryToolset(mem_capability)
@@ -249,7 +253,7 @@ async def get_memory_stats(ctx: RunContext[AgentDeps]) -> MemoryResult:
     """Get memory system statistics."""
     from pydantic_ai_harness.memory import MemoryToolset
     mem_capability = Memory(
-        FileStore("./data/memory"),
+        get_memory_store(),
         namespace=ctx.deps.user_id,
     )
     toolset = MemoryToolset(mem_capability)

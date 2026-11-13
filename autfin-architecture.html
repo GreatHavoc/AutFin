@@ -152,8 +152,10 @@
     <div class="stage">
       <div class="st-head"><span class="n">06</span><span class="title">What is written down</span>
         <span class="file">capability Memory(FileStore("./data/memory"))</span></div>
-      <p>Markdown memory files namespaced per <code>user_id</code>, injected back into the next run's context
-         (<code>max_tokens=5000</code>, <code>max_lines=500</code>). Path is <b>CWD-relative</b> — run from the repo root.
+      <p>Memory rows namespaced per <code>user_id</code>, injected back into the next run's context
+         (<code>max_tokens=5000</code>, <code>max_lines=500</code>). Stored by <code>SqliteMemoryStore</code> in
+         <code>data/autfin.db</code> — the harness's <code>FileStore</code> cannot run on this machine, because it
+         resolves its directory from the run's workspace and no workspace backend supports Windows.
          Separately, when an agent calls <code>record_trade_outcome</code> the closed trade lands in the SQLite
          <code>learning_journal</code> (<code>data/autfin.db</code>, gitignored) — calibration is computed from that table.
          Only it is live in <code>src/autfin/memory/</code>; the rest is legacy.
@@ -163,7 +165,7 @@
           creates a <code>runs</code> table and this directory already carried one from the deleted hand-rolled
           run log, so a shared file left <code>CREATE TABLE IF NOT EXISTS</code> keeping the old shape and every
           write failed.</p>
-      <div class="chips"><span class="chip a">tests mutate the tracked data/memory/.memory-store.sqlite3</span></div>
+      <div class="chips"><span class="chip a">verified live: the shipped supervisor and the analyze sub-agent both run on NIM</span></div>
     </div>
 
   </div>
