@@ -118,11 +118,12 @@ def create_agent[OutputT](
         get_spend_limits(),
         get_tool_output_limits(),
         get_injection_defense(),
-        # Prompt caching through the unified ModelSettings `cache` flag. Verified
-        # against the NIM endpoint: the setting is accepted, not rejected. Whether
-        # it produces cache reads is unproven — the throttle killed the second
-        # turn of the probe — so this is the documented lever switched on, not a
-        # measured saving. No-op on models that cache implicitly.
+        # Prompt caching through the unified ModelSettings `cache` flag. Measured against
+        # NIM on 2026-11-14 with three turns on one conversation: the setting is
+        # accepted, and cache_read_tokens stays 0 while input grows 1620 -> 3314 ->
+        # 5189. So on this endpoint the lever is switched on and buys nothing —
+        # the provider does not report cache reads — and the supervisor's ~5k
+        # prefix is re-billed per step. No-op on models that cache implicitly.
         Caching(),
         Instrumentation(),
     ]

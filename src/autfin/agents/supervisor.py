@@ -16,6 +16,7 @@ from pydantic_ai_harness.memory import Memory
 from pydantic_ai_harness.planning import Planning
 from pydantic_ai_harness.subagents import SubAgent, SubAgents
 from pydantic_ai_harness.system_reminders import Reminder, SystemReminders
+from pydantic_ai_harness.warn_on_cache_busts import WarnOnCacheBusts
 
 from autfin.agents.analysis import analysis_agent
 from autfin.agents.base import create_agent, get_model
@@ -200,6 +201,11 @@ supervisor_agent = create_agent(
         # supervisor's history grows by a full routine per day: cheap tiers
         # first, the summarizer only when clearing tool results is not enough.
         get_history_compaction(),
+        # Caching is attached to every agent, so the supervisor's prefix is the
+        # cacheable one. This reports when it collapses: instructions plus every
+        # tool schema are ~5k tokens resent per step, and a silent collapse would
+        # re-bill that whole prefix every request with nothing else to show it.
+        WarnOnCacheBusts(),
         # Crash recovery: snapshots each settled step of the daemon's run to
         # data/autfin.db, so a crashed routine resumes instead of restarting.
         get_step_persistence(),
