@@ -31,7 +31,7 @@ from autfin.agents.memory import memory_agent
 from autfin.agents.persistence import get_step_persistence
 from autfin.agents.research import research_agent
 from autfin.agents.risk import risk_agent
-from autfin.agents.safety import get_artifact_scanner
+from autfin.agents.safety import get_artifact_scanner, get_order_judge
 from autfin.memory.store import get_memory_store
 from autfin.tools import learning_toolset
 from autfin.types import (
@@ -201,6 +201,10 @@ supervisor_agent = create_agent(
         # supervisor's history grows by a full routine per day: cheap tiers
         # first, the summarizer only when clearing tool results is not enough.
         get_history_compaction(),
+        # The live-trading rung: a second model reviews a proposed order before
+        # the tool body runs, scoped by a selector that reads ctx.deps.mode, so
+        # paper mode matches nothing and pays nothing.
+        get_order_judge(),
         # Caching is attached to every agent, so the supervisor's prefix is the
         # cacheable one. This reports when it collapses: instructions plus every
         # tool schema are ~5k tokens resent per step, and a silent collapse would
