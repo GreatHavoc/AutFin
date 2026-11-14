@@ -14,6 +14,7 @@ from pydantic_ai_harness.memory import Memory
 from autfin.agents.base import create_agent
 from autfin.agents.managed_prompts import memory_instructions
 from autfin.agents.persistence import get_step_store
+from autfin.agents.safety import get_artifact_scanner
 from autfin.memory.store import get_memory_store
 from autfin.tools import learning_toolset
 from autfin.types import (
@@ -34,6 +35,9 @@ memory_agent = create_agent(
         # platform, so FileStore raised UserError in before_run on every run.
         Memory(
             get_memory_store(),
+            # Memory is injected into every run's context, so what the agents
+            # write there is a second chance to plant an instruction.
+            scanner=get_artifact_scanner(),
             namespace=lambda ctx: ctx.deps.user_id,
             max_tokens=5000,
             max_lines=500,

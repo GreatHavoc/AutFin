@@ -25,6 +25,8 @@ uv run python run.py --once                          # daemon; --mode paper|live
 - **Always pass `tests/`.** Bare `uv run pytest` fails collection: root `test_validation.py` imports `validate_durable_execution`, deleted along with `agents/durable.py`. Root `test_*.py` / `demo_sentiment.py` are ad-hoc scripts that hit live network at import.
 - Full-suite time is dominated by sentiment tests loading FinBERT (transformers → HF cache). ~1.5 min warm, ~4.5 min cold.
 - `tests/test_tools/test_technical_toolset.py` calls live Yahoo on purpose ("no mocks"); its last close can come back `nan` when Yahoo rate-limits, which fails `test_sma_reliance` on `result.iloc[-1] > 0`. Re-run before blaming a change.
+- The same applies to `tests/test_tools/test_backtest.py::test_engine_fetch_data`, which fetches 2023 history from Yahoo: it fails with a `ValueError` when the window is exhausted mid-suite and passes when run alone. Two live-Yahoo tests in one run is enough to exhaust it.
+- `agents/safety.py` holds the two untrusted-input defenses, now attached: `PromptInjectionDefender` (classifies every locally executed tool result and **withholds** the ones carrying instructions to the agent — the browser scrape, the sentiment tools, yfinance news) and `ArtifactScanner` (passed to `Memory(scanner=...)`, because memory is injected into every run's context). Both were installed as dependencies by the upgrade and neither was attached; phase 4 of the plan.
 
 ## Housekeeping for every code change
 

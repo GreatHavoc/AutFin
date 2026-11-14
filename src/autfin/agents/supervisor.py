@@ -29,6 +29,7 @@ from autfin.agents.memory import memory_agent
 from autfin.agents.persistence import get_step_persistence
 from autfin.agents.research import research_agent
 from autfin.agents.risk import risk_agent
+from autfin.agents.safety import get_artifact_scanner
 from autfin.memory.store import get_memory_store
 from autfin.tools import learning_toolset
 from autfin.types import (
@@ -152,6 +153,9 @@ planning_capability = Planning(
 # raised UserError in before_run on every live run. See memory/store.py.
 memory_capability = Memory(
     get_memory_store(),
+    # Memory is injected into every run's context, so what the agents write there
+    # is a second chance to plant an instruction.
+    scanner=get_artifact_scanner(),
     namespace=lambda ctx: ctx.deps.user_id,
     max_tokens=5000,
     max_lines=500,

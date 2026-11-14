@@ -88,6 +88,7 @@ def create_agent[OutputT](
     from pydantic_ai.capabilities import HandleDeferredToolCalls, Instrumentation
 
     from autfin.agents.order_approval import resolve_order_approvals
+    from autfin.agents.safety import get_injection_defense
     from autfin.agents.spend import get_spend_limits
     from autfin.agents.tool_output import get_tool_output_limits
 
@@ -99,6 +100,9 @@ def create_agent[OutputT](
     # entrypoint (tests, `python -m autfin`), not only run.py's global
     # logfire.instrument_pydantic_ai() call, and it no-ops until a tracer
     # provider is configured.
+    # The defender rides with them: every tool that returns third-party text
+    # (browser scrape, sentiment, news) would otherwise hand the model words an
+    # outside party wrote.
     agent = Agent[AgentDeps, OutputT](
         capabilities=[
             HandleDeferredToolCalls(handler=resolve_order_approvals),
@@ -107,6 +111,7 @@ def create_agent[OutputT](
             # daily ceiling.
             get_spend_limits(),
             get_tool_output_limits(),
+            get_injection_defense(),
             Instrumentation(),
             *(capabilities or []),
             *get_guardrails_for_agent(name),
