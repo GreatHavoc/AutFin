@@ -3,616 +3,164 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AutFin × Pydantic AI — migration checklist</title>
+<title>AutFin x Pydantic AI - migration plan</title>
 <style>
-  :root{
-    --bg:#0a0e13; --panel:#111a22; --panel2:#0d151c; --line:#22303c;
-    --ink:#dbe6ef; --dim:#8ba0b3; --teal:#2dd4bf; --blue:#60a5fa;
-    --amber:#f5b544; --red:#f87171; --green:#4ade80; --violet:#a78bfa;
-    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 var(--mono);
-       background-image:radial-gradient(circle at 15% -10%,#12313a 0,transparent 55%),
-                        radial-gradient(circle at 85% 0%,#1b2440 0,transparent 45%)}
-  .wrap{max-width:1280px;margin:0 auto;padding:34px 22px 70px}
-  h1{font-size:22px;margin:0 0 4px;letter-spacing:-.3px}
-  h1 span{color:var(--teal)}
-  .sub{color:var(--dim);font-size:12.5px;margin:0 0 22px}
-  h2{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
-     margin:38px 0 14px;padding-bottom:7px;border-bottom:1px solid var(--line);font-weight:600}
+:root{--bg:#0b0f14;--panel:#111823;--panel2:#0e151d;--line:#1e2a36;--ink:#dbe6ef;
+--dim:#8ba0b3;--teal:#2dd4bf;--blue:#60a5fa;--amber:#f5b544;--red:#f87171;--green:#4ade80;
+--violet:#a78bfa;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 var(--mono)}
+.wrap{max-width:1180px;margin:0 auto;padding:32px 22px 60px}
+h1{font-size:21px;margin:0 0 4px;letter-spacing:-.3px}
+h1 span{color:var(--teal)}
+.sub{color:var(--dim);font-size:12.5px;margin:0 0 20px}
+h2{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+margin:34px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line);font-weight:600}
+h3{font-size:13px;margin:0 0 4px;color:var(--ink)}
+code{color:var(--blue);font-size:12px;word-break:break-word}
+a{color:var(--teal);text-decoration:none;border-bottom:1px dotted #2dd4bf55}
 
-  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 18px}
-  .bar button{background:var(--panel);color:var(--ink);border:1px solid var(--line);
-    border-radius:6px;padding:5px 11px;font:11px var(--mono);cursor:pointer}
-  .bar button:hover{border-color:var(--teal);color:var(--teal)}
-  .progress{flex:1;min-width:180px;height:8px;background:var(--panel);border:1px solid var(--line);
-    border-radius:20px;overflow:hidden}
-  .progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--blue));
-    transition:width .2s}
-  .count{font-size:11px;color:var(--dim);white-space:nowrap}
+.kpi{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.kpi div{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+padding:9px 13px;min-width:112px}
+.kpi b{display:block;font-size:18px}
+.kpi span{font-size:9.5px;color:var(--dim);letter-spacing:.05em}
+.k-done b{color:var(--green)} .k-open b{color:var(--amber)} .k-inst b{color:var(--blue)}
+.k-dec b{color:var(--dim)} .k-total b{color:var(--teal)}
 
-  table{width:100%;border-collapse:collapse;font-size:11.5px}
-  th,td{text-align:left;padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{color:var(--dim);font-weight:600;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-     position:sticky;top:0;background:var(--bg);z-index:1}
-  tr:last-child td{border-bottom:none}
-  td code{color:var(--blue);font-size:11px;word-break:break-word}
-  td a{color:var(--teal);text-decoration:none;border-bottom:1px dotted #2dd4bf66}
-  td a:hover{color:var(--ink)}
+.note{border:1px solid var(--line);background:var(--panel2);border-radius:8px;
+padding:12px 15px;font-size:11.5px;color:var(--dim);margin:0 0 16px}
+.note b{color:var(--ink)}
+.note.warn{border-color:#f5b54444}
+.note.warn b{color:var(--amber)}
 
-  .chk{width:26px;text-align:center;cursor:pointer;user-select:none}
-  .chk input{accent-color:var(--teal);cursor:pointer;width:14px;height:14px}
-  tr.done td{opacity:.5}
-  tr.done td:first-child{opacity:1}
-  tr.done .task{text-decoration:line-through}
+.phase{border:1px solid var(--line);border-radius:10px;background:var(--panel2);
+margin:0 0 16px;overflow:hidden}
+.phase-head{display:flex;gap:12px;align-items:baseline;padding:11px 15px;
+border-bottom:1px solid var(--line);background:var(--panel)}
+.phase-head .n{color:var(--teal);font-size:10px;letter-spacing:.12em}
+.phase-head h3{font-size:12.5px}
+.phase-head .st{margin-left:auto;font-size:9.5px;letter-spacing:.08em;white-space:nowrap}
+.phase-body{padding:6px 15px 12px}
 
-  .tag{display:inline-block;font-size:9.5px;padding:1px 7px;border-radius:20px;white-space:nowrap;
-       border:1px solid;letter-spacing:.04em}
-  .t-now{color:var(--green);border-color:#4ade8055;background:#4ade800d}
-  .t-up{color:var(--amber);border-color:#f5b54455;background:#f5b5440d}
-  .t-del{color:var(--red);border-color:#f8717144;background:#f871710d}
-  .t-keep{color:var(--dim);border-color:var(--line)}
-  .prio{font-size:9.5px;color:var(--dim)}
-
-  .replace{color:var(--dim);font-size:10.5px}
-  .replace b{color:var(--violet);font-weight:600}
-  td.st{white-space:nowrap}
-  .commit{font-size:9px;margin-top:3px}
-  .commit a{color:var(--dim);border:none}
-  tr.done-t td{opacity:.45}
-  tr.done-t td.st{opacity:1}
-  .strip{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;font-size:10.5px;color:var(--dim)}
-  .src{font-size:10px;color:var(--dim);word-break:break-all}
-
-  .note{border-left:2px solid var(--amber);background:#f5b5440d;padding:10px 14px;
-        font-size:11.5px;color:var(--dim);border-radius:0 6px 6px 0;margin:16px 0}
-  .note b{color:var(--amber)}
-  .kpi{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 20px}
-  .kpi div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
-  .kpi b{display:block;font-size:19px;color:var(--teal)}
-  .kpi span{font-size:10px;color:var(--dim)}
-  footer{margin-top:44px;color:#5d7285;font-size:10.5px;border-top:1px solid var(--line);padding-top:12px}
+.card{border:1px solid var(--line);border-radius:8px;background:var(--panel);
+padding:10px 13px;margin:10px 0}
+.card .lab{display:inline-block;font-size:9px;letter-spacing:.1em;padding:1px 7px;
+border-radius:20px;border:1px solid;margin-bottom:6px}
+.l-done{color:var(--green);border-color:#4ade8055;background:#4ade800d}
+.l-open{color:var(--amber);border-color:#f5b54455;background:#f5b5440d}
+.l-installed{color:var(--blue);border-color:#60a5fa55;background:#60a5fa0d}
+.l-declined{color:var(--dim);border-color:var(--line)}
+.l-blocked{color:var(--red);border-color:#f8717144;background:#f871710d}
+.l-keep{color:var(--violet);border-color:#a78bfa44;background:#a78bfa0d}
+.card .t{font-size:12.5px;line-height:1.55}
+.card .m{font-size:10.5px;color:var(--dim);margin-top:5px}
+.card .m .k{color:var(--violet)}
+.card .m a{color:var(--dim);border:none}
+.card.done .t{opacity:.72}
+.tagline{font-size:9.5px;color:var(--dim)}
+footer{margin-top:36px;color:#5d7285;font-size:10.5px;border-top:1px solid var(--line);
+padding-top:12px}
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <h1>AutFin <span>×</span> Pydantic AI — migration checklist</h1>
+  <h1>AutFin <span>x</span> Pydantic AI - migration plan</h1>
   <p class="sub">
     Every feature Pydantic AI provides that AutFin hand-rolled, plus everything worth adding.
-    Sourced from the live docs (ai.pydantic.dev, 300+ pages mapped). Originally verified against
-    <code>2.37.0</code>/<code>0.28.0</code>; upgraded to <code>2.68.0</code>/<code>0.68.0</code> in
-    <a href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a>, which unlocks section C.
+    Sourced from the live docs. Verified against <code>2.68.0</code> / <code>0.68.0</code>
+    (upgraded from <code>2.37.0</code> / <code>0.28.0</code>).
+    Last updated 2026-11-14.
   </p>
 
   <div class="kpi">
-    <div><b id="k-total">0</b><span>total items</span></div>
-    <div><b id="k-now">0</b><span>usable in the current pin</span></div>
-    <div><b id="k-up">0</b><span>need a version upgrade</span></div>
-    <div><b id="k-del">0</b><span>delete outright</span></div>
-    <div><b id="k-done">0</b><span>done</span></div>
+    <div class="k-total"><b>47</b><span>TOTAL ITEMS</span></div>
+    <div class="k-done"><b>24</b><span>DONE</span></div>
+    <div class="k-open"><b>5</b><span>OPEN</span></div>
+    <div class="k-inst"><b>9</b><span>INSTALLED ONLY</span></div>
+    <div class="k-dec"><b>5</b><span>DECLINED / BLOCKED</span></div>
   </div>
 
-  <div class="bar">
-    <div class="progress"><i id="pbar"></i></div>
-    <span class="count" id="plabel">0 / 0</span>
-    <button onclick="setAll(true)">check all</button>
-    <button onclick="setAll(false)">clear all</button>
-    <button onclick="localStorage.removeItem(KEY);location.reload()">reset saved</button>
+  <div class="note warn">
+    <b>Status correction, 2026-11-14: section C was mislabelled.</b>
+    Its nine rows were tagged done with commit <a href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a>.
+    That commit installed the capabilities as <b>dependencies</b>. None of them is attached to any
+    agent: <code>PromptInjectionDefender</code>, <code>ArtifactScanning</code>, <code>DetectLoops</code>,
+    <code>ModelFallback</code>, <code>Caching</code>, <code>AskUser</code>, <code>Permissions</code>,
+    <code>ApprovalReviewer</code>, <code>ToolCallJudge</code>, <code>TrajectoryJudge</code>,
+    <code>SmartSearch</code>, <code>IPythonCodeMode</code> and <code>CapabilityCreation</code>
+    all return nothing when grepped across <code>src/autfin/</code>. Their tag is now INSTALLED and
+    their boxes are unchecked, so the document matches the repository.
   </div>
 
   <div class="note">
     <b>Decisions recorded, so they are not re-litigated:</b>
-    workspace capabilities are <b>dropped entirely</b> &#8212; pydantic-ai 2.68 requires an attached
-    workspace, <code>LocalWorkspace</code> is POSIX-only and <code>DockerSandbox</code> hard-codes that
-    same POSIX runner on the client, so Windows has no supported local workspace. No agent exposes
-    file/workspace/shell tools, so nothing was lost. <code>browser-use</code> is uninstallable
-    (pins <code>pydantic==2.12.5</code>).
+    workspace capabilities are dropped entirely - 2.68 requires an attached workspace,
+    <code>LocalWorkspace</code> is POSIX-only and <code>DockerSandbox</code> hard-codes that same
+    POSIX runner on the client, so Windows has no supported local workspace. No agent exposes
+    file/workspace/shell tools, so nothing was lost (upstream: pydantic-ai#9873).
+    <code>browser-use</code> is uninstallable (it pins <code>pydantic==2.12.5</code>).
   </div>
 
   <div class="note">
-    <b>How to read the tags:</b>
-    <span class="tag t-now">done / usable</span> ·
-    <span class="tag t-up">extra needed</span> module present but its optional dependency is not installed ·
-    <span class="tag t-del">delete</span> remove the hand-rolled thing outright ·
-    <span class="tag t-keep">keep</span> legitimate domain code, leave it.
-    <br><b>Replace</b> names the exact file/function in this repo that goes away.
-    Progress is saved in <code>localStorage</code> per browser.
+    <b>Next:</b> phase 4, the safety layer - <code>PromptInjectionDefender</code> and
+    <code>ArtifactScanning</code> on the scraping agents, <code>DetectLoops</code> on the
+    supervisor, then <code>ModelFallback</code> and <code>Caching</code>, which together are the
+    only structural answer to the NIM tokens-per-minute limit that currently blocks an
+    unattended daily run.
   </div>
 
-  <h2>A · Hand-rolled duplicates — replace with the framework feature</h2>
-  <div class="strip">
-    <span><b style="color:var(--green)">14</b> done &#8212; section A complete</span>
-    <span>&#183;</span><span>last up: A5, the SQLite ConversationStore and native dataset serialisation, in <a href="https://github.com/GreatHavoc/AutFin/commit/176dead">176dead</a></span>
+  <h2>Project plan</h2>
+
+  <div class="phase"><div class="phase-head"><span class="n">PHASE 1</span><h3>Requirements and scope</h3><span class="st" style="color:var(--green)">COMPLETE</span></div><div class="phase-body"><p class="sub" style="margin:6px 0 0">What the migration must deliver, and the constraints it is bound by.</p><div class="note warn" style="margin:12px 0">
+<b>In scope.</b> Replace every hand-rolled subsystem that the framework now owns, and attach the
+capabilities the upgrade unlocked, so that one agent graph carries its guardrails, its cost
+ceilings, its crash recovery, its history bounds and its traces through the framework rather than
+through local code. Verified live, not only by construction: the supervisor and a sub-agent both
+complete a real run on NIM.
+<br><br>
+<b>Out of scope, by decision.</b> Workspace and file/shell capabilities (no local workspace exists
+on Windows, and no agent needs one) &#183; paid research providers (Exa, You.com) &#183; a durable
+workflow engine &#183; serving an editor client.
+<br><br>
+<b>Acceptance.</b> <code>uv run pytest tests/ -q</code> green &#183; the checklist on this page
+matches the code when grepped &#183; every decline and every block carries its measured reason and
+the trigger that would reopen it &#183; <code>AGENTS.md</code> and
+<code>autfin-architecture.html</code> updated in the same commit as the change they describe.
+</div></div></div>
+
+  <div class="phase"><div class="phase-head"><span class="n">PHASE 2</span><h3>Analysis - replace the hand-rolled duplicates</h3><span class="st" style="color:var(--green)">14 / 14 DONE</span></div><div class="phase-body"><p class="sub" style="margin:6px 0 0">Section A. Each item removed a duplicate implementation in favour of the framework feature.</p><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ agents/base.py:45-90 (both functions, dead) · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/capabilities/select-model">select-model</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ llm/model_tiers.py MODEL_REGISTRY + config/settings.py deep_model/fast_model/nvidia_model/nvidia_deep_model (already forced to agree once; now remove the need) · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/capabilities/resolve-model-id">resolve-model-id</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ evals/dataset.py run_evaluations() (the runner loop) · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/evals/evals">evals</a> · <a href="https://pydantic.dev/docs/ai/evals/how-to/concurrency">concurrency</a> · <a href="https://pydantic.dev/docs/ai/evals/how-to/retry-strategies">retry-strategies</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ evals/dataset.py TradeQualityEvaluator, RiskVetoEvaluator, DebateQualityEvaluator, AnalysisCompletenessEvaluator, PositionSizingEvaluator, AgentBehaviorEvaluator · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/llm-judge">llm-judge</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/custom">custom</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/standard-quality-metrics">standard-quality-metrics</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ evals/dataset.py save_dataset()/load_dataset() · observability/roro.py compute_roro() (SQL over the trades table) · <a href="https://github.com/GreatHavoc/AutFin/commit/176dead">176dead</a> · <a href="https://pydantic.dev/docs/ai/evals/how-to/dataset-serialization">dataset-serialization</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/span-based">span-based</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/agentic">agentic</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ observability/metrics.py AgentMetrics, TradingMetrics, ObservabilityMetrics, record_agent(), record_llm(), record_trade() · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">instrumentation</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/usage">usage</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ observability/tracer.py AutFinTracer, TraceContext, _persist_trace(), _load_recent_traces_from_db() · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">instrumentation</a> · <a href="https://pydantic.dev/docs/ai/integrations/logfire">logfire</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/message-history">message-history</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ validation.py validate_type_checking/unit_tests/eval_suite/guardrails/memory_persistence/plan_persistence/load_test/durable_execution + test_validation.py (already broken — imports a deleted function) · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/evals/evals">evals</a> · <a href="https://pydantic.dev/docs/ai/harness/step-persistence">step-persistence</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ agents/supervisor.py run_morning_routine(), run_quarterly_review(), handle_price_alert() (the imperative phase sequences) · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/harness/dynamic-workflow">dynamic-workflow</a> · <a href="https://pydantic.dev/docs/ai/harness/subagents">subagents</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ llm/validation.py TOOL_PARAM_RULES · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/tools-toolsets/tools-advanced">tools-advanced</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/exceptions">exceptions</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ config/settings.py retry_max_attempts, retry_initial_interval, retry_backoff_factor, node_timeout_seconds, circuit_breaker_threshold, circuit_breaker_reset_seconds · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/retries">retries</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/timeouts">timeouts</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/agent">agent</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ tools/browser_agent.py get_browser_agent() (hardcoded openai:gpt-4.1-mini, needs an OPENAI_API_KEY that .env.example never lists) · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/capabilities/web-fetch">web-fetch</a> · <a href="https://pydantic.dev/docs/ai/capabilities/web-search">web-search</a> · <a href="https://pydantic.dev/docs/ai/harness/researcher">researcher</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ memory/embeddings.py generate_embedding() fallback (silently used because sentence-transformers is not a dependency) + learning/retriever.py retrieve_learnings() similarity scoring · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/harness/conversation-search">conversation-search</a> · <a href="https://pydantic.dev/docs/ai/harness/memory">memory</a> · <a href="https://pydantic.dev/docs/ai/guides/embeddings">embeddings</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ agents/moat.py _assess_* scoring functions · agents/distortion.py check_distortion() · agents/regulatory.py classify_regulatory_event() keyword tables · <a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/llm-judge">llm-judge</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/standard-quality-metrics">standard-quality-metrics</a></div></div></div></div>
+
+  <div class="phase"><div class="phase-head"><span class="n">PHASE 3</span><h3>Build - features to add</h3><span class="st" style="color:var(--amber)">10 DONE / 5 OPEN / 5 DECLINED</span></div><div class="phase-body"><p class="sub" style="margin:6px 0 0">Section B. Attached, measured, or declined with the reason recorded on the card.</p><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ attach to agents/risk.py + agents/supervisor.py execute_trade()/place_order · <a href="https://pydantic.dev/docs/ai/tools-toolsets/deferred-tools">deferred-tools</a> · <a href="https://pydantic.dev/docs/ai/tools-toolsets/toolsets">toolsets</a> · <a href="https://pydantic.dev/docs/ai/capabilities/handle-deferred-tool-calls">handle-deferred-tool-calls</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ attach to agents/supervisor.py; replaces the unused UsageLimits idea behind config/settings.py · <a href="https://github.com/GreatHavoc/AutFin/commit/4e87947">4e87947</a> · <a href="https://pydantic.dev/docs/ai/harness/spend">spend</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ attach to tools/__init__.py toolset singletons (kite, fundamental, technical, sentiment, screening, learning, browser) · <a href="https://github.com/GreatHavoc/AutFin/commit/8e623a8">8e623a8</a> · <a href="https://pydantic.dev/docs/ai/capabilities/tool-search">tool-search</a> · <a href="https://pydantic.dev/docs/ai/tools-toolsets/toolsets">toolsets</a> · <a href="https://pydantic.dev/docs/ai/capabilities/on-demand">on-demand</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ attach to agents/supervisor.py (and the long-running sub-agents) · <a href="https://github.com/GreatHavoc/AutFin/commit/f59310f">f59310f</a> · <a href="https://pydantic.dev/docs/ai/harness/compaction">compaction</a> · <a href="https://pydantic.dev/docs/ai/capabilities/compaction">compaction</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ attach to tools/universe.py fetch_universe_data() (200 symbols × full financials) and tools/fundamental_tools.py get_financials() · <a href="https://github.com/GreatHavoc/AutFin/commit/95a400d">95a400d</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ attach to agents/supervisor.py; replaces memory/database.py runs table + record_run_start()/record_run_end() · <a href="https://github.com/GreatHavoc/AutFin/commit/fb897e9">fb897e9</a> · <a href="https://pydantic.dev/docs/ai/harness/step-persistence">step-persistence</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/persistence">persistence</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ attach in agents/base.py create_agent(); complements the logfire.instrument_pydantic_ai() calls in run.py/__main__.py · <a href="https://github.com/GreatHavoc/AutFin/commit/bfd1d92">bfd1d92</a> · <a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">instrumentation</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ attach to agents/memory.py; replaces the sha256 similarity path in learning/retriever.py · <a href="https://github.com/GreatHavoc/AutFin/commit/fce6fc4">fce6fc4</a> · <a href="https://pydantic.dev/docs/ai/harness/conversation-search">conversation-search</a></div></div><div class="card declined"><span class="lab l-declined">DECLINED</span><div class="t"><b>Mid-run escalation — measured, not justified here.</b> <code>Advisor</code> gives an executor model a consultation tool so a light agent can escalate one judgement to a stronger model instead of running the whole thing on the deep tier. Neither premise holds in this repo: <code>debate.py</code>'s bull/bear case is deterministic arithmetic over confidence scores (no LLM deliberates, so there is no bear case to escalate), <code>conference.py</code>'s tools are deterministic fan-out, and every judgement agent already runs the top tier — <code>deep</code> and <code>reasoning</code> are the same model (<code>nvidia/minimax-m3</code>), so an advisor would consult the very model already running. Revisit when <code>MODEL_CONFIG</code> carries two genuinely different tiers, then attach to <code>agents/debate.py</code>/<code>agents/conference.py</code>.</div><div class="m">→ attach to agents/debate.py and agents/conference.py · not justified priority 2 · <a href="https://pydantic.dev/docs/ai/harness/advisor">advisor</a></div></div><div class="card open"><span class="lab l-open">OPEN</span><div class="t"><b>Repo context at run start.</b> <code>RepoContext</code> loads <code>AGENTS.md</code>/<code>CLAUDE.md</code> plus repository structure before the first request.</div><div class="m">→ attach to agents/supervisor.py; feeds the AGENTS.md we already maintain (nothing reads it today) · now priority 2 · <a href="https://pydantic.dev/docs/ai/harness/repo-context">repo-context</a></div></div><div class="card open"><span class="lab l-open">OPEN</span><div class="t"><b>Trim and filter tools per step.</b> <code>ProcessHistory</code> for history shaping; <code>PrefixTools</code>/<code>PrepareTools</code>/<code>SetToolMetadata</code> for name collisions and capability-driven filtering.</div><div class="m">→ attach in agents/base.py; resolves collisions across the six toolsets in tools/__init__.py · now priority 3 · <a href="https://pydantic.dev/docs/ai/capabilities/process-history">process-history</a> · <a href="https://pydantic.dev/docs/ai/capabilities/prefix-tools">prefix-tools</a> · <a href="https://pydantic.dev/docs/ai/capabilities/prepare-tools">prepare-tools</a> · <a href="https://pydantic.dev/docs/ai/capabilities/set-tool-metadata">set-tool-metadata</a></div></div><div class="card declined"><span class="lab l-declined">DECLINED</span><div class="t"><b>Read documents, not just HTML — measured, nothing to read.</b> <code>FileUnderstanding</code> describes files the serving model can't read, with a fallback model. No tool in this repo returns a file at all: a grep for <code>DocumentUrl</code>/<code>BinaryContent</code>/<code>.pdf</code> across <code>src/</code> returns nothing, and <code>tools/browser_agent.py</code> is HTML-only scraping. <code>ImageGeneration</code> for charts has the same problem — backtest stats are printed to logs, nothing renders them. Attaching either now would be a capability that never fires. Revisit when the research path starts fetching SEBI filings, or when backtest stats get rendered.</div><div class="m">→ attach to agents/research.py; extends the HTML-only scraping in tools/browser_agent.py · not justified priority 3 · <a href="https://pydantic.dev/docs/ai/capabilities/file-understanding">file-understanding</a> · <a href="https://pydantic.dev/docs/ai/capabilities/image-generation">image-generation</a></div></div><div class="card declined"><span class="lab l-declined">DECLINED</span><div class="t"><b>Cheaper evals — measured, the wrong trade for this endpoint.</b> <code>BatchModelRequests</code> queues requests into the provider's batch API (about half price, but a result can take up to a day and each batch waits <code>max_wait</code>, 30s by default). NIM is reached through a custom <code>base_url</code>, and the OpenAI provider's own note says OpenAI-compatible endpoints "don't necessarily serve <code>/v1/batches</code>" — unverified here. It is also the wrong trade for a routine that must finish before the 09:15 open. Revisit when evals dominate spend and NIM's batch endpoint is confirmed.</div><div class="m">→ attach to the agents run by evals/dataset.py run_evaluations() · not justified priority 3 · <a href="https://pydantic.dev/docs/ai/core-concepts/batch">batch</a></div></div><div class="card blocked"><span class="lab l-blocked">BLOCKED</span><div class="t"><b>On-demand procedures — blocked by the workspace decision.</b> <code>Skills</code> reads skill directories from the run's workspace (<code>ctx.workspace</code>, or its own <code>workspace=</code>) and a run with neither fails at its start. Workspace capabilities are dropped repo-wide: <code>LocalWorkspace</code> is POSIX-only and <code>DockerSandbox</code> hard-codes the same POSIX subprocess runner, so there is no supported workspace on this Windows box. Revisit when a local workspace backend exists; until then the procedures already live in <code>agents/managed_prompts.py</code>, which is version-controlled and injected eagerly.</div><div class="m">→ attach to agents/supervisor.py; complements agents/managed_prompts.py · blocked priority 3 · <a href="https://pydantic.dev/docs/ai/harness/skills">skills</a></div></div><div class="card open"><span class="lab l-open">OPEN</span><div class="t"><b>Cache-collapse detection.</b> <code>WarnOnCacheBusts</code> reports prefix collapses from the provider's own numbers (note: importing <code>cache_stability</code> emits a deprecation warning).</div><div class="m">→ attach to agents/supervisor.py once caching is configured · now priority 3 · <a href="https://pydantic.dev/docs/ai/harness/warn-on-cache-busts">warn-on-cache-busts</a></div></div><div class="card open"><span class="lab l-open">OPEN</span><div class="t"><b>Cache the stable prefix.</b> On <code>2.37.0</code> configure prompt caching through model settings (the <code>Caching</code> capability is not in this pin — see section C).</div><div class="m">→ agents/base.py ModelSettings construction; relevant because the supervisor resends all instructions + tool schemas every step · upgrade · <a href="https://pydantic.dev/docs/ai/capabilities/caching">caching</a></div></div><div class="card open"><span class="lab l-open">OPEN</span><div class="t"><b>X/Twitter sentiment.</b> <code>XSearch</code> (native on xAI, sub-agent fallback elsewhere) for the social half of <code>get_sentiment_data</code>.</div><div class="m">→ attach to agents/analysis.py; complements tools/sentiment_tools.py · now priority 3 · <a href="https://pydantic.dev/docs/ai/capabilities/x-search">x-search</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ new: no conversation store exists today; each supervisor_agent.run() is a fresh run · <a href="https://github.com/GreatHavoc/AutFin/commit/6467273">6467273</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/persistence">persistence</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/conversation">conversation</a></div></div><div class="card declined"><span class="lab l-declined">DECLINED</span><div class="t"><b>Declarative agent definitions — measured, a second source of truth.</b> <code>AgentSpec</code> can express model, name, instructions, output schema, model settings and serializable capability specs. It cannot express what <code>create_agent()</code> actually wires: the toolset singletons are runtime objects (<code>CombinedToolset</code>, <code>ApprovalRequiredToolset</code>) built in <code>tools/__init__.py</code>, and every tool is registered with <code>@agent.tool</code> after construction. Converting would leave Python for the parts specs can't hold plus a YAML file for the rest — two places to edit for one agent, next to the version-controlled <code>agents/managed_prompts.py</code>. Revisit when agent definitions need changing without deploying code.</div><div class="m">→ agents/base.py create_agent() (the hand-rolled factory) · not justified priority 3 · <a href="https://pydantic.dev/docs/ai/core-concepts/agent-spec">agent-spec</a></div></div><div class="card done"><span class="lab l-done">DONE</span><div class="t"></div><div class="m">→ extends evals/dataset.py; the natural home for the calibration question in learning/calibrator.py · <a href="https://github.com/GreatHavoc/AutFin/commit/10b100f">10b100f</a> · <a href="https://pydantic.dev/docs/ai/evals/online-evaluation">online-evaluation</a></div></div></div></div>
+
+  <div class="phase"><div class="phase-head"><span class="n">PHASE 4</span><h3>Integration - capabilities the upgrade unlocked</h3><span class="st" style="color:var(--blue)">0 / 9 ATTACHED</span></div><div class="phase-body"><p class="sub" style="margin:6px 0 0">Section C. Installed as dependencies in fcc62b3; attaching them is the open work.</p><div class="note warn" style="margin:12px 0">Every card below is a dependency that is present and unused. Nothing here has been attached to an agent, and the INSTALLED label is what says so.</div><div class="card installed"><span class="lab l-installed">INSTALLED</span><div class="t">ModelFallback. Dependency installed in fcc62b3. Not attached to any agent, so a rate-limited or 404 tier still ends the run.</div><div class="m">→ replaces the OpenRouter fallback the README promises and config/capabilities.py documents but nothing implements. NIM per-model quota is this system's single point of failure · priority 1 · <a href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a> · <a href="https://pydantic.dev/docs/ai/capabilities/model-fallback">model-fallback</a></div></div><div class="card installed"><span class="lab l-installed">INSTALLED</span><div class="t">Caching. The capability exists at 2.68.0. Not attached, so every request still resends instructions plus all tool schemas.</div><div class="m">→ the cost lever for long supervisor runs that resend all instructions + tool schemas every step · priority 2 · <a href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a> · <a href="https://pydantic.dev/docs/ai/capabilities/caching">caching</a></div></div><div class="card installed"><span class="lab l-installed">INSTALLED</span><div class="t">DetectLoops. Dependency installed in fcc62b3. Not attached, so nothing detects when the model repeats itself despite the batching reminders.</div><div class="m">→ the system reminders in agents/supervisor.py tell the model to batch calls; nothing detects when it loops anyway · priority 2 · <a href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a> · <a href="https://pydantic.dev/docs/ai/harness/detect-loops">detect-loops</a></div></div><div class="card installed"><span class="lab l-installed">INSTALLED</span><div class="t">PromptInjectionDefender and ArtifactScanning. Both installed in fcc62b3 and neither attached: scraped sentiment text still enters the model with no untrusted-input classification. The checklist ranks this the highest unmitigated risk in the repo.</div><div class="m">→ scraped Reddit/Moneycontrol/ET text from tools/sentiment_tools.py and tools/browser_agent.py enters the model with no untrusted-input classification. Highest unmitigated risk in the repo · priority 1 · <a href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a> · <a href="https://pydantic.dev/docs/ai/harness/prompt-injection-defender">prompt-injection-defender</a> · <a href="https://pydantic.dev/docs/ai/harness/artifact-scanning">artifact-scanning</a></div></div><div class="card installed"><span class="lab l-installed">INSTALLED</span><div class="t">Human-in-the-loop layer (AskUser, Permissions, ApprovalReviewer, ToolCallJudge, TrajectoryJudge). All installed in fcc62b3 and none attached. Order execution is gated (B1); mid-run review is not.</div><div class="m">→ a second model reviews each call / the whole trajectory and steers mid-run; the paper-trading → live-trading safety ladder · priority 2 · <a href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a> · <a href="https://pydantic.dev/docs/ai/harness/ask-user">ask-user</a> · <a href="https://pydantic.dev/docs/ai/harness/permissions">permissions</a> · <a href="https://pydantic.dev/docs/ai/harness/tool-call-judge">tool-call-judge</a> · <a href="https://pydantic.dev/docs/ai/harness/trajectory-judge">trajectory-judge</a> · <a href="https://pydantic.dev/docs/ai/harness/approval-reviewer">approval-reviewer</a></div></div><div class="card installed"><span class="lab l-installed">INSTALLED</span><div class="t">Research stack (BrowserUse, Playwright, Exa, You.com, SmartSearch). Needs paid keys for Exa/You.com and browser-use is uninstallable; nothing attached.</div><div class="m">→ replaces parts of the hand-built Obscura + yfinance research path in agents/research.py and tools/universe.py · extra needed priority 3 · <a href="https://pydantic.dev/docs/ai/harness/browser-use">browser-use</a> · <a href="https://pydantic.dev/docs/ai/harness/playwright">playwright</a> · <a href="https://pydantic.dev/docs/ai/harness/exa-search">exa-search</a> · <a href="https://pydantic.dev/docs/ai/harness/youdotcom">youdotcom</a></div></div><div class="card installed"><span class="lab l-installed">INSTALLED</span><div class="t">conversation_store is attached (A5/B8) and pydantic_graph is exercised by the DynamicWorkflow (A9). Workspaces are dropped repo-wide; durable_exec has no workflow-engine backend configured.</div><div class="m">→ restores the Temporal crash recovery the README documents; agents/durable.py was deleted in this session's cleanup and never replaced · extra needed priority 2 · <a href="https://pydantic.dev/docs/ai/capabilities/durable_execution/overview">overview</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/workspace">workspace</a> · <a href="https://pydantic.dev/docs/ai/graph/builder">builder</a></div></div><div class="card installed"><span class="lab l-installed">INSTALLED</span><div class="t">IPythonCodeMode and CapabilityCreation. Installed in fcc62b3 and not attached. CodeMode on the quant agent already covers the sandboxed-compute need.</div><div class="m">→ agents/quant.py uses stateless CodeMode(); capability_creation is importable in 0.28.0 but the authored-capability flow needs the newer API · priority 3 · <a href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a> · <a href="https://pydantic.dev/docs/ai/harness/ipython-code-mode">ipython-code-mode</a> · <a href="https://pydantic.dev/docs/ai/harness/capability-creation">capability-creation</a></div></div><div class="card installed"><span class="lab l-installed">INSTALLED</span><div class="t">ACP and the CLI integration. Nothing in this repo serves an editor client, so there is nothing to attach it to yet.</div><div class="m">→ new capability; nothing equivalent today. Dev-ergonomics, not correctness · priority 3 · <a href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a> · <a href="https://pydantic.dev/docs/ai/harness/acp">acp</a> · <a href="https://pydantic.dev/docs/ai/integrations/cli">cli</a></div></div></div></div>
+
+  <div class="phase"><div class="phase-head"><span class="n">PHASE 5</span><h3>Verification - what stays as it is</h3><span class="st" style="color:var(--violet)">4 KEEP</span></div><div class="phase-body"><p class="sub" style="margin:6px 0 0">Section D, plus the commands that prove the current state.</p><div class="card keep"><span class="lab l-keep">KEEP</span><div class="t">Domain engines with no framework equivalent</div><div class="m">backtesting/ (walk-forward, alpha decay), backtest/ (vectorbt suite), portfolio/tax_engine.py (FY 2026-27 STCG/LTCG rules), risk/kelly.py, risk/vol_targeting.py, universe/curator.py</div></div><div class="card keep"><span class="lab l-keep">KEEP</span><div class="t">The capability set already in use</div><div class="m">SubAgents, DynamicWorkflow, Planning, Memory, SystemReminders, Thinking, WebSearch, Guardrails (attached this session), ManagedPrompt, CodeMode (quant), FileSystem (market_data) · <a href="https://pydantic.dev/docs/ai/capabilities/overview">overview</a> · <a href="https://pydantic.dev/docs/ai/harness">harness</a></div></div><div class="card keep"><span class="lab l-keep">KEEP</span><div class="t"><code>learning/calibrator.py</code> + <code>learning/online.py</code></div><div class="m">conviction-tier calibration with a per-tier delta is domain logic; the measurement half (how well calibrated are the agents) belongs to online evaluation — do that, keep this · <a href="https://pydantic.dev/docs/ai/evals/online-evaluation">online-evaluation</a></div></div><div class="card keep"><span class="lab l-keep">KEEP</span><div class="t">The six deterministic pre-work modules repaired this session</div><div class="m">agents/moat.py, agents/regulatory.py, risk/anomaly.py, risk/regime.py, evals/, tools/browser_agent.py — all fixed, tested, and still uninvoked</div></div></div></div>
+
+  <div class="phase">
+    <div class="phase-head"><span class="n">VERIFY</span><h3>Commands</h3>
+      <span class="st" style="color:var(--green)">254 PASSED</span></div>
+    <div class="phase-body">
+      <div class="card"><div class="t">
+        <code>uv run pytest tests/ -q</code> - 24 items'
+        worth of tests pass. One live-Yahoo case (<code>test_sma_reliance</code>) can flake on a
+        <code>nan</code> close when Yahoo rate-limits; re-run before blaming a change.<br><br>
+        <code>uv run ruff check <paths></code> - repo-wide baseline is red by design
+        (85 errors); fix only the files you touch.<br><br>
+        Live: the shipped supervisor and the analyze sub-agent both run on NIM
+        (<code>minimaxai/minimax-m3.1-flash</code>); the full 8-agent routine cannot finish on the
+        free tier because the throttle is tokens-per-minute.
+      </div></div>
+    </div>
   </div>
-
-  <table>
-    <thead><tr><th class="chk">✓</th><th>Task</th><th>Replace (this repo)</th><th>Tag</th><th>Status</th><th>Source</th></tr></thead>
-    <tbody>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Delete <code>create_select_model_capability()</code> and <code>create_adaptive_model_capability()</code> from <code>agents/base.py</code>; route tier choice through <code>SelectModel</code> with a real <code>ModelSelectionContext</code> (deps, prompt, history, usage, step).</td>
-        <td class="replace">→ <b>agents/base.py:45-90</b> (both functions, dead)</td>
-        <td><span class="tag t-del">delete</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/select-model">capabilities/select-model</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Collapse the three tier→model tables into one resolver. Keep <code>types.ModelConfig</code> as the source of truth, drop the duplicate tables.</td>
-        <td class="replace">→ <b>llm/model_tiers.py</b> <code>MODEL_REGISTRY</code> + <b>config/settings.py</b> <code>deep_model/fast_model/nvidia_model/nvidia_deep_model</b> (already forced to agree once; now remove the need)</td>
-        <td><span class="tag t-del">delete</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/resolve-model-id">capabilities/resolve-model-id</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Replace the hand-rolled eval runner with <code>pydantic-evals</code>' own API — <code>Dataset.evaluate_sync()</code>, concurrency limits, retry strategies. Keep <code>create_autfin_dataset()</code> as the dataset builder only.</td>
-        <td class="replace">→ <b>evals/dataset.py</b> <code>run_evaluations()</code> (the runner loop)</td>
-        <td><span class="tag t-now">now</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evals">evals/evals</a> · <a href="https://pydantic.dev/docs/ai/evals/how-to/concurrency">how-to/concurrency</a> · <a href="https://pydantic.dev/docs/ai/evals/how-to/retry-strategies">how-to/retry-strategies</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Stop hand-writing evaluator classes where a judge fits. Add <code>LLMJudge</code> (rubrics) and <code>GEval</code> (integer + chain-of-thought) to the dataset; keep deterministic ones as custom <code>Evaluator</code>s.</td>
-        <td class="replace">→ <b>evals/dataset.py</b> <code>TradeQualityEvaluator</code>, <code>RiskVetoEvaluator</code>, <code>DebateQualityEvaluator</code>, <code>AnalysisCompletenessEvaluator</code>, <code>PositionSizingEvaluator</code>, <code>AgentBehaviorEvaluator</code></td>
-        <td><span class="tag t-now">now</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evaluators/llm-judge">evaluators/llm-judge</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/custom">evaluators/custom</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/standard-quality-metrics">evaluators/standard-quality-metrics</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Use <code>InMemoryConversationStore</code>/a real store instead of hand-rolled JSON save/load; evaluate a run's trajectory with span-based + agentic evaluators rather than SQL.</td>
-        <td class="replace">→ <b>evals/dataset.py</b> <code>save_dataset()</code>/<code>load_dataset()</code> · <b>observability/roro.py</b> <code>compute_roro()</code> (SQL over the <code>trades</code> table)</td>
-        <td><span class="tag t-now">now</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/176dead">176dead</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/how-to/dataset-serialization">how-to/dataset-serialization</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/span-based">evaluators/span-based</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/agentic">evaluators/agentic</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Delete the hand-rolled metrics recorder; read <code>RunUsage</code> (cost, tokens, requests, tool_calls) off every result and let <code>Instrumentation</code> emit the spans.</td>
-        <td class="replace">→ <b>observability/metrics.py</b> <code>AgentMetrics</code>, <code>TradingMetrics</code>, <code>ObservabilityMetrics</code>, <code>record_agent()</code>, <code>record_llm()</code>, <code>record_trade()</code></td>
-        <td><span class="tag t-up">upgrade</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">capabilities/instrumentation</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/usage">api/pydantic-ai/usage</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Drop the SQLite trace store. Logfire (already wired in <code>run.py</code>) stores the OTel spans; <code>run_id</code>/<code>conversation_id</code> correlation comes free from core.</td>
-        <td class="replace">→ <b>observability/tracer.py</b> <code>AutFinTracer</code>, <code>TraceContext</code>, <code>_persist_trace()</code>, <code>_load_recent_traces_from_db()</code></td>
-        <td><span class="tag t-up">upgrade</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">capabilities/instrumentation</a> · <a href="https://pydantic.dev/docs/ai/integrations/logfire">integrations/logfire</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/message-history">core-concepts/message-history</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Replace the 8 hand-rolled gates with framework output: evals for behavioural gates, Instrumentation/Logfire for observability, StepPersistence for persistence.</td>
-        <td class="replace">→ <b>validation.py</b> <code>validate_type_checking/unit_tests/eval_suite/guardrails/memory_persistence/plan_persistence/load_test/durable_execution</code> + <b>test_validation.py</b> (already broken — imports a deleted function)</td>
-        <td><span class="tag t-up">upgrade</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evals">evals/evals</a> · <a href="https://pydantic.dev/docs/ai/harness/step-persistence">harness/step-persistence</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Let the model write its own orchestration. <code>DynamicWorkflow</code> is already attached with <code>defer_loading=True</code>; the supervisor's Python fan-out duplicates it.</td>
-        <td class="replace">→ <b>agents/supervisor.py</b> <code>run_morning_routine()</code>, <code>run_quarterly_review()</code>, <code>handle_price_alert()</code> (the imperative phase sequences)</td>
-        <td><span class="tag t-up">upgrade</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/dynamic-workflow">harness/dynamic-workflow</a> · <a href="https://pydantic.dev/docs/ai/harness/subagents">harness/subagents</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Delete the per-tool argument rule table. Core validates tool args with the Pydantic schema and returns <code>ModelRetry</code> to the model.</td>
-        <td class="replace">→ <b>llm/validation.py</b> <code>TOOL_PARAM_RULES</code></td>
-        <td><span class="tag t-up">upgrade</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/tools-toolsets/tools-advanced">tools-toolsets/tools-advanced</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/exceptions">api/pydantic-ai/exceptions</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Delete the hand-rolled retry/circuit-breaker/timeout knobs from settings; use <code>Agent(retries=...)</code>, <code>UsageLimits</code>, and per-run timeouts.</td>
-        <td class="replace">→ <b>config/settings.py</b> <code>retry_max_attempts</code>, <code>retry_initial_interval</code>, <code>retry_backoff_factor</code>, <code>node_timeout_seconds</code>, <code>circuit_breaker_threshold</code>, <code>circuit_breaker_reset_seconds</code></td>
-        <td><span class="tag t-up">upgrade</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/retries">core-concepts/retries</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/timeouts">core-concepts/timeouts</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/agent">core-concepts/agent</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Replace the hand-rolled scraping agent with the framework's web capabilities; keep <code>get_browser_toolset()</code> (Obscura MCP) only for JS-rendered pages.</td>
-        <td class="replace">→ <b>tools/browser_agent.py</b> <code>get_browser_agent()</code> (hardcoded <code>openai:gpt-4.1-mini</code>, needs an <code>OPENAI_API_KEY</code> that <code>.env.example</code> never lists)</td>
-        <td><span class="tag t-now">now</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/web-fetch">capabilities/web-fetch</a> · <a href="https://pydantic.dev/docs/ai/capabilities/web-search">capabilities/web-search</a> · <a href="https://pydantic.dev/docs/ai/harness/researcher">harness/researcher</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Stop using sha256 "hash embeddings" as semantic search. Retrieve over real stored history instead.</td>
-        <td class="replace">→ <b>memory/embeddings.py</b> <code>generate_embedding()</code> fallback (silently used because <code>sentence-transformers</code> is not a dependency) + <b>learning/retriever.py</b> <code>retrieve_learnings()</code> similarity scoring</td>
-        <td><span class="tag t-now">now</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/conversation-search">harness/conversation-search</a> · <a href="https://pydantic.dev/docs/ai/harness/memory">harness/memory</a> · <a href="https://pydantic.dev/docs/ai/guides/embeddings">guides/embeddings</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t">Score the fuzzy qualitative dimensions (moat, distortion, regulatory impact) with a judge instead of hand-built heuristics.</td>
-        <td class="replace">→ <b>agents/moat.py</b> <code>_assess_*</code> scoring functions · <b>agents/distortion.py</b> <code>check_distortion()</code> · <b>agents/regulatory.py</b> <code>classify_regulatory_event()</code> keyword tables</td>
-        <td><span class="tag t-now">now</span></td>
-        <td class="st"><span class="tag t-now">done</span><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/21911f0">21911f0</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/evaluators/llm-judge">evaluators/llm-judge</a> · <a href="https://pydantic.dev/docs/ai/evals/evaluators/standard-quality-metrics">evaluators/standard-quality-metrics</a></td>
-      </tr>
-
-    </tbody>
-  </table>
-
-  <h2>B · Missing features to add — all usable after the 2.68.0 upgrade</h2>
-  <table>
-    <thead><tr><th class="chk">✓</th><th>Task</th><th>Attach to / replaces</th><th>Tag</th><th>Source</th></tr></thead>
-    <tbody>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t"><b>Human approval before a live order.</b> Wrap the order tools in <code>ApprovalRequiredToolset</code> and handle the deferred run with <code>HandleDeferredToolCalls</code>. Today guardrails validate <em>arguments</em> but nothing gates <em>execution</em>.</td>
-        <td class="replace">→ attach to <b>agents/risk.py</b> + <b>agents/supervisor.py</b> <code>execute_trade()</code>/<code>place_order</code></td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/tools-toolsets/deferred-tools">tools-toolsets/deferred-tools</a> · <a href="https://pydantic.dev/docs/ai/tools-toolsets/toolsets">tools-toolsets/toolsets</a> · <a href="https://pydantic.dev/docs/ai/capabilities/handle-deferred-tool-calls">capabilities/handle-deferred-tool-calls</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t"><b>Cost ceilings.</b> Attach <code>Spend</code> with USD/token budgets per model and per tenant (user_id).</td>
-        <td class="replace">→ attach to <b>agents/supervisor.py</b>; replaces the unused <code>UsageLimits</code> idea behind <code>config/settings.py</code></td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
-        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/4e87947">4e87947</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/spend">harness/spend</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t"><b>Tool catalogue discipline.</b> Measured the tool schemas the model actually receives per request (TestModel ground truth): supervisor 23, analysis 22, research 29, memory 14, risk 6, quant 5 — nothing crosses the ~30-tool threshold, so no toolset is marked <code>defer_loading=True</code>; that would add a search round-trip to save nothing. The duplicate that did exist — <code>risk.py</code> and <code>quant.py</code> mounting <code>technical_toolset</code> beside <code>risk_toolset</code>, which already bundles it — is removed, and a test asserts it stays removed. Audit surfaced four live bugs: the risk agent's core tool imported a module that never existed, the output guardrail crashed every structured output, the spend scope crashed on <code>ctx.deps=None</code>, and each fixed with tests.</td>
-        <td class="replace">→ attach to <b>tools/__init__.py</b> toolset singletons (kite, fundamental, technical, sentiment, screening, learning, browser)</td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
-        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/8e623a8">8e623a8</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/tool-search">capabilities/tool-search</a> · <a href="https://pydantic.dev/docs/ai/tools-toolsets/toolsets">tools-toolsets/toolsets</a> · <a href="https://pydantic.dev/docs/ai/capabilities/on-demand">capabilities/on-demand</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t"><b>Bound the history.</b> <code>TieredCompaction</code> on the supervisor: <code>ClearToolResults</code> first (financial tool payloads are the biggest bytes, the last three pairs stay intact), <code>SummarizingCompaction</code> on the <b>fast</b> tier only when clearing is not enough. The target is <code>target_fraction=0.5</code> of the model's context window, not an absolute count — <code>resolve_context_window()</code> returns <code>None</code> for the NIM models, so a count would be a guess about a deployment the pricing registry does not describe, while the fraction is right whether the window resolves to 8k, 128k or falls back to 200k. Required here, not optional: <code>run.py</code> continues one conversation across trading days, so history grows by a full routine per day and every run resends all of it.</td>
-        <td class="replace">→ attach to <b>agents/supervisor.py</b> (and the long-running sub-agents)</td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
-        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/f59310f">f59310f</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/compaction">harness/compaction</a> · <a href="https://pydantic.dev/docs/ai/capabilities/compaction">capabilities/compaction</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t"><b>Cap oversized tool returns.</b> <code>ToolOutputLimits</code> spills at 20k chars and truncates at 8k on a <code>LocalFileStore</code>. Measured live returns are 536 chars, so these bands are a guard rather than a fix for a measured flood.</td>
-        <td class="replace">→ attach to <b>tools/universe.py</b> <code>fetch_universe_data()</code> (200 symbols × full financials) and <b>tools/fundamental_tools.py</b> <code>get_financials()</code></td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
-        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/95a400d">95a400d</a></div></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t"><b>Crash recovery for the routine.</b> <code>StepPersistence</code> on a shared <code>SqliteStepStore</code> (<code>data/autfin.db</code>) snapshots every settled step, appends a step-event trail and keeps a tool-effect ledger, so a crashed daemon run resumes from its last complete snapshot and an interrupted tool reads as <code>unknown_after_crash</code>. The dead <code>runs</code> table plus <code>record_run_start()</code>/<code>record_run_end()</code> are deleted — they had zero callers and recorded only start/end. Attached to the supervisor only; sub-agent steps would just be noise.</td>
-        <td class="replace">→ attach to <b>agents/supervisor.py</b>; replaces <b>memory/database.py</b> <code>runs</code> table + <code>record_run_start()</code>/<code>record_run_end()</code></td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
-        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/fb897e9">fb897e9</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/step-persistence">harness/step-persistence</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/persistence">core-concepts/persistence</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t"><b>OTel spans everywhere.</b> <code>Instrumentation()</code> with default settings is attached in <code>create_agent()</code>, so every agent emits <code>invoke_agent</code>/<code>chat</code> spans on the global tracer provider from any entrypoint — not only <code>run.py</code>'s <code>logfire.instrument_pydantic_ai()</code> call, which the daemon alone reached. It no-ops until a provider is configured.</td>
-        <td class="replace">→ attach in <b>agents/base.py</b> <code>create_agent()</code>; complements the <code>logfire.instrument_pydantic_ai()</code> calls in <b>run.py</b>/<code>__main__.py</b></td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
-        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/bfd1d92">bfd1d92</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/instrumentation">capabilities/instrumentation</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t"><b>Real history recall.</b> <code>ConversationSearch</code> on the memory agent, reading the same shared step store: <code>search_conversation_history</code> ranks persisted history with BM25 and returns excerpts, so earlier turns that compaction dropped — and earlier runs of the daemon's thread — come back on demand. <code>scope='conversation'</code> keeps the corpus to one conversation's runs; the daemon threads a single conversation id, so store-wide search would pool every user into one corpus. The sha256 "hash embedding" similarity in <code>learning/retriever.py</code> stays for the learning journal — conversation recall is what this capability is for.</td>
-        <td class="replace">→ attach to <b>agents/memory.py</b>; replaces the sha256 similarity path in <b>learning/retriever.py</b></td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
-        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/fce6fc4">fce6fc4</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/conversation-search">harness/conversation-search</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Mid-run escalation — measured, not justified here.</b> <code>Advisor</code> gives an executor model a consultation tool so a light agent can escalate one judgement to a stronger model instead of running the whole thing on the deep tier. Neither premise holds in this repo: <code>debate.py</code>'s bull/bear case is deterministic arithmetic over confidence scores (no LLM deliberates, so there is no bear case to escalate), <code>conference.py</code>'s tools are deterministic fan-out, and every judgement agent already runs the top tier — <code>deep</code> and <code>reasoning</code> are the same model (<code>nvidia/minimax-m3</code>), so an advisor would consult the very model already running. Revisit when <code>MODEL_CONFIG</code> carries two genuinely different tiers, then attach to <code>agents/debate.py</code>/<code>agents/conference.py</code>.</td>
-        <td class="replace">→ attach to <b>agents/debate.py</b> and <b>agents/conference.py</b></td>
-        <td><span class="tag t-up">not justified</span> <span class="prio">priority 2</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/advisor">harness/advisor</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Repo context at run start.</b> <code>RepoContext</code> loads <code>AGENTS.md</code>/<code>CLAUDE.md</code> plus repository structure before the first request.</td>
-        <td class="replace">→ attach to <b>agents/supervisor.py</b>; feeds the <b>AGENTS.md</b> we already maintain (nothing reads it today)</td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 2</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/repo-context">harness/repo-context</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Trim and filter tools per step.</b> <code>ProcessHistory</code> for history shaping; <code>PrefixTools</code>/<code>PrepareTools</code>/<code>SetToolMetadata</code> for name collisions and capability-driven filtering.</td>
-        <td class="replace">→ attach in <b>agents/base.py</b>; resolves collisions across the six toolsets in <b>tools/__init__.py</b></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/process-history">capabilities/process-history</a> · <a href="https://pydantic.dev/docs/ai/capabilities/prefix-tools">capabilities/prefix-tools</a> · <a href="https://pydantic.dev/docs/ai/capabilities/prepare-tools">capabilities/prepare-tools</a> · <a href="https://pydantic.dev/docs/ai/capabilities/set-tool-metadata">capabilities/set-tool-metadata</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Read documents, not just HTML — measured, nothing to read.</b> <code>FileUnderstanding</code> describes files the serving model can't read, with a fallback model. No tool in this repo returns a file at all: a grep for <code>DocumentUrl</code>/<code>BinaryContent</code>/<code>.pdf</code> across <code>src/</code> returns nothing, and <code>tools/browser_agent.py</code> is HTML-only scraping. <code>ImageGeneration</code> for charts has the same problem — backtest stats are printed to logs, nothing renders them. Attaching either now would be a capability that never fires. Revisit when the research path starts fetching SEBI filings, or when backtest stats get rendered.</td>
-        <td class="replace">→ attach to <b>agents/research.py</b>; extends the HTML-only scraping in <b>tools/browser_agent.py</b></td>
-        <td><span class="tag t-up">not justified</span> <span class="prio">priority 3</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/file-understanding">capabilities/file-understanding</a> · <a href="https://pydantic.dev/docs/ai/capabilities/image-generation">capabilities/image-generation</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Cheaper evals — measured, the wrong trade for this endpoint.</b> <code>BatchModelRequests</code> queues requests into the provider's batch API (about half price, but a result can take up to a day and each batch waits <code>max_wait</code>, 30s by default). NIM is reached through a custom <code>base_url</code>, and the OpenAI provider's own note says OpenAI-compatible endpoints "don't necessarily serve <code>/v1/batches</code>" — unverified here. It is also the wrong trade for a routine that must finish before the 09:15 open. Revisit when evals dominate spend and NIM's batch endpoint is confirmed.</td>
-        <td class="replace">→ attach to the agents run by <b>evals/dataset.py</b> <code>run_evaluations()</code></td>
-        <td><span class="tag t-up">not justified</span> <span class="prio">priority 3</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/batch">core-concepts/batch</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>On-demand procedures — blocked by the workspace decision.</b> <code>Skills</code> reads skill directories from the run's workspace (<code>ctx.workspace</code>, or its own <code>workspace=</code>) and a run with neither fails at its start. Workspace capabilities are dropped repo-wide: <code>LocalWorkspace</code> is POSIX-only and <code>DockerSandbox</code> hard-codes the same POSIX subprocess runner, so there is no supported workspace on this Windows box. Revisit when a local workspace backend exists; until then the procedures already live in <code>agents/managed_prompts.py</code>, which is version-controlled and injected eagerly.</td>
-        <td class="replace">→ attach to <b>agents/supervisor.py</b>; complements <b>agents/managed_prompts.py</b></td>
-        <td><span class="tag t-up">blocked</span> <span class="prio">priority 3</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/skills">harness/skills</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Cache-collapse detection.</b> <code>WarnOnCacheBusts</code> reports prefix collapses from the provider's own numbers (note: importing <code>cache_stability</code> emits a deprecation warning).</td>
-        <td class="replace">→ attach to <b>agents/supervisor.py</b> once caching is configured</td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/warn-on-cache-busts">harness/warn-on-cache-busts</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Cache the stable prefix.</b> On <code>2.37.0</code> configure prompt caching through model settings (the <code>Caching</code> capability is not in this pin — see section C).</td>
-        <td class="replace">→ <b>agents/base.py</b> <code>ModelSettings</code> construction; relevant because the supervisor resends all instructions + tool schemas every step</td>
-        <td><span class="tag t-up">upgrade</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/caching">capabilities/caching</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>X/Twitter sentiment.</b> <code>XSearch</code> (native on xAI, sub-agent fallback elsewhere) for the social half of <code>get_sentiment_data</code>.</td>
-        <td class="replace">→ attach to <b>agents/analysis.py</b>; complements <b>tools/sentiment_tools.py</b></td>
-        <td><span class="tag t-now">now</span> <span class="prio">priority 3</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/x-search">capabilities/x-search</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t"><b>Persist conversations properly.</b> A5 built the SQLite store (<code>src/autfin/conversation/</code>) and <code>run.py</code> loads/saves <code>daemon:morning</code>; the remaining gap was the read path, which handed the stored dict to the <code>ConversationRecord</code> constructor, so <code>deferred_tool_requests</code> came back a dict and a paused live order could not resume. Records now round-trip through the record's <code>TypeAdapter</code>, so messages, usage, conversation_id and deferred requests all survive.</td>
-        <td class="replace">→ new: no conversation store exists today; each <code>supervisor_agent.run()</code> is a fresh run</td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 3</span></td>
-        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/6467273">6467273</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/persistence">core-concepts/persistence</a> · <a href="https://pydantic.dev/docs/ai/api/pydantic-ai/conversation">api/pydantic-ai/conversation</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><b>Declarative agent definitions — measured, a second source of truth.</b> <code>AgentSpec</code> can express model, name, instructions, output schema, model settings and serializable capability specs. It cannot express what <code>create_agent()</code> actually wires: the toolset singletons are runtime objects (<code>CombinedToolset</code>, <code>ApprovalRequiredToolset</code>) built in <code>tools/__init__.py</code>, and every tool is registered with <code>@agent.tool</code> after construction. Converting would leave Python for the parts specs can't hold plus a YAML file for the rest — two places to edit for one agent, next to the version-controlled <code>agents/managed_prompts.py</code>. Revisit when agent definitions need changing without deploying code.</td>
-        <td class="replace">→ <b>agents/base.py</b> <code>create_agent()</code> (the hand-rolled factory)</td>
-        <td><span class="tag t-up">not justified</span> <span class="prio">priority 3</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/core-concepts/agent-spec">core-concepts/agent-spec</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox" checked></td>
-        <td class="task done-t"><b>Live grading.</b> <code>run.py</code>'s <code>_run_morning</code> carries a deterministic evaluator through <code>pydantic_evals.online.evaluate</code>: each production run's <code>SupervisorOutput</code> is scored in the background and the result lands on the call span's OTel event. The existing <code>TradeQualityEvaluator</code> could not be reused as-is — it indexes <code>ctx.output</code> as a dict and would raise on every production call, since the supervisor returns a model — so <code>evals/online.py</code> adds <code>SupervisorOutputEvaluator</code> with the same risk/reward and conviction floors.</td>
-        <td class="replace">→ extends <b>evals/dataset.py</b>; the natural home for the calibration question in <b>learning/calibrator.py</b></td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 3</span></td>
-        <td class="st"><div class="commit"><a href="https://github.com/GreatHavoc/AutFin/commit/10b100f">10b100f</a></div></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/online-evaluation">evals/online-evaluation</a></td>
-      </tr>
-
-    </tbody>
-  </table>
-
-  <h2>C · Done by the upgrade — pydantic-ai 2.37.0 &#8594; 2.68.0, harness 0.28.0 &#8594; 0.68.0</h2>
-  <table>
-    <thead><tr><th class="chk">✓</th><th>Task</th><th>Why it matters here</th><th>Tag</th><th>Status</th><th>Source</th></tr></thead>
-    <tbody>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Bump <code>pydantic-ai</code> past 2.37.0, then attach <code>ModelFallback</code>.</td>
-        <td class="replace">→ replaces the OpenRouter fallback the README promises and <b>config/capabilities.py</b> documents but nothing implements. NIM per-model quota is this system's single point of failure</td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
-        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/model-fallback">capabilities/model-fallback</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Upgrade, then take the <code>Caching</code> capability (currently absent from <code>pydantic_ai.capabilities</code>).</td>
-        <td class="replace">→ the cost lever for long supervisor runs that resend all instructions + tool schemas every step</td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
-        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/caching">capabilities/caching</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Upgrade the harness, then add <code>DetectLoops</code>.</td>
-        <td class="replace">→ the system reminders in <b>agents/supervisor.py</b> tell the model to batch calls; nothing detects when it loops anyway</td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
-        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/detect-loops">harness/detect-loops</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Upgrade the harness, then add <code>PromptInjectionDefender</code> and <code>ArtifactScanning</code>.</td>
-        <td class="replace">→ scraped Reddit/Moneycontrol/ET text from <b>tools/sentiment_tools.py</b> and <b>tools/browser_agent.py</b> enters the model with no untrusted-input classification. Highest unmitigated risk in the repo</td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 1</span></td>
-        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/prompt-injection-defender">harness/prompt-injection-defender</a> · <a href="https://pydantic.dev/docs/ai/harness/artifact-scanning">harness/artifact-scanning</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Upgrade the harness for the human-in-the-loop layer: <code>AskUser</code>, <code>Permissions</code>, <code>ApprovalReviewer</code>, <code>ToolCallJudge</code>, <code>TrajectoryJudge</code>.</td>
-        <td class="replace">→ a second model reviews each call / the whole trajectory and steers mid-run; the paper-trading → live-trading safety ladder</td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 2</span></td>
-        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/ask-user">harness/ask-user</a> · <a href="https://pydantic.dev/docs/ai/harness/permissions">harness/permissions</a> · <a href="https://pydantic.dev/docs/ai/harness/tool-call-judge">harness/tool-call-judge</a> · <a href="https://pydantic.dev/docs/ai/harness/trajectory-judge">harness/trajectory-judge</a> · <a href="https://pydantic.dev/docs/ai/harness/approval-reviewer">harness/approval-reviewer</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Upgrade the harness for the research stack: <code>BrowserUse</code>, <code>Playwright</code>, <code>Exa</code>, <code>You.com</code>, <code>SmartSearch</code>.</td>
-        <td class="replace">→ replaces parts of the hand-built Obscura + yfinance research path in <b>agents/research.py</b> and <b>tools/universe.py</b></td>
-        <td><span class="tag t-up">extra needed</span> <span class="prio">priority 3</span></td>
-        <td class="st"></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/browser-use">harness/browser-use</a> · <a href="https://pydantic.dev/docs/ai/harness/playwright">harness/playwright</a> · <a href="https://pydantic.dev/docs/ai/harness/exa-search">harness/exa-search</a> · <a href="https://pydantic.dev/docs/ai/harness/youdotcom">harness/youdotcom</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Upgrade for <code>conversation_store</code>, <code>workspaces</code>, <code>graph</code>, <code>durable_exec</code> backends (Temporal/DBOS/Prefect/Restate/Airflow) and <code>LocalWorkspace</code>.</td>
-        <td class="replace">→ restores the Temporal crash recovery the README documents; <strong>agents/durable.py</strong> was deleted in this session's cleanup and never replaced</td>
-        <td><span class="tag t-up">extra needed</span> <span class="prio">priority 2</span></td>
-        <td class="st"></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/durable_execution/overview">capabilities/durable_execution/overview</a> · <a href="https://pydantic.dev/docs/ai/core-concepts/workspace">core-concepts/workspace</a> · <a href="https://pydantic.dev/docs/ai/graph/builder">graph/builder</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Upgrade for <code>IPythonCodeMode</code> (stateful sandbox) and <code>CapabilityCreation</code> (the agent authors its own capabilities).</td>
-        <td class="replace">→ <strong>agents/quant.py</strong> uses stateless <code>CodeMode()</code>; <code>capability_creation</code> is importable in 0.28.0 but the authored-capability flow needs the newer API</td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 3</span></td>
-        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/ipython-code-mode">harness/ipython-code-mode</a> · <a href="https://pydantic.dev/docs/ai/harness/capability-creation">harness/capability-creation</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Upgrade for <code>ACP</code> (serve the supervisor to Zed over the Agent Client Protocol) and the <code>CLI</code> integration.</td>
-        <td class="replace">→ new capability; nothing equivalent today. Dev-ergonomics, not correctness</td>
-        <td><span class="tag t-now">done</span> <span class="prio">priority 3</span></td>
-        <td class="st"><a class="commit" href="https://github.com/GreatHavoc/AutFin/commit/fcc62b3">fcc62b3</a></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/harness/acp">harness/acp</a> · <a href="https://pydantic.dev/docs/ai/integrations/cli">integrations/cli</a></td>
-      </tr>
-
-    </tbody>
-  </table>
-
-  <h2>D · Verified as legitimate — leave alone</h2>
-  <table>
-    <thead><tr><th class="chk">✓</th><th>Item</th><th>Why it stays</th><th>Tag</th><th>Source</th></tr></thead>
-    <tbody>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">Domain engines with no framework equivalent</td>
-        <td class="replace"><code>backtesting/</code> (walk-forward, alpha decay), <code>backtest/</code> (vectorbt suite), <code>portfolio/tax_engine.py</code> (FY 2026-27 STCG/LTCG rules), <code>risk/kelly.py</code>, <code>risk/vol_targeting.py</code>, <code>universe/curator.py</code></td>
-        <td><span class="tag t-keep">keep</span></td>
-        <td class="src">deterministic arithmetic — Pydantic AI has no opinion on these</td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">The capability set already in use</td>
-        <td class="replace"><code>SubAgents</code>, <code>DynamicWorkflow</code>, <code>Planning</code>, <code>Memory</code>, <code>SystemReminders</code>, <code>Thinking</code>, <code>WebSearch</code>, <code>Guardrails</code> (attached this session), <code>ManagedPrompt</code>, <code>CodeMode</code> (quant), <code>FileSystem</code> (market_data)</td>
-        <td><span class="tag t-keep">keep</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/capabilities/overview">capabilities/overview</a> · <a href="https://pydantic.dev/docs/ai/harness">harness</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task"><code>learning/calibrator.py</code> + <code>learning/online.py</code></td>
-        <td class="replace">conviction-tier calibration with a per-tier delta is domain logic; the <em>measurement</em> half (how well calibrated are the agents) belongs to online evaluation — do that, keep this</td>
-        <td><span class="tag t-keep">keep</span> <span class="prio">+ section B</span></td>
-        <td class="src"><a href="https://pydantic.dev/docs/ai/evals/online-evaluation">evals/online-evaluation</a></td>
-      </tr>
-
-      <tr>
-        <td class="chk"><input type="checkbox"></td>
-        <td class="task">The six deterministic pre-work modules repaired this session</td>
-        <td class="replace"><code>agents/moat.py</code>, <code>agents/regulatory.py</code>, <code>risk/anomaly.py</code>, <code>risk/regime.py</code>, <code>evals/</code>, <code>tools/browser_agent.py</code> — all fixed, tested, and still uninvoked</td>
-        <td><span class="tag t-keep">keep</span></td>
-        <td class="src">session commits <code>82ed38b</code>, <code>8089c91</code>, <code>99536e6</code></td>
-      </tr>
-
-    </tbody>
-  </table>
 
   <footer>
-    Sources: <a href="https://pydantic.dev/docs/ai/capabilities/overview">capabilities index</a> (80+ capabilities, Pydantic AI + Harness),
-    <a href="https://pydantic.dev/docs/ai/harness">Pydantic AI Harness</a>,
-    <a href="https://pydantic.dev/docs/ai/evals/evals">Pydantic Evals</a>,
-    <a href="https://pydantic.dev/docs/ai/core-concepts/message-history">messages &amp; history</a>,
-    <a href="https://pydantic.dev/docs/ai/tools-toolsets/toolsets">toolsets</a>,
-    <a href="https://pydantic.dev/docs/ai/core-concepts/output">output</a>,
-    <a href="https://pydantic.dev/docs/ai/core-concepts/persistence">persistence</a> —
-    all read in full during research, plus the 300-URL sitemap at <a href="https://ai.pydantic.dev/sitemap.xml">ai.pydantic.dev/sitemap.xml</a>.
-    Module importability re-verified against <code>.venv</code> after the 2.68.0 upgrade.
+    Repo: <a href="https://github.com/GreatHavoc/AutFin">GreatHavoc/AutFin</a>.
+    Every status on this page was read from the code on disk, not from the commit log alone.
+    Where the two disagreed, the code won and this page was corrected.
   </footer>
 
 </div>
-
-<script>
-const KEY = 'autfin-pai-checklist-v1';
-const boxes = [...document.querySelectorAll('tbody input[type=checkbox]')];
-const rows = boxes.map(b => b.closest('tr'));
-const saved = JSON.parse(localStorage.getItem(KEY) || '[]');
-// An empty store means 'never touched' - keep the defaults the HTML ships with
-// (the 9 section-A rows finished in 21911f0 are pre-checked).
-boxes.forEach((b, i) => {
-  b.checked = saved.length ? !!saved[i] : b.checked;
-  b.closest('tr').classList.toggle('done', b.checked);
-});
-function counts() {
-  const done = boxes.filter(b => b.checked).length;
-  const tag = f => document.querySelectorAll('.tag.' + f).length;
-  return {
-    done, total: boxes.length,
-    now: tag('t-now'), up: tag('t-up'), del: tag('t-del'), keep: tag('t-keep'),
-  };
-}
-function paint() {
-  rows.forEach((r, i) => r.classList.toggle('done', boxes[i].checked));
-  const c = counts();
-  document.getElementById('pbar').style.width = (c.done / c.total * 100) + '%';
-  document.getElementById('plabel').textContent = `${c.done} / ${c.total}`;
-  document.getElementById('k-total').textContent = c.total;
-  document.getElementById('k-now').textContent = c.now;
-  document.getElementById('k-up').textContent = c.up;
-  document.getElementById('k-del').textContent = c.del;
-  document.getElementById('k-done').textContent = c.done;
-}
-function persist() { localStorage.setItem(KEY, JSON.stringify(boxes.map(b => b.checked))); paint(); }
-boxes.forEach(b => b.addEventListener('change', persist));
-function setAll(v) { boxes.forEach(b => b.checked = v); persist(); }
-paint();
-</script>
 </body>
 </html>
