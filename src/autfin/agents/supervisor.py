@@ -10,6 +10,7 @@ from pydantic_ai import ApprovalRequired, RunContext
 from pydantic_ai.capabilities import Thinking, WebSearch
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
+from pydantic_ai_harness.detect_loops import DetectLoops
 from pydantic_ai_harness.dynamic_workflow import DynamicWorkflow, WorkflowAgent
 from pydantic_ai_harness.memory import Memory
 from pydantic_ai_harness.planning import Planning
@@ -190,6 +191,11 @@ supervisor_agent = create_agent(
         planning_capability,
         memory_capability,
         system_reminders_capability,
+        # The reminders above tell the model to batch its sub-agent calls; nothing
+        # detected when it loops anyway. This watches the tool calls, their
+        # results and the text for repetition and nudges rather than burning the
+        # run's budget on the same step ten times.
+        DetectLoops(),
         # The daemon continues one conversation across trading days, so the
         # supervisor's history grows by a full routine per day: cheap tiers
         # first, the summarizer only when clearing tool results is not enough.

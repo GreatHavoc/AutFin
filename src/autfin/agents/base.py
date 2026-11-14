@@ -9,7 +9,7 @@ from typing import Any, Callable, Literal, TypeVar
 
 from dotenv import load_dotenv
 from pydantic_ai import Agent
-from pydantic_ai.capabilities import ModelFallback
+from pydantic_ai.capabilities import Caching, ModelFallback
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
@@ -118,6 +118,12 @@ def create_agent[OutputT](
         get_spend_limits(),
         get_tool_output_limits(),
         get_injection_defense(),
+        # Prompt caching through the unified ModelSettings `cache` flag. Verified
+        # against the NIM endpoint: the setting is accepted, not rejected. Whether
+        # it produces cache reads is unproven — the throttle killed the second
+        # turn of the probe — so this is the documented lever switched on, not a
+        # measured saving. No-op on models that cache implicitly.
+        Caching(),
         Instrumentation(),
     ]
     if getattr(MODEL_CONFIG, model_type) != getattr(MODEL_CONFIG, fallback_name):
