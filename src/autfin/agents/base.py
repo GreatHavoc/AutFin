@@ -9,6 +9,7 @@ from typing import Any, Callable, Literal, TypeVar
 
 from dotenv import load_dotenv
 from pydantic_ai import Agent
+from pydantic_ai.capabilities import ModelFallback
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
@@ -97,22 +98,34 @@ def create_agent[OutputT](
     # ApprovalRequiredToolset in tools/__init__, so they pause here: paper mode is
     # approved automatically, live mode bubbles up as DeferredToolRequests.
     # Instrumentation rides along per agent so spans are emitted by every
-    # entrypoint (tests, `python -m autfin`), not only run.py's global
+    # entrypoint (tests, `python -m autfin`), not just run.py's global
     # logfire.instrument_pydantic_ai() call, and it no-ops until a tracer
     # provider is configured.
     # The defender rides with them: every tool that returns third-party text
     # (browser scrape, sentiment, news) would otherwise hand the model words an
     # outside party wrote.
+    # So does the fallback: NIM's throttle is per-model and measured in tokens per
+    # minute, so a throttled deep tier used to end the whole run. The two tiers
+    # are different models, so the other one can serve the step. Skipped when the
+    # tiers are configured to the same id, where it would only retry the throttled
+    # endpoint.
+    fallback_name = "fast" if model_type in ("deep", "reasoning") else "deep"
+    agent_caps = [
+        HandleDeferredToolCalls(handler=resolve_order_approvals),
+        # One shared instance, not one per agent: the default store is built
+        # per capability, so a fresh one here would give every agent its own
+        # daily ceiling.
+        get_spend_limits(),
+        get_tool_output_limits(),
+        get_injection_defense(),
+        Instrumentation(),
+    ]
+    if getattr(MODEL_CONFIG, model_type) != getattr(MODEL_CONFIG, fallback_name):
+        agent_caps.append(ModelFallback(get_model(fallback_name)))
+
     agent = Agent[AgentDeps, OutputT](
         capabilities=[
-            HandleDeferredToolCalls(handler=resolve_order_approvals),
-            # One shared instance, not one per agent: the default store is built
-            # per capability, so a fresh one here would give every agent its own
-            # daily ceiling.
-            get_spend_limits(),
-            get_tool_output_limits(),
-            get_injection_defense(),
-            Instrumentation(),
+            *agent_caps,
             *(capabilities or []),
             *get_guardrails_for_agent(name),
         ],
