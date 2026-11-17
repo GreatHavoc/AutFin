@@ -80,3 +80,5 @@ logs/
 
 # AutFin egg-info
 src/autfin.egg-info/
+# Runtime / learning data - never commit personal trading state
+data/
